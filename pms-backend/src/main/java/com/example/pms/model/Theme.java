@@ -31,4 +31,6 @@ public class Theme {
 
     private Boolean status;
 
+    @ManyToOne
+    private User createdBy;
 }

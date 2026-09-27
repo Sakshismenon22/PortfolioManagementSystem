@@ -24,4 +24,6 @@ public class AddThemeDTO {
 
     private List<AllocationDTO> allocationRuleList;
 
+    private Integer userId;
+
 }

@@ -5,7 +5,9 @@ import com.example.pms.dto.request.AllocationDTO;
 import com.example.pms.exception.ThemeNotFoundException;
 import com.example.pms.model.AllocationRule;
 import com.example.pms.model.Theme;
+import com.example.pms.model.User;
 import com.example.pms.repository.ThemeRepository;
+import com.example.pms.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -18,6 +20,7 @@ public class ThemeServiceImpl implements ThemeService{
 
     private final ThemeRepository themeRepository;
     private final AllocationRuleService allocationRuleService;
+    private final UserRepository userRepository;
 
     @Override
     public String addTheme(AddThemeDTO addThemeDTO) {
@@ -25,8 +28,8 @@ public class ThemeServiceImpl implements ThemeService{
         for(AllocationDTO allocationRule:addThemeDTO.getAllocationRuleList()){
             allocationRuleList.add(allocationRuleService.addAllocationRule(allocationRule));
         }
-
-        Theme theme = new Theme(null,addThemeDTO.getName(),addThemeDTO.getRisk(),addThemeDTO.getInvestmentHorizon(),allocationRuleList,true);
+        User user = userRepository.findById(addThemeDTO.getUserId()).get();
+        Theme theme = new Theme(null,addThemeDTO.getName(),addThemeDTO.getRisk(),addThemeDTO.getInvestmentHorizon(),allocationRuleList,true,user);
         themeRepository.save(theme);
         return "Theme Added.";
     }
