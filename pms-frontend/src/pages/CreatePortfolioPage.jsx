@@ -221,6 +221,19 @@ const CreatePortfolioPage = () => {
   const [selectedTheme, setSelectedTheme] =
     useState(null);
 
+  const [themes, setThemes]= useState({
+    id:"",
+    name:"",
+    risk:"",
+    investmentHorizon:"",
+    allocationRuleList:[{
+    asset:"",
+    percentage:"",
+    }],
+  });
+
+  
+
 
   const [selectedBenchmark, setSelectedBenchmark] =
     useState(null);

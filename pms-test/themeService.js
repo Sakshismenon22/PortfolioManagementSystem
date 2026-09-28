@@ -3,7 +3,7 @@ import axios from "axios";
 
 const getAllThemes = ()=>{
    try{
-    const response = axios.get("http:localhost:/api/themes/get-all-themes");
+    const response = axios.get(`http://localhost:8082/api/themes/get-all-themes`);
 
     return response.data;
    }catch(error){
@@ -13,6 +13,4 @@ const getAllThemes = ()=>{
 
 const themes = await getAllThemes();
 
-for(theme of themes){
-    console.log(theme.data)
-}
+console.log(themes);
