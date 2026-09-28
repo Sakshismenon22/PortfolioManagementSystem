@@ -16,6 +16,7 @@ import TopBarComponent from "../components/TopBarComponent";
 import { createTheme } from "../services/themeService";
 import { getAllSecuritiesInfo } from "../services/securityService";
 import { toast } from "react-toastify";
+import { getAllAssets } from "../services/portfolioService";
 
 
 const RISK_OPTIONS = [
@@ -92,12 +93,14 @@ const CreateThemePage = () => {
 
     try {
 
-      const response = await getAllSecuritiesInfo();
+      const response = await getAllAssets();
 
       /*
        * Adjust this depending on the exact response structure
        * returned by your backend.
        */
+      console.log("Assets response:" , response);
+      console.log("Assets data :" , response.data);
       const securities = response?.data?.securities ?? [];
         
 
@@ -597,6 +600,7 @@ const CreateThemePage = () => {
                     <div>
 
                       <select
+                        name = "assetId"
                         value={
                           allocation.assetId
                         }

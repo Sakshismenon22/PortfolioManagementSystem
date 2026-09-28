@@ -76,3 +76,13 @@ export const getTotalRemainingBalance = async(userId) => {
         return error.data;
     }
 }
+
+export const getAllAssets = async() =>{
+    try{
+        const response = await axios.get(`security-master/api/assets/all-assets`);
+        console.log(response);
+        return response.data;
+    }catch(e){
+        return e.response;
+    }
+}
