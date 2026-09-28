@@ -35,7 +35,7 @@ const portfolio = {
   totalReturn: 24.6,
   benchmarkReturn: 18.2,
   alpha: 6.4,
-  irr: 28.2,
+ 
 
   benchmark: "NIFTY 50",
 };

@@ -56,4 +56,10 @@ public class PortfolioController {
     public Double getTotalRemainingAmount(@PathVariable Integer userId){
         return portfolioService.getTotalRemainingAmount(userId);
     }
+
+    @GetMapping("/portfolio-details/{id}/{userId}")
+    public Response<Portfolio> getPortfolioDetails(@PathVariable Long id, @PathVariable Integer userId){
+        return new Response<>(HttpStatus.OK.value(), true, portfolioService.getPortfolioDetails(id, userId), "Portfolio details retrieved", LocalDateTime.now());
+    }
+
 }
