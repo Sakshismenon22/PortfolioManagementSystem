@@ -5,10 +5,7 @@ import com.example.pms.dto.request.CreateAndActivatePortfolioDTO;
 import com.example.pms.dto.request.AddPortfolioHoldingDTO;
 import com.example.pms.dto.request.CreatePortfolioDTO;
 import com.example.pms.dto.request.GetAllPortfolioDTO;
-import com.example.pms.dto.response.GetAllPortfolioResponseDTO;
-import com.example.pms.dto.response.PortfolioDetailsDTO;
-import com.example.pms.dto.response.SecurityPriceDTO;
-import com.example.pms.dto.response.ValidationDTO;
+import com.example.pms.dto.response.*;
 import com.example.pms.exception.PortfolioNotFoundException;
 import com.example.pms.exception.ThemeNotFoundException;
 import com.example.pms.exception.UserNotFoundException;
@@ -295,5 +292,307 @@ public class PortfolioServiceImpl implements PortfolioService{
 
         return portfolio;
     }
+
+    @Override
+    public PortfolioBasicInfoDTO getPortfolioBasicInfo(
+            Long portfolioId,
+            Integer userId
+    ) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(UserNotFoundException::new);
+
+        Portfolio portfolio = portfolioRepository
+                .findById(portfolioId)
+                .orElseThrow(PortfolioNotFoundException::new);
+
+        if (!portfolio.getUser().getUserId().equals(user.getUserId())) {
+            throw new RuntimeException("Unauthorized portfolio access");
+        }
+
+        Theme theme = portfolio.getTheme();
+
+        return new PortfolioBasicInfoDTO(
+                portfolio.getId(),
+                portfolio.getName(),
+                portfolio.getPortfolioType(),
+                portfolio.getCurrency(),
+                portfolio.getBenchmark(),
+                portfolio.getExchange(),
+                theme != null ? Long.valueOf(theme.getId()) : null,
+                theme != null ? theme.getName() : null,
+                portfolio.getReBalancingFrequency(),
+                portfolio.getAmount(),
+                portfolio.getPortfolioStatus(),
+                user.getUserId()
+        );
+    }
+
+    @Override
+    public ThemeAllocationDTO getThemeAllocation(
+            Long portfolioId,
+            Integer userId
+    ) {
+
+        Portfolio portfolio = getUserPortfolio(
+                portfolioId,
+                userId
+        );
+
+        Theme theme = portfolio.getTheme();
+
+        if (theme == null) {
+            throw new ThemeNotFoundException();
+        }
+
+        List<AllocationRuleDTO> rules =
+                theme.getAllocationRuleList()
+                        .stream()
+                        .map(rule -> {
+
+                            Asset asset = rule.getAsset();
+
+                            return new AllocationRuleDTO(
+                                    rule.getId(),
+                                    asset.getId(),
+                                    asset.getAssetClass(),
+                                    asset.getAssetSubclass(),
+                                    asset.getDescription(),
+                                    rule.getPercentage()
+                            );
+                        })
+                        .toList();
+
+        return new ThemeAllocationDTO(
+                Long.valueOf(theme.getId()),
+                theme.getName(),
+                theme.getRisk() != null
+                        ? theme.getRisk().toString()
+                        : null,
+                theme.getInvestmentHorizon() != null
+                        ? theme.getInvestmentHorizon().toString()
+                        : null,
+                rules
+        );
+    }
+
+    private Portfolio getUserPortfolio(
+            Long portfolioId,
+            Integer userId
+    ) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(UserNotFoundException::new);
+
+        Portfolio portfolio = portfolioRepository
+                .findById(portfolioId)
+                .orElseThrow(PortfolioNotFoundException::new);
+
+        if (!portfolio.getUser().getUserId()
+                .equals(user.getUserId())) {
+
+            throw new RuntimeException(
+                    "Unauthorized portfolio access"
+            );
+        }
+
+        return portfolio;
+    }
+
+    @Override
+    public List<PortfolioHoldingDTO> getPortfolioHoldings(
+            Long portfolioId,
+            Integer userId
+    ) {
+
+        Portfolio portfolio =
+                getUserPortfolio(
+                        portfolioId,
+                        userId
+                );
+
+        List<PortfolioHolding> holdings =
+                portfolioHoldingRepository
+                        .findAllByPortfolio(portfolio);
+
+        double totalInvested = holdings.stream()
+                .mapToDouble(h ->
+                        h.getTotalCost() != null
+                                ? h.getTotalCost()
+                                : 0.0
+                )
+                .sum();
+
+        return holdings.stream()
+                .map(holding -> {
+
+                    double totalCost =
+                            holding.getTotalCost() != null
+                                    ? holding.getTotalCost()
+                                    : 0.0;
+
+                    double allocation =
+                            totalInvested == 0
+                                    ? 0
+                                    : (totalCost /
+                                    totalInvested) * 100;
+
+                    SecurityMaster security =
+                            holding.getSecurityMaster();
+
+                    return new PortfolioHoldingDTO(
+                            holding.getId(),
+                            security.getId(),
+                            security.getSymbol(),
+                            security.getName(),
+                            holding.getAsset().getId(),
+                            holding.getAsset().getAssetClass(),
+                            holding.getQuantityHeld(),
+                            holding.getAverageCost(),
+                            totalCost,
+                            totalCost,
+                            Math.round(allocation * 100.0)
+                                    / 100.0
+                    );
+                })
+                .toList();
+    }
+
+    @Override
+    public AllocationValidationDTO validatePortfolioAllocation(
+            Long portfolioId,
+            Integer userId
+    ) {
+
+        Portfolio portfolio =
+                getUserPortfolio(
+                        portfolioId,
+                        userId
+                );
+
+        List<PortfolioHolding> holdings =
+                portfolioHoldingRepository
+                        .findAllByPortfolio(portfolio);
+
+
+        double totalInvested = holdings.stream()
+                .mapToDouble(h ->
+                        h.getTotalCost() != null
+                                ? h.getTotalCost()
+                                : 0.0
+                )
+                .sum();
+
+
+        Map<Integer, Double> assetAmountMap =
+                new HashMap<>();
+
+        Map<Integer, Integer> assetHoldingCount =
+                new HashMap<>();
+
+        for (PortfolioHolding holding : holdings) {
+
+            Integer assetId =
+                    holding.getAsset().getId();
+
+            Double amount =
+                    holding.getTotalCost() != null
+                            ? holding.getTotalCost()
+                            : 0.0;
+
+            assetAmountMap.put(
+                    assetId,
+                    assetAmountMap.getOrDefault(
+                            assetId,
+                            0.0
+                    ) + amount
+            );
+
+            assetHoldingCount.put(
+                    assetId,
+                    assetHoldingCount.getOrDefault(
+                            assetId,
+                            0
+                    ) + 1
+            );
+        }
+
+
+        List<AssetAllocationValidationDTO> result =
+                new ArrayList<>();
+
+        boolean portfolioValid = true;
+
+        for (AllocationRule rule :
+                portfolio.getTheme()
+                        .getAllocationRuleList()) {
+
+            Asset asset = rule.getAsset();
+
+            Integer assetId = asset.getId();
+
+            double target =
+                    rule.getPercentage() != null
+                            ? rule.getPercentage()
+                            : 0.0;
+
+            double invested =
+                    assetAmountMap.getOrDefault(
+                            assetId,
+                            0.0
+                    );
+
+            double current =
+                    totalInvested == 0
+                            ? 0.0
+                            : (invested /
+                            totalInvested) * 100;
+
+            current =
+                    Math.round(current * 100.0)
+                            / 100.0;
+
+            double drift =
+                    current - target;
+
+            drift =
+                    Math.round(drift * 100.0)
+                            / 100.0;
+
+
+            boolean satisfied =
+                    Math.abs(drift) < 5.0;
+
+            if (!satisfied) {
+                portfolioValid = false;
+            }
+
+            result.add(
+                    new AssetAllocationValidationDTO(
+                            assetId,
+                            asset.getAssetClass(),
+                            target,
+                            current,
+                            drift,
+                            satisfied,
+                            assetHoldingCount
+                                    .getOrDefault(
+                                            assetId,
+                                            0
+                                    )
+                    )
+            );
+        }
+
+        return new AllocationValidationDTO(
+                portfolio.getId(),
+                portfolio.getName(),
+                totalInvested,
+                getCurrentAum(portfolio),
+                portfolioValid,
+                result
+        );
+    }
+
 }
 

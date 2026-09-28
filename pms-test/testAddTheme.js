@@ -10,7 +10,7 @@ const goldEquityTheme = {
   risk: "MEDIUM",
   investmentHorizon: "LONG",
   allocationRuleList: [
-    { assetId: 1,  percentage: 70.0 },   
+    { assetId: 2,  percentage: 70.0 },   
     { assetId: 20, percentage: 30.0 }    
   ],
   userId:1

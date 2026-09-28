@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   FolderKanban,
@@ -21,24 +21,27 @@ import {
   AlertTriangle,
   LockKeyhole,
 } from "lucide-react";
+import { useParams } from "react-router-dom";
+import {
+  getPortfolioBasicInfo,
+  getPortfolioHoldings,
+} from "../services/portfolioService";
 
+// const portfolio = {
+//   name: "Growth Portfolio",
+//   status: "ACTIVE",
+//   exchange: "NSE/BSE",
+//   type: "WEIGHTAGE",
+//   isinPool: "INSTITUTIONAL PRIMARY",
 
-const portfolio = {
-  name: "Growth Portfolio",
-  status: "ACTIVE",
-  exchange: "NSE/BSE",
-  type: "WEIGHTAGE",
-  isinPool: "INSTITUTIONAL PRIMARY",
+//   portfolioValue: 845000000,
+//   investedAmount: 700000000,
+//   totalReturn: 24.6,
+//   benchmarkReturn: 18.2,
+//   alpha: 6.4,
 
-  portfolioValue: 845000000,
-  investedAmount: 700000000,
-  totalReturn: 24.6,
-  benchmarkReturn: 18.2,
-  alpha: 6.4,
- 
-
-  benchmark: "NIFTY 50",
-};
+//   benchmark: "NIFTY 50",
+// };
 
 const driftData = [
   {
@@ -71,82 +74,80 @@ const driftData = [
   },
 ];
 
-const holdings = [
-  {
-    security: "Reliance Industries",
-    symbol: "RELIANCE",
-    assetClass: "STOCK",
-    quantity: "8,500",
-    buyPrice: 2450,
-    currentPrice: 2940.5,
-    investedValue: 20825000,
-    currentValue: 24994250,
-    pnl: 4169250,
-    pnlPercent: 20.02,
-  },
-  {
-    security: "Tata Consultancy Services",
-    symbol: "TCS",
-    assetClass: "STOCK",
-    quantity: "5,200",
-    buyPrice: 3400,
-    currentPrice: 3920,
-    investedValue: 17680000,
-    currentValue: 20384000,
-    pnl: 2704000,
-    pnlPercent: 15.29,
-  },
-  {
-    security: "HDFC Bank",
-    symbol: "HDFCBANK",
-    assetClass: "STOCK",
-    quantity: "6,800",
-    buyPrice: 1480,
-    currentPrice: 1530.2,
-    investedValue: 10064000,
-    currentValue: 10405360,
-    pnl: 341360,
-    pnlPercent: 3.39,
-  },
-  {
-    security: "SBI Bluechip Direct",
-    symbol: "SBIBLUE",
-    assetClass: "MUTUAL FUND",
-    quantity: "1,40,000",
-    buyPrice: 72,
-    currentPrice: 84.2,
-    investedValue: 10080000,
-    currentValue: 11788000,
-    pnl: 1708000,
-    pnlPercent: 16.94,
-  },
-  {
-    security: "Nippon Nifty 50 BeES",
-    symbol: "NIFTYBEES",
-    assetClass: "ETF",
-    quantity: "40,800",
-    buyPrice: 210,
-    currentPrice: 248.1,
-    investedValue: 8568000,
-    currentValue: 10122480,
-    pnl: 1554480,
-    pnlPercent: 18.15,
-  },
-  {
-    security: "Sovereign Gold Bond 2026",
-    symbol: "SGB2026",
-    assetClass: "COMMODITY",
-    quantity: "1,050",
-    buyPrice: 5800,
-    currentPrice: 6420,
-    investedValue: 6090000,
-    currentValue: 6741000,
-    pnl: 651000,
-    pnlPercent: 10.69,
-  },
-];
-
-
+// const holdings = [
+//   {
+//     security: "Reliance Industries",
+//     symbol: "RELIANCE",
+//     assetClass: "STOCK",
+//     quantity: "8,500",
+//     buyPrice: 2450,
+//     currentPrice: 2940.5,
+//     investedValue: 20825000,
+//     currentValue: 24994250,
+//     pnl: 4169250,
+//     pnlPercent: 20.02,
+//   },
+//   {
+//     security: "Tata Consultancy Services",
+//     symbol: "TCS",
+//     assetClass: "STOCK",
+//     quantity: "5,200",
+//     buyPrice: 3400,
+//     currentPrice: 3920,
+//     investedValue: 17680000,
+//     currentValue: 20384000,
+//     pnl: 2704000,
+//     pnlPercent: 15.29,
+//   },
+//   {
+//     security: "HDFC Bank",
+//     symbol: "HDFCBANK",
+//     assetClass: "STOCK",
+//     quantity: "6,800",
+//     buyPrice: 1480,
+//     currentPrice: 1530.2,
+//     investedValue: 10064000,
+//     currentValue: 10405360,
+//     pnl: 341360,
+//     pnlPercent: 3.39,
+//   },
+//   {
+//     security: "SBI Bluechip Direct",
+//     symbol: "SBIBLUE",
+//     assetClass: "MUTUAL FUND",
+//     quantity: "1,40,000",
+//     buyPrice: 72,
+//     currentPrice: 84.2,
+//     investedValue: 10080000,
+//     currentValue: 11788000,
+//     pnl: 1708000,
+//     pnlPercent: 16.94,
+//   },
+//   {
+//     security: "Nippon Nifty 50 BeES",
+//     symbol: "NIFTYBEES",
+//     assetClass: "ETF",
+//     quantity: "40,800",
+//     buyPrice: 210,
+//     currentPrice: 248.1,
+//     investedValue: 8568000,
+//     currentValue: 10122480,
+//     pnl: 1554480,
+//     pnlPercent: 18.15,
+//   },
+//   {
+//     security: "Sovereign Gold Bond 2026",
+//     symbol: "SGB2026",
+//     assetClass: "COMMODITY",
+//     quantity: "1,050",
+//     buyPrice: 5800,
+//     currentPrice: 6420,
+//     investedValue: 6090000,
+//     currentValue: 6741000,
+//     pnl: 651000,
+//     pnlPercent: 10.69,
+//   },
+// ];
 
 const formatCrore = (value) => {
   return `₹ ${(value / 10000000).toFixed(2)} Cr`;
@@ -162,8 +163,6 @@ const formatPrice = (value) => {
 const formatCompactValue = (value) => {
   return `₹ ${(value / 10000000).toFixed(2)} Cr`;
 };
-
-
 
 const SideBarComponent = () => {
   const menuItems = [
@@ -198,7 +197,6 @@ const SideBarComponent = () => {
 
   return (
     <aside className="fixed left-0 top-0 z-30 flex h-screen w-[240px] flex-col bg-[#172a40] text-white">
-     
       <div className="flex h-[70px] items-center gap-3 border-b border-white/10 px-5">
         <div className="flex h-7 w-7 items-center justify-center rounded-md bg-blue-600">
           <TrendingUp size={17} />
@@ -249,7 +247,6 @@ const SideBarComponent = () => {
         })}
       </nav>
 
-
       <div className="mt-auto p-3">
         <div className="rounded-md bg-white/10 p-4">
           <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-300">
@@ -283,13 +280,10 @@ const SideBarComponent = () => {
   );
 };
 
-
-
 const TopBarComponent = () => {
   return (
     <header className="fixed left-[240px] right-0 top-0 z-20 h-[70px] border-b border-slate-200 bg-white">
       <div className="flex h-full items-center justify-between px-5">
-
         <div className="flex h-9 w-[350px] items-center gap-2 rounded-md bg-slate-100 px-3">
           <Search size={17} className="text-slate-500" />
 
@@ -340,8 +334,6 @@ const TopBarComponent = () => {
   );
 };
 
-
-
 const StatCard = ({ title, value, subtitle, icon: Icon, valueClass = "" }) => {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -365,8 +357,6 @@ const StatCard = ({ title, value, subtitle, icon: Icon, valueClass = "" }) => {
     </div>
   );
 };
-
-
 
 const PerformanceChart = () => {
   return (
@@ -398,9 +388,7 @@ const PerformanceChart = () => {
         </div>
       </div>
 
-
       <div className="relative mt-5 h-[280px] overflow-hidden">
-    
         <div className="absolute left-0 top-0 flex h-full flex-col justify-between text-[10px] text-slate-400">
           <span>130.0</span>
           <span>120.0</span>
@@ -409,7 +397,6 @@ const PerformanceChart = () => {
           <span>90.0</span>
         </div>
 
-  
         <div className="absolute left-12 right-3 top-0 h-full">
           {[0, 25, 50, 75, 100].map((top) => (
             <div
@@ -419,7 +406,6 @@ const PerformanceChart = () => {
             />
           ))}
 
-       
           <svg
             viewBox="0 0 700 250"
             className="absolute inset-0 h-full w-full"
@@ -452,7 +438,6 @@ const PerformanceChart = () => {
               fill="url(#performanceGradient)"
             />
 
-     
             <path
               d="M0 200
                  C60 197 80 190 115 180
@@ -467,7 +452,6 @@ const PerformanceChart = () => {
               strokeWidth="2.5"
               strokeDasharray="6 5"
             />
-
 
             <path
               d="M0 200
@@ -495,7 +479,6 @@ const PerformanceChart = () => {
             />
           </svg>
 
-   
           <div className="absolute right-0 top-0 rounded-md bg-[#172a40] px-4 py-2 text-[10px] text-white shadow-lg">
             <div className="mb-1 text-[9px] uppercase text-slate-300">
               Peak Trajectory Metric
@@ -520,7 +503,6 @@ const PerformanceChart = () => {
         </div>
       </div>
 
-  
       <div className="mt-2 flex items-center gap-5 text-[11px] font-semibold text-slate-600">
         <div className="flex items-center gap-2">
           <span className="h-[2px] w-3 bg-blue-700" />
@@ -539,8 +521,6 @@ const PerformanceChart = () => {
     </div>
   );
 };
-
-
 
 const AllocationDriftMonitor = () => {
   return (
@@ -561,7 +541,6 @@ const AllocationDriftMonitor = () => {
         </span>
       </div>
 
-
       <div className="mt-5 grid grid-cols-[1.5fr_.8fr_.8fr_.8fr_1fr] bg-slate-100 px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
         <span>Asset Class</span>
         <span>Target</span>
@@ -569,7 +548,6 @@ const AllocationDriftMonitor = () => {
         <span>Drift</span>
         <span>Status</span>
       </div>
-
 
       <div>
         {driftData.map((item) => (
@@ -611,7 +589,6 @@ const AllocationDriftMonitor = () => {
         ))}
       </div>
 
-     
       <div className="mt-4 rounded-md border border-red-100 bg-red-50 p-4">
         <div className="flex gap-2">
           <AlertTriangle size={18} className="mt-0.5 shrink-0 text-red-600" />
@@ -633,8 +610,22 @@ const AllocationDriftMonitor = () => {
   );
 };
 
-
 const HoldingsTable = () => {
+  const [portfolio, setPortfolio] = useState({});
+  const [holdings, setHoldings] = useState([]);
+  const { id } = useParams();
+  const loadHoldings = async () => {
+    const data = await getPortfolioHoldings(id);
+    setHoldings(data);
+  };
+  const loadPortFolio = async () => {
+    const data = await getPortfolioBasicInfo(id);
+    console.log(data);
+    setPortfolio(data);
+  };
+  useEffect(() => {
+    loadHoldings();
+  }, []);
   return (
     <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
       {/* Header */}
@@ -663,7 +654,6 @@ const HoldingsTable = () => {
         </div>
       </div>
 
-
       <div className="overflow-x-auto">
         <table className="w-full min-w-[1050px] border-collapse">
           <thead>
@@ -672,22 +662,20 @@ const HoldingsTable = () => {
               <th className="px-3 py-3">Symbol</th>
               <th className="px-3 py-3">Asset Class</th>
               <th className="px-3 py-3 text-right">Quantity</th>
-              <th className="px-3 py-3 text-right">Buy Price</th>
-              <th className="px-3 py-3 text-right">Current Price</th>
-              <th className="px-3 py-3 text-right">Invested Value</th>
+              <th className="px-3 py-3 text-right">Average Cost</th>
+              <th className="px-3 py-3 text-right">Total Cost</th>
               <th className="px-3 py-3 text-right">Current Value</th>
-              <th className="px-3 py-3 text-right">P&L (Unrealized)</th>
+              <th className="px-3 py-3 text-right">Allocation</th>
             </tr>
           </thead>
-
           <tbody>
             {holdings.map((holding) => (
               <tr
-                key={holding.symbol}
+                key={holding.holdingId}
                 className="border-b border-slate-100 hover:bg-slate-50"
               >
                 <td className="px-3 py-4 text-sm font-medium text-slate-800">
-                  {holding.security}
+                  {holding.securityName}
                 </td>
 
                 <td className="px-3 py-4 font-mono text-[11px] font-semibold text-slate-500">
@@ -701,19 +689,15 @@ const HoldingsTable = () => {
                 </td>
 
                 <td className="px-3 py-4 text-right text-sm font-semibold text-slate-700">
-                  {holding.quantity}
+                  {holding.quantity?.toLocaleString("en-IN")}
                 </td>
 
                 <td className="px-3 py-4 text-right text-sm text-slate-700">
-                  {formatPrice(holding.buyPrice)}
-                </td>
-
-                <td className="px-3 py-4 text-right text-sm font-semibold text-slate-700">
-                  {formatPrice(holding.currentPrice)}
+                  {formatPrice(holding.averageCost)}
                 </td>
 
                 <td className="px-3 py-4 text-right text-sm text-slate-700">
-                  {formatCompactValue(holding.investedValue)}
+                  {formatCompactValue(holding.totalCost)}
                 </td>
 
                 <td className="px-3 py-4 text-right text-sm font-semibold text-slate-800">
@@ -721,12 +705,8 @@ const HoldingsTable = () => {
                 </td>
 
                 <td className="px-3 py-4 text-right">
-                  <div className="font-semibold text-emerald-700">
-                    +{formatCompactValue(holding.pnl)}
-                  </div>
-
-                  <div className="text-[10px] text-emerald-600">
-                    +{holding.pnlPercent.toFixed(1)}%
+                  <div className="font-semibold text-blue-700">
+                    {holding.allocationPercentage?.toFixed(2)}%
                   </div>
                 </td>
               </tr>
@@ -734,7 +714,6 @@ const HoldingsTable = () => {
           </tbody>
         </table>
       </div>
-
 
       <div className="flex items-center justify-between bg-blue-50 px-5 py-5">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
@@ -770,9 +749,18 @@ const HoldingsTable = () => {
   );
 };
 
-
-
 const PortfolioDetailsPage = () => {
+  const { id } = useParams();
+  const [portfolio, setPortfolio] = useState({});
+  const loadPortFolio = async () => {
+    const data = await getPortfolioBasicInfo(id);
+    console.log(data);
+    setPortfolio(data);
+  };
+  useEffect(() => {
+    console.log("Portfolio ID:", id);
+    loadPortFolio();
+  }, [id]);
   return (
     <div className="min-h-screen bg-[#f7f9fc] font-sans text-slate-900">
       <SideBarComponent />
@@ -781,36 +769,34 @@ const PortfolioDetailsPage = () => {
 
       <main className="ml-[240px] pt-[70px]">
         <div className="mx-auto max-w-[1500px] px-5 py-6">
-
-
           <div className="flex items-end justify-between">
             <div>
               <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                 Portfolios
                 <span className="mx-2">›</span>
-                <span className="text-slate-700">Growth Portfolio</span>
+                <span className="text-slate-700">{portfolio.name}</span>
               </div>
 
               <h1 className="text-[32px] font-bold tracking-tight text-slate-900">
-                Growth Portfolio
+                {portfolio.name}
               </h1>
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="flex items-center gap-1 rounded bg-emerald-100 px-2 py-1 text-[10px] font-bold text-emerald-700">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-                  ACTIVE
+                  {portfolio.portfolioStatus}
                 </span>
 
                 <span className="rounded bg-blue-100 px-2 py-1 text-[10px] font-bold uppercase text-slate-700">
-                  Exchange: NSE/BSE
+                  Exchange: {portfolio.exchange}
                 </span>
 
                 <span className="rounded bg-blue-100 px-2 py-1 text-[10px] font-bold uppercase text-slate-700">
-                  Type: Weightage
+                  Type: {portfolio.portfolioType}
                 </span>
 
                 <span className="rounded bg-blue-100 px-2 py-1 text-[10px] font-bold uppercase text-slate-700">
-                  ISIN Pool: Institutional Primary
+                  Currency: {portfolio.currency}
                 </span>
               </div>
             </div>
@@ -835,7 +821,6 @@ const PortfolioDetailsPage = () => {
               </button>
             </div>
           </div>
-
 
           <div className="mt-5 grid grid-cols-4 gap-4">
             <StatCard
@@ -879,7 +864,7 @@ const PortfolioDetailsPage = () => {
                 <>
                   {portfolio.benchmark}
                   <span className="float-right font-semibold text-blue-700">
-                    Alpha: +{portfolio.alpha.toFixed(2)}%
+                    Alpha: +{portfolio.alpha?.toFixed(2)}%
                   </span>
                 </>
               }
@@ -887,13 +872,11 @@ const PortfolioDetailsPage = () => {
             />
           </div>
 
-
           <div className="mt-4 grid grid-cols-[1.7fr_1fr] gap-4">
             <PerformanceChart />
 
             <AllocationDriftMonitor />
           </div>
-
 
           <div className="mt-4">
             <HoldingsTable />
