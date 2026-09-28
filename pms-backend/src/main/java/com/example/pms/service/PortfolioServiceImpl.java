@@ -1,8 +1,13 @@
 package com.example.pms.service;
 
+import com.example.pms.client.SecurityMasterClient;
 import com.example.pms.dto.request.CreateAndActivatePortfolioDTO;
 import com.example.pms.dto.request.AddPortfolioHoldingDTO;
 import com.example.pms.dto.request.CreatePortfolioDTO;
+import com.example.pms.dto.request.GetAllPortfolioDTO;
+import com.example.pms.dto.response.GetAllPortfolioResponseDTO;
+import com.example.pms.dto.response.PortfolioDetailsDTO;
+import com.example.pms.dto.response.SecurityPriceDTO;
 import com.example.pms.dto.response.ValidationDTO;
 import com.example.pms.exception.PortfolioNotFoundException;
 import com.example.pms.exception.ThemeNotFoundException;
@@ -17,11 +22,16 @@ import com.example.pms.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+
+import java.util.*;
+import java.util.stream.Collectors;
+
 import javax.sound.sampled.Port;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +42,7 @@ public class PortfolioServiceImpl implements PortfolioService{
     private final PortfolioRepository portfolioRepository;
     private final PortFolioHoldingRepository portfolioHoldingRepository;
     private final PortfolioHoldingService portfolioHoldingService;
+    private final SecurityMasterClient securityMasterClient;
 
 
     @Override
@@ -168,6 +179,86 @@ public class PortfolioServiceImpl implements PortfolioService{
 
     }
 
+    @Override
+    public GetAllPortfolioResponseDTO getAllPortfolioDetails(GetAllPortfolioDTO getAllPortfolioDTO) {
+        if(userRepository.existsById(getAllPortfolioDTO.getUserId())){
+            List<Portfolio> portfolios = portfolioRepository.findByUserUserId(getAllPortfolioDTO.getUserId());
+            List<PortfolioDetailsDTO> portfolioDetailsDTOList = new ArrayList<>();
+            for(Portfolio portfolio:portfolios){
+                if(portfolio.getPortfolioStatus().equals(PortfolioStatus.ACTIVE)){
+                    String initials = Arrays.stream(portfolio.getName().split(" ")).map((word)-> String.valueOf(word.charAt(0))).collect(Collectors.joining());
+                    Double currentAum = getCurrentAum(portfolio);
+                    Double totalInvestedAmount = getTotalInvestedAmount(portfolio);
+                    Double return1Y = currentAum - totalInvestedAmount;
+                    Double returnPercent = (return1Y/totalInvestedAmount) * 100;
+                    String returnPercentString = returnPercent<0?"-"+returnPercent+"%":"+"+returnPercent+"%";
+
+                    PortfolioDetailsDTO portfolioDetailsDTO = new PortfolioDetailsDTO(
+                            portfolio.getId(),
+                            initials,portfolio.getName(),
+                            "PMS-0"+portfolio.getId(),
+                            portfolio.getTheme().getName(),
+                            portfolio.getPortfolioType().toString(),
+                            currentAum,
+                            returnPercentString,
+                            portfolio.getBenchmark(),
+                            portfolio.getPortfolioStatus(),
+                            "View"
+                    );
+                    portfolioDetailsDTOList.add(portfolioDetailsDTO);
+                }
+            }
+            return new GetAllPortfolioResponseDTO(portfolioDetailsDTOList);
+        }else{
+            throw new UserNotFoundException();
+        }
+    }
+
+    public Double getCurrentAum(Portfolio portfolio){
+        List<PortfolioHolding> portfolioHoldings = portfolioHoldingRepository.findAllByPortfolio(portfolio);
+        Double currentAum = 0.0d;
+        for(PortfolioHolding portfolioHolding:portfolioHoldings){
+            SecurityPriceDTO  securityPriceDTO = securityMasterClient.findBySecurityId(portfolioHolding.getSecurityMaster().getId()).get();
+            SecurityType type = securityPriceDTO.getSecurityMaster().getSecurityType();
+            switch (type){
+                case ETF,EQUITY->{
+                    Double currentPrice = securityPriceDTO.getStockData().getClosePrice().doubleValue();
+                    Double holdingWorth = currentPrice * portfolioHolding.getQuantityHeld();
+                    currentAum += holdingWorth;
+                }
+
+                case MUTUAL_FUND -> {
+                    Double currentPrice = securityPriceDTO.getMutualFundNav().getNav().doubleValue();
+                    Double holdingWorth = currentPrice * portfolioHolding.getQuantityHeld();
+                    currentAum += holdingWorth;
+                }
+
+                case BOND -> {
+                    Double currentPrice = securityPriceDTO.getBond().getFaceValue().doubleValue();
+                    Double holdingWorth = currentPrice * portfolioHolding.getQuantityHeld();
+                    currentAum += holdingWorth;
+                }
+
+                case COMMODITY -> {
+                    Double currentPrice = securityPriceDTO.getCommoditySpotData().getSpotPrice().doubleValue();
+                    Double holdingWorth = currentPrice * portfolioHolding.getQuantityHeld();
+                    currentAum += holdingWorth;
+                }
+            }
+
+        }
+        return currentAum+portfolio.getAmount();
+    }
+
+    public Double getTotalInvestedAmount(Portfolio portfolio) {
+        List<PortfolioHolding> portfolioHoldings = portfolioHoldingRepository.findAllByPortfolio(portfolio);
+        Double totalInvestedAmount = 0.0d;
+        for (PortfolioHolding portfolioHolding : portfolioHoldings) {
+            totalInvestedAmount += portfolioHolding.getTotalCost();
+        }
+        return totalInvestedAmount + portfolio.getAmount();
+    }
+
 
     @Override
     public Double getTotalRemainingAmount(Integer userId){
@@ -183,6 +274,7 @@ public class PortfolioServiceImpl implements PortfolioService{
         }
 
         return totalRemainingAmount;
+
 
 
     }
