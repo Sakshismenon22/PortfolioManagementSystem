@@ -41,4 +41,9 @@ public class PortfolioController {
     public Integer getCountOfActivePortfolios(@PathVariable Integer userId){
         return portfolioService.getCountOfActivePortfolios(userId);
     }
+
+    @GetMapping("/remaining-total/{userId}")
+    public Double getTotalRemainingAmount(@PathVariable Integer userId){
+        return portfolioService.getTotalRemainingAmount(userId);
+    }
 }
