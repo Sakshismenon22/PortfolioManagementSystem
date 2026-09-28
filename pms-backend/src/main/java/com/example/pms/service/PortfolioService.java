@@ -32,4 +32,7 @@ public interface PortfolioService {
     public Double getTotalRemainingAmount(Integer userId);
 
 
+    public Portfolio getPortfolioDetails(Long id, Integer userId);
+
+
 }

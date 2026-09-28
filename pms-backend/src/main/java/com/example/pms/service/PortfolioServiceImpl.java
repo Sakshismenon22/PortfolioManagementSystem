@@ -278,5 +278,22 @@ public class PortfolioServiceImpl implements PortfolioService{
 
 
     }
+
+    @Override
+    public Portfolio getPortfolioDetails(Long id, Integer userId){
+        Portfolio portfolio = new Portfolio();
+        if(userRepository.existsById(userId)){
+            if(portfolioRepository.existsById(id)){
+                 portfolio = portfolioRepository.findById(id).get();
+            }
+            else{
+                throw new PortfolioNotFoundException();
+            }
+        }else{
+            throw new UserNotFoundException();
+        }
+
+        return portfolio;
+    }
 }
 

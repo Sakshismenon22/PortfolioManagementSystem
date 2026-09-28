@@ -8,6 +8,7 @@ import PortfolioPage from './pages/PortfolioPage'
 import CreatePortfolioPage from './pages/CreatePortfolioPage'
 import PortfolioDetailsPage from './pages/PortfolioDetailsPage'
 import DashboardPage from './pages/DashboardPage'
+import CreateThemePage from "./pages/CreateThemePage";
 import { ToastContainer } from 'react-toastify'
 function App() {
   const [count, setCount] = useState(0)
@@ -21,6 +22,8 @@ function App() {
           <Route path="/create-portfolio" element={<CreatePortfolioPage/>}/>
           <Route path="/portfolio-details" element={<PortfolioDetailsPage/>}/>
           <Route path="/home" element={<DashboardPage/>}/>
+          <Route path="/create-theme" element={<CreateThemePage />}
+/>
         </Routes>
       </BrowserRouter>
 
