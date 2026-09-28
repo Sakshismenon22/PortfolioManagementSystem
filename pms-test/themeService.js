@@ -1,7 +1,7 @@
 import axios from "axios";
 
 
-export const getAllThemes = async ()=>{
+const getAllThemes = async ()=>{
    try{
     const response = await axios.get(`http://localhost:8082/api/themes/get-all-themes`,"");
 
@@ -10,3 +10,7 @@ export const getAllThemes = async ()=>{
     return error.data;
    }
 }
+
+const themes = await getAllThemes();
+
+console.log(themes);
