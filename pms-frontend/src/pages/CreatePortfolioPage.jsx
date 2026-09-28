@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   ArrowLeft,
@@ -20,6 +20,7 @@ import {
 
 import SideBarComponent from "../components/SideBarComponent";
 import TopBarComponent from "../components/TopBarComponent";
+import { getAllSecuritiesInfo } from "../services/securityService";
 
 
 
@@ -98,56 +99,56 @@ const themes = [
   },
 ];
 
-const securities = [
-  {
-    id: 1,
-    symbol: "RELIANCE",
-    name: "Reliance Industries Ltd",
-    isin: "INE002A01018",
-    assetClass: "Stock",
-    price: 2940.5,
-  },
-  {
-    id: 2,
-    symbol: "TCS",
-    name: "Tata Consultancy Services",
-    isin: "INE467B01029",
-    assetClass: "Stock",
-    price: 3920.0,
-  },
-  {
-    id: 3,
-    symbol: "HDFCBANK",
-    name: "HDFC Bank Ltd",
-    isin: "INE040A01034",
-    assetClass: "Stock",
-    price: 1530.2,
-  },
-  {
-    id: 4,
-    symbol: "SBIDIRECT",
-    name: "SBI Bluechip Direct Growth",
-    isin: "INF200K01135",
-    assetClass: "Mutual Fund",
-    price: 84.2,
-  },
-  {
-    id: 5,
-    symbol: "NIFTYBEES",
-    name: "Nippon India Nifty 50 BeES",
-    isin: "INF204KB14I2",
-    assetClass: "ETF",
-    price: 248.1,
-  },
-  {
-    id: 6,
-    symbol: "GOLDBEES",
-    name: "Sovereign Gold Bond / Gold",
-    isin: "INF732E01037",
-    assetClass: "Commodity",
-    price: 6420.0,
-  },
-];
+// const securities = [
+//   {
+//     id: 1,
+//     symbol: "RELIANCE",
+//     name: "Reliance Industries Ltd",
+//     isin: "INE002A01018",
+//     assetClass: "Stock",
+//     price: 2940.5,
+//   },
+//   {
+//     id: 2,
+//     symbol: "TCS",
+//     name: "Tata Consultancy Services",
+//     isin: "INE467B01029",
+//     assetClass: "Stock",
+//     price: 3920.0,
+//   },
+//   {
+//     id: 3,
+//     symbol: "HDFCBANK",
+//     name: "HDFC Bank Ltd",
+//     isin: "INE040A01034",
+//     assetClass: "Stock",
+//     price: 1530.2,
+//   },
+//   {
+//     id: 4,
+//     symbol: "SBIDIRECT",
+//     name: "SBI Bluechip Direct Growth",
+//     isin: "INF200K01135",
+//     assetClass: "Mutual Fund",
+//     price: 84.2,
+//   },
+//   {
+//     id: 5,
+//     symbol: "NIFTYBEES",
+//     name: "Nippon India Nifty 50 BeES",
+//     isin: "INF204KB14I2",
+//     assetClass: "ETF",
+//     price: 248.1,
+//   },
+//   {
+//     id: 6,
+//     symbol: "GOLDBEES",
+//     name: "Sovereign Gold Bond / Gold",
+//     isin: "INF732E01037",
+//     assetClass: "Commodity",
+//     price: 6420.0,
+//   },
+// ];
 
 const benchmarks = [
   {
@@ -195,8 +196,15 @@ const CreatePortfolioPage = () => {
 
 
   const [currentStep, setCurrentStep] = useState(1);
-
-
+  const [securities,setSecurities] = useState([]);
+  const loadSecurities = async ()=>{
+    const res = await getAllSecuritiesInfo();
+    setSecurities(res.data.securities);
+    console.log(securities);
+  }
+  useEffect(()=>{
+    loadSecurities();
+  },[]);
 
   const [portfolio, setPortfolio] = useState({
     name: "",
