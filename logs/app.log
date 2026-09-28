@@ -1297,3 +1297,8 @@ java.util.NoSuchElementException: No value present
 2026-09-28T15:33:11.863+05:30  INFO 25792 --- [pms] [http-nio-8082-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
 2026-09-28T15:33:11.864+05:30  INFO 25792 --- [pms] [http-nio-8082-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
 2026-09-28T15:33:11.870+05:30  INFO 25792 --- [pms] [http-nio-8082-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 6 ms
+2026-09-28T15:56:01.332+05:30  INFO 25792 --- [pms] [SpringApplicationShutdownHook] o.s.boot.tomcat.GracefulShutdown         : Commencing graceful shutdown. Waiting for active requests to complete
+2026-09-28T15:56:01.341+05:30  INFO 25792 --- [pms] [tomcat-shutdown] o.s.boot.tomcat.GracefulShutdown         : Graceful shutdown complete
+2026-09-28T15:56:01.345+05:30  INFO 25792 --- [pms] [SpringApplicationShutdownHook] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-09-28T15:56:01.348+05:30  INFO 25792 --- [pms] [SpringApplicationShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2026-09-28T15:56:01.353+05:30  INFO 25792 --- [pms] [SpringApplicationShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.
