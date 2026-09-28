@@ -14,26 +14,28 @@ import SideBarComponent from "../components/SideBarComponent";
 import TopBarComponent from "../components/TopBarComponent";
 
 import { createTheme } from "../services/themeService";
-import { getAllSecuritiesInfo } from "../services/securityService";
-import { toast } from "react-toastify";
 import { getAllAssets } from "../services/portfolioService";
+import { toast } from "react-toastify";
 
 
 const RISK_OPTIONS = [
   {
     value: "LOW",
     label: "Low Risk",
-    description: "Capital preservation with relatively lower volatility.",
+    description:
+      "Capital preservation with relatively lower volatility.",
   },
   {
     value: "MEDIUM",
     label: "Medium Risk",
-    description: "Balanced growth with moderate market exposure.",
+    description:
+      "Balanced growth with moderate market exposure.",
   },
   {
     value: "HIGH",
     label: "High Risk",
-    description: "Higher growth potential with higher volatility.",
+    description:
+      "Higher growth potential with higher volatility.",
   },
 ];
 
@@ -89,22 +91,43 @@ const CreateThemePage = () => {
   }, []);
 
 
+  /*
+   * Load assets from Unified Security Master
+   *
+   * portfolioService.getAllAssets() returns:
+   *
+   * {
+   *   statusCode: 200,
+   *   success: true,
+   *   data: [ ...assets... ],
+   *   message: "All assets retrieved"
+   * }
+   *
+   * Therefore the actual array is response.data.
+   */
   const loadAssets = async () => {
 
     try {
 
       const response = await getAllAssets();
 
-      /*
-       * Adjust this depending on the exact response structure
-       * returned by your backend.
-       */
-      console.log("Assets response:" , response);
-      console.log("Assets data :" , response.data);
-      const securities = response?.data?.securities ?? [];
-        
+      console.log("Asset API response:", response);
+      console.log("Assets:", response?.data);
 
-      setAssets(securities);
+      const assetList = Array.isArray(response?.data)
+        ? response.data
+        : [];
+
+        //Remove duplicates
+        const uniqueAssets = Array.from(
+            new Map(
+                assetList.map((asset) => [
+                    asset.assetClass, asset,
+                ])
+            ).values()
+    );
+
+      setAssets(uniqueAssets);
 
     } catch (error) {
 
@@ -225,26 +248,39 @@ const CreateThemePage = () => {
 
 
     /*
-     * Replace this with however your application
-     * stores the logged-in user's ID.
+     * Get logged-in user's ID.
      */
     const userId =
       Number(localStorage.getItem("userId")) || 1;
 
 
+    /*
+     * Payload expected by AddThemeDTO
+     */
     const payload = {
+
       name: theme.name,
+
       risk: theme.risk,
+
       investmentHorizon:
         theme.investmentHorizon,
 
       allocationRuleList:
         allocations.map((allocation) => ({
-          assetId: Number(allocation.assetId),
-          percentage: Number(allocation.percentage),
+
+          assetId: Number(
+            allocation.assetId
+          ),
+
+          percentage: Number(
+            allocation.percentage
+          ),
+
         })),
 
       userId,
+
     };
 
 
@@ -265,7 +301,10 @@ const CreateThemePage = () => {
         response
       );
 
-      toast.success("Theme created successfully.");
+      toast.success(
+        "Theme created successfully."
+      );
+
 
       /*
        * Reset form after successful creation.
@@ -600,17 +639,17 @@ const CreateThemePage = () => {
                     <div>
 
                       <select
-                        name = "assetId"
-                        value={
-                          allocation.assetId
-                        }
+                        name="assetId"
+                        value={allocation.assetId}
+
                         onChange={(event) =>
                           handleAllocationChange(
-                            allocation.id,
+                            index,
                             "assetId",
                             event.target.value
                           )
                         }
+
                         className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                       >
 
@@ -618,16 +657,15 @@ const CreateThemePage = () => {
                           Select Asset
                         </option>
 
+
                         {assets.map(
-                          (security) => (
+                          (asset) => (
 
                             <option
-                              key={security.id}
-                              value={security.id}
+                              key={asset.id}
+                              value={asset.id}
                             >
-                              {security.name ||
-                                security.symbol
-                                }
+                              {asset.assetClass}
                             </option>
 
                           )
@@ -678,8 +716,7 @@ const CreateThemePage = () => {
                           removeAllocation(index)
                         }
                         disabled={
-                          allocations.length ===
-                          1
+                          allocations.length === 1
                         }
                         className="rounded-md p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"
                       >
@@ -746,6 +783,7 @@ const CreateThemePage = () => {
 
                   {isValidAllocation ? (
                     <>
+
                       <Check
                         size={16}
                         className="text-emerald-700"
@@ -754,9 +792,11 @@ const CreateThemePage = () => {
                       <span className="text-sm font-semibold text-emerald-700">
                         Validated
                       </span>
+
                     </>
                   ) : (
                     <>
+
                       <AlertTriangle
                         size={16}
                         className="text-red-600"
@@ -765,6 +805,7 @@ const CreateThemePage = () => {
                       <span className="text-sm font-semibold text-red-600">
                         Requires 100%
                       </span>
+
                     </>
                   )}
 
