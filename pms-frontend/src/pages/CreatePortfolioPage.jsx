@@ -248,7 +248,7 @@ const CreatePortfolioPage = () => {
         security.symbol.toLowerCase().includes(query) ||
         security.isin.toLowerCase().includes(query)
     );
-  }, [securitySearch]);
+  }, [securities,securitySearch]);
 
 
 

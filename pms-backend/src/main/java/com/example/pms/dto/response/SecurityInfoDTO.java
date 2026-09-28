@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 public class SecurityInfoDTO {
 
     private Long id;
+    private String name;
     private String symbol;
     private String isin;
     private Asset asset;
