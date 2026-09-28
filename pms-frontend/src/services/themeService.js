@@ -1,18 +1,12 @@
 import axios from "axios";
 
 
-const getAllThemes = ()=>{
+export const getAllThemes = async ()=>{
    try{
-    const response = axios.get("http:localhost:/api/themes/get-all-themes");
+    const response = await axios.get(`http://localhost:8082/api/themes/get-all-themes`,"");
 
     return response.data;
    }catch(error){
     return error.data;
    }
-}
-
-const themes = await getAllThemes();
-
-for(theme of themes){
-    console.log(theme.data)
 }

@@ -1,9 +1,9 @@
 import axios from "axios";
 
 
-const getAllThemes = ()=>{
+const getAllThemes = async ()=>{
    try{
-    const response = axios.get(`http://localhost:8082/api/themes/get-all-themes`);
+    const response = await axios.get(`http://localhost:8082/api/themes/get-all-themes`,"");
 
     return response.data;
    }catch(error){
