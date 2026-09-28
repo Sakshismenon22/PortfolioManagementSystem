@@ -1,5 +1,6 @@
 package com.example.pms.client;
 
+import com.example.pms.dto.response.SecuritiesInfoDTO;
 import com.example.pms.dto.response.SecurityPriceDTO;
 import com.example.pms.response.Response;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +39,30 @@ public class SecurityMasterClient {
 
         } catch (Exception e) {
             log.warn("Security lookup failed for Security Id {}: {}", id, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    public Optional<SecuritiesInfoDTO> getAllSecurityInfo(){
+        try {
+            Response<SecuritiesInfoDTO> envelope = securityMasterRestClient.get()
+                    .uri("/api/security/get-all-security-info")
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<Response<SecuritiesInfoDTO>>() {});
+            if (envelope == null) {
+                log.warn("Securities info request failed");
+                return Optional.empty();
+            }
+            if (!envelope.getSuccess()) {
+                log.warn("Security Master returned success=false message: {}", envelope.getMessage());
+                return Optional.empty();
+            }
+
+            log.debug("Security Info message: {}",envelope.getData());
+            return Optional.ofNullable(envelope.getData());
+
+        } catch (Exception e) {
+            log.warn("Security lookup failed for all Securities ",e.getMessage());
             return Optional.empty();
         }
     }
