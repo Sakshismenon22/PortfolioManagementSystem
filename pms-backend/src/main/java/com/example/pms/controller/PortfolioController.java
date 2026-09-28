@@ -32,4 +32,13 @@ public class PortfolioController {
     public ResponseEntity<?> buyPortfolioHoldings(@PathVariable Long id){
         return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(),true,null,portfolioService.buyPortfolioHoldings(id), LocalDateTime.now()));
     }
+    @GetMapping("/count-portfolio/{userId}")
+    public Integer getCountOfPortfolios(@PathVariable Integer userId){
+        return portfolioService.getCountOfPortfolios(userId);
+    }
+
+    @GetMapping("/count-active/{userId}")
+    public Integer getCountOfActivePortfolios(@PathVariable Integer userId){
+        return portfolioService.getCountOfActivePortfolios(userId);
+    }
 }
