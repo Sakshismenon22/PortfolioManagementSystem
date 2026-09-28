@@ -1,7 +1,9 @@
 package com.example.pms.controller;
 
+import com.example.pms.dto.request.CreateAndActivatePortfolioDTO;
 import com.example.pms.dto.request.CreatePortfolioDTO;
 import com.example.pms.dto.response.ValidationDTO;
+import com.example.pms.model.Portfolio;
 import com.example.pms.response.Response;
 import com.example.pms.service.PortfolioService;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +22,7 @@ public class PortfolioController {
 
     @PostMapping("/create-portfolio")
     public ResponseEntity<?> createPortfolio(@RequestBody CreatePortfolioDTO createPortfolioDTO){
-        return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(),true,null,portfolioService.createPortfolio(createPortfolioDTO), LocalDateTime.now()));
+        return ResponseEntity.ok(new Response<Portfolio>(HttpStatus.OK.value(),true,portfolioService.createPortfolio(createPortfolioDTO),"Created.", LocalDateTime.now()));
     }
 
     @GetMapping("/validate-portfolio/{id}")
@@ -32,4 +34,10 @@ public class PortfolioController {
     public ResponseEntity<?> buyPortfolioHoldings(@PathVariable Long id){
         return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(),true,null,portfolioService.buyPortfolioHoldings(id), LocalDateTime.now()));
     }
+
+    @PostMapping("/create-and-activate-portfolio")
+    public ResponseEntity<?> createAndActivatePortfolio(@RequestBody CreateAndActivatePortfolioDTO createAndActivatePortfolioDTO){
+        return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(),true,null,portfolioService.createAndActivatePortfolio(createAndActivatePortfolioDTO), LocalDateTime.now()));
+    }
+
 }

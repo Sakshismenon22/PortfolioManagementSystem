@@ -21,83 +21,86 @@ import {
 import SideBarComponent from "../components/SideBarComponent";
 import TopBarComponent from "../components/TopBarComponent";
 import { getAllSecuritiesInfo } from "../services/securityService";
+import { use } from "react";
+import { getAllThemes } from "../services/themeService";
+import { toast } from "react-toastify";
 
 
 
-const themes = [
-  {
-    id: 1,
-    name: "Aggressive Growth",
-    risk: "HIGH",
-    investmentHorizon: "LONG_TERM",
-    allocationRules: [
-      {
-        asset: "Stock",
-        percentage: 60,
-      },
-      {
-        asset: "Mutual Fund",
-        percentage: 15,
-      },
-      {
-        asset: "ETF",
-        percentage: 15,
-      },
-      {
-        asset: "Commodity",
-        percentage: 10,
-      },
-    ],
-  },
-  {
-    id: 2,
-    name: "Balanced Growth",
-    risk: "MODERATE",
-    investmentHorizon: "MEDIUM_TERM",
-    allocationRules: [
-      {
-        asset: "Stock",
-        percentage: 50,
-      },
-      {
-        asset: "Mutual Fund",
-        percentage: 25,
-      },
-      {
-        asset: "ETF",
-        percentage: 15,
-      },
-      {
-        asset: "Commodity",
-        percentage: 10,
-      },
-    ],
-  },
-  {
-    id: 3,
-    name: "Conservative",
-    risk: "LOW",
-    investmentHorizon: "SHORT_TERM",
-    allocationRules: [
-      {
-        asset: "Stock",
-        percentage: 30,
-      },
-      {
-        asset: "Mutual Fund",
-        percentage: 40,
-      },
-      {
-        asset: "ETF",
-        percentage: 20,
-      },
-      {
-        asset: "Commodity",
-        percentage: 10,
-      },
-    ],
-  },
-];
+// const themes = [
+//   {
+//     id: 1,
+//     name: "Aggressive Growth",
+//     risk: "HIGH",
+//     investmentHorizon: "LONG_TERM",
+//     allocationRules: [
+//       {
+//         asset: "Stock",
+//         percentage: 60,
+//       },
+//       {
+//         asset: "Mutual Fund",
+//         percentage: 15,
+//       },
+//       {
+//         asset: "ETF",
+//         percentage: 15,
+//       },
+//       {
+//         asset: "Commodity",
+//         percentage: 10,
+//       },
+//     ],
+//   },
+//   {
+//     id: 2,
+//     name: "Balanced Growth",
+//     risk: "MODERATE",
+//     investmentHorizon: "MEDIUM_TERM",
+//     allocationRules: [
+//       {
+//         asset: "Stock",
+//         percentage: 50,
+//       },
+//       {
+//         asset: "Mutual Fund",
+//         percentage: 25,
+//       },
+//       {
+//         asset: "ETF",
+//         percentage: 15,
+//       },
+//       {
+//         asset: "Commodity",
+//         percentage: 10,
+//       },
+//     ],
+//   },
+//   {
+//     id: 3,
+//     name: "Conservative",
+//     risk: "LOW",
+//     investmentHorizon: "SHORT_TERM",
+//     allocationRules: [
+//       {
+//         asset: "Stock",
+//         percentage: 30,
+//       },
+//       {
+//         asset: "Mutual Fund",
+//         percentage: 40,
+//       },
+//       {
+//         asset: "ETF",
+//         percentage: 20,
+//       },
+//       {
+//         asset: "Commodity",
+//         percentage: 10,
+//       },
+//     ],
+//   },
+// ];
 
 // const securities = [
 //   {
@@ -197,13 +200,25 @@ const CreatePortfolioPage = () => {
 
   const [currentStep, setCurrentStep] = useState(1);
   const [securities,setSecurities] = useState([]);
+  const [themes,setThemes] = useState([]);
   const loadSecurities = async ()=>{
     const res = await getAllSecuritiesInfo();
     setSecurities(res.data.securities);
     console.log(securities);
   }
+
+  const loadThemes = async ()=>{
+    const res = await getAllThemes();
+    setThemes(res.data);
+    
+    console.log(res.data)
+    
+  }
+  
+
   useEffect(()=>{
     loadSecurities();
+    loadThemes();
   },[]);
 
   const [portfolio, setPortfolio] = useState({
@@ -229,16 +244,7 @@ const CreatePortfolioPage = () => {
   const [selectedTheme, setSelectedTheme] =
     useState(null);
 
-  const [themes, setThemes]= useState({
-    id:"",
-    name:"",
-    risk:"",
-    investmentHorizon:"",
-    allocationRuleList:[{
-    asset:"",
-    percentage:"",
-    }],
-  });
+  
 
   
 
@@ -257,12 +263,68 @@ const CreatePortfolioPage = () => {
 
     return securities.filter(
       (security) =>
-        security.name.toLowerCase().includes(query) ||
-        security.symbol.toLowerCase().includes(query) ||
-        security.isin.toLowerCase().includes(query)
+        security.name?.toLowerCase().includes(query) ||
+        security.symbol?.toLowerCase().includes(query) ||
+        security.isin?.toLowerCase().includes(query)
     );
   }, [securities,securitySearch]);
 
+  const quantitiesBySecurityId = useMemo(() => {
+  const result = {};
+  const amount = Number(portfolio.amount) || 0;
+
+  if (!selectedTheme || amount <= 0) {
+    return result;
+  }
+
+  
+  const countByClass = {};
+  selectedSecurities.forEach((sec) => {
+    const cls = sec.asset?.assetClass;
+    if (!cls) return;
+    countByClass[cls] = (countByClass[cls] || 0) + 1;
+  });
+
+  
+  selectedSecurities.forEach((sec) => {
+    const cls = sec.asset?.assetClass;
+    if (!cls) return;
+
+    const themeRule = selectedTheme.allocationRuleList.find(
+      (rule) => rule.asset?.assetClass === cls
+    );
+    if (!themeRule) return;
+
+    const classPercent = Number(themeRule.percentage) || 0;
+    const countInClass = countByClass[cls] || 1;
+
+    
+    const effectivePercent = classPercent / countInClass;
+
+    const amountForSecurity = (amount * effectivePercent) / 100;
+    const price = Number(sec.price) || 0;
+
+    const isCommodity = (sec.asset?.assetSubclass || "")
+      .toLowerCase()
+      .includes("commodity");
+
+    const rawQuantity =
+      price > 0 ? amountForSecurity / price : 0;
+
+    
+    const quantity = isCommodity
+      ? Number(rawQuantity.toFixed(2))
+      : Math.floor(rawQuantity);
+
+    result[sec.id] = {
+      effectivePercent,
+      amount: amountForSecurity,
+      quantity,
+    };
+  });
+
+  return result;
+}, [selectedSecurities, selectedTheme, portfolio.amount]);
 
 
 
@@ -349,7 +411,7 @@ const CreatePortfolioPage = () => {
     return selectedSecurities
       .filter(
         (security) =>
-          security.assetClass === assetClass
+          security.asset.assetClass === assetClass
       )
       .reduce(
         (total, security) =>
@@ -368,9 +430,9 @@ const CreatePortfolioPage = () => {
     }
 
     return (
-      selectedTheme.allocationRules.find(
+      selectedTheme.allocationRuleList.find(
         (rule) =>
-          rule.asset === assetClass
+          rule.asset.assetClass === assetClass
       )?.percentage || 0
     );
   };
@@ -388,10 +450,10 @@ const CreatePortfolioPage = () => {
 
   const themeAllocationValid =
     selectedTheme &&
-    selectedTheme.allocationRules.every(
+    selectedTheme.allocationRuleList.every(
       (rule) =>
         getCurrentAssetAllocation(
-          rule.asset
+          rule.asset.assetClass
         ) === rule.percentage
     );
 
@@ -433,7 +495,105 @@ const CreatePortfolioPage = () => {
   };
 
 
+const validateThemeAllocation = () => {
+  const themeRules = selectedTheme?.allocationRuleList || [];
 
+  const result = themeRules.map((rule) => {
+    const cls = rule.asset?.assetClass;
+    const rulePercent = Number(rule.percentage) || 0;
+    const currentPercent = getCurrentAssetAllocation(cls);
+
+    const ok = currentPercent === rulePercent;
+
+    return {
+      assetClass: cls,
+      rulePercent,
+      currentPercent,
+      ok,
+    };
+  });
+
+  const isValid = result.every((r) => r.ok);
+  return { isValid, result };
+};
+
+  const handleCreateAndActivatePortfolio = () => {
+ 
+  if (!selectedTheme) {
+    toast.err("Please select a theme before creating the portfolio.");
+    return;
+  }
+
+  
+  const { isValid, result } = validateThemeAllocation();
+
+  if (!isValid) {
+    const wrong = result
+      .filter((r) => !r.ok)
+      .map(
+        (r) =>
+          `${r.assetClass}: expected ${r.rulePercent}%, got ${r.currentPercent}%`
+      )
+      .join(" | ");
+
+    toast.err(`Theme allocation not satisfied — ${wrong}`);
+    return;
+  }
+
+
+  if (selectedSecurities.length === 0) {
+    toast.err("Add at least one security to the portfolio.");
+    return;
+  }
+
+
+  const createPortfolioDTO = {
+    name: portfolio.name,
+    portfolioType: portfolio.portfolioType,     
+    currency: portfolio.currency,
+    benchmark: selectedBenchmark?.id ?? null,   
+    exchange: portfolio.exchange,
+    reBalancingFrequency: portfolio.reBalancingFrequency,
+    amount: Number(portfolio.amount) || 0,
+    userId: portfolio.userId ?? null,           
+    portfolioStatus: "DRAFT",                  
+    themeId: selectedTheme?.id ?? null,
+  };
+
+  
+  const addPortfolioHoldingDTOList = selectedSecurities
+    .map((security) => {
+      const q = quantitiesBySecurityId[security.id];
+      const quantity = q?.quantity ?? 0;
+
+      if (quantity <= 0) {
+        
+        console.log("Skipped holding (no quantity):", security.name);
+        return null;
+      }
+
+      
+      const quantityInt = Math.round(quantity);
+
+      return {
+        portfolioId: null,                       
+        securityMasterId: security.id,          
+        quantity: quantityInt,                   
+        assetId: security.asset?.id,             
+      };
+    })
+    .filter((h) => h !== null);
+
+  
+  const payload = {
+    createPortfolioDTO,
+    addPortfolioHoldingDTOList,
+  };
+
+  console.log("CreateAndActivatePortfolio payload:", payload);
+
+  toast.success("Portfolio created successfully!");
+};
 
   const handleCreatePortfolio = () => {
     const payload = {
@@ -443,14 +603,31 @@ const CreatePortfolioPage = () => {
       securities: selectedSecurities,
     };
 
+    if (!selectedTheme) {
+    toast.error("Please select a theme before creating the portfolio.");
+    return;
+    }
+    const { isValid, result } = validateThemeAllocation();
+
     console.log(
       "Portfolio payload:",
       payload
     );
 
-    alert(
-      "Portfolio created successfully!"
-    );
+    if (!isValid) {
+    const wrong = result
+      .filter((r) => !r.ok)
+      .map(
+        (r) =>
+          `${r.assetClass}: expected ${r.rulePercent}%, got ${r.currentPercent}%`
+      )
+      .join(" | ");
+
+    toast.error(`Theme allocation not satisfied — ${wrong}`);
+    return;
+    }
+
+    toast.success("Portfolio created successfully!");
   };
 
 
@@ -482,7 +659,54 @@ const CreatePortfolioPage = () => {
     },
   ];
 
+  const isCommodity = (security) =>
+  (security?.asset?.assetClass || "")
+    .toLowerCase()
+    .includes("commodities");
 
+  const quantitiesBySecurityId2 = useMemo(() => {
+    const result = {};
+    const amount = Number(portfolio.amount) || 0;
+
+    if (amount <= 0) {
+      return result;
+    }
+
+    selectedSecurities.forEach((sec) => {
+      const allocation = Number(sec.allocation) || 0;
+      const price = Number(sec.price) || 0;
+
+      if (allocation <= 0 || price <= 0) {
+        return;
+      }
+
+      const amountForSecurity = (amount * allocation) / 100;
+
+      const isComm = (sec.asset?.assetClass || "")
+        .toLowerCase()
+        .includes("commodities");
+
+      let quantity;
+
+      if (isComm) {
+        const pricePerGram = price / 10;
+        quantity = Number(
+          (amountForSecurity / pricePerGram).toFixed(2)
+        );
+      } else {
+        quantity = Math.floor(amountForSecurity / price);
+      }
+
+      result[sec.id] = {
+        allocation,
+        amount: amountForSecurity,
+        quantity,
+        isComm,
+      };
+    });
+
+    return result;
+  }, [selectedSecurities, portfolio.amount]);
 
   return (
     <div className="min-h-screen bg-[#f6f8fd]">
@@ -970,14 +1194,14 @@ const CreatePortfolioPage = () => {
 
                         <div className="mt-4 space-y-2">
 
-                          {theme.allocationRules.map(
+                          {theme.allocationRuleList.map(
                             (rule) => (
                               <div
-                                key={rule.asset}
+                                key={rule.id}
                                 className="flex justify-between text-xs"
                               >
                                 <span className="text-slate-500">
-                                  {rule.asset}
+                                  {rule.asset.assetClass}
                                 </span>
 
                                 <span className="font-semibold">
@@ -1035,15 +1259,15 @@ const CreatePortfolioPage = () => {
 
                     <div className="mt-5 space-y-4">
 
-                      {selectedTheme.allocationRules.map(
+                      {selectedTheme.allocationRuleList.map(
                         (rule) => (
 
-                          <div key={rule.asset}>
+                          <div key={rule.asset.id}>
 
                             <div className="mb-1 flex justify-between text-xs">
 
                               <span>
-                                {rule.asset}
+                                {rule.asset.assetClass}
                               </span>
 
                               <span className="font-semibold">
@@ -1090,7 +1314,7 @@ const CreatePortfolioPage = () => {
           {currentStep === 3 && (
             <div className="mt-5 grid grid-cols-[2fr_1fr] gap-4">
 
-              {/* SECURITY TABLE */}
+             
 
               <div className="rounded-xl border border-slate-200 bg-white p-4">
 
@@ -1282,6 +1506,12 @@ const CreatePortfolioPage = () => {
                         Allocation
                       </div>
 
+                      <div>
+                        Quantity
+                      </div>
+
+                   
+
                       <div />
 
                     </div>
@@ -1310,7 +1540,7 @@ const CreatePortfolioPage = () => {
 
                           <div>
                             <span className="rounded bg-blue-50 px-2 py-1 text-[9px] font-bold text-blue-700">
-                              {security.assetClass}
+                              {security.asset.assetClass}
                             </span>
                           </div>
 
@@ -1348,7 +1578,14 @@ const CreatePortfolioPage = () => {
                             </div>
 
                           </div>
-
+                          
+                          <div className="text-xs font-mono">
+                            {(() => {
+                              const q = quantitiesBySecurityId2[security.id];
+                              if (!q || q.quantity <= 0) return "—";
+                              return q.isComm ? `${q.quantity} g` : q.quantity;
+                            })()}
+                          </div>
 
                           <button
                             onClick={() =>
@@ -1454,28 +1691,28 @@ const CreatePortfolioPage = () => {
 
                     <div className="mt-4 space-y-5">
 
-                      {selectedTheme.allocationRules.map(
+                      {selectedTheme.allocationRuleList.map(
                         (rule) => {
 
                           const current =
                             getCurrentAssetAllocation(
-                              rule.asset
+                              rule.asset.assetClass
                             );
 
                           const valid =
                             isThemeSatisfied(
-                              rule.asset
+                              rule.asset.assetClass
                             );
 
                           return (
                             <div
-                              key={rule.asset}
+                              key={rule.asset.id}
                             >
 
                               <div className="flex justify-between text-xs">
 
                                 <span className="font-semibold">
-                                  {rule.asset}
+                                  {rule.asset.id}
                                 </span>
 
                                 <span>
@@ -1520,8 +1757,8 @@ const CreatePortfolioPage = () => {
                                 <span className="text-slate-400">
                                   {selectedSecurities.filter(
                                     (security) =>
-                                      security.assetClass ===
-                                      rule.asset
+                                      security.asset.id ===
+                                      rule.asset.id
                                   ).length}{" "}
                                   Holdings
                                 </span>

@@ -8,7 +8,7 @@ import PortfolioPage from './pages/PortfolioPage'
 import CreatePortfolioPage from './pages/CreatePortfolioPage'
 import PortfolioDetailsPage from './pages/PortfolioDetailsPage'
 import DashboardPage from './pages/DashboardPage'
-
+import { ToastContainer } from 'react-toastify'
 function App() {
   const [count, setCount] = useState(0)
 
@@ -23,6 +23,20 @@ function App() {
           <Route path="/home" element={<DashboardPage/>}/>
         </Routes>
       </BrowserRouter>
+
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+      />
+      
     </>
   )
 }
