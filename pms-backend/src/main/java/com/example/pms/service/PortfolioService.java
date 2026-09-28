@@ -3,6 +3,8 @@ package com.example.pms.service;
 
 import com.example.pms.dto.request.CreateAndActivatePortfolioDTO;
 import com.example.pms.dto.request.CreatePortfolioDTO;
+import com.example.pms.dto.request.GetAllPortfolioDTO;
+import com.example.pms.dto.response.GetAllPortfolioResponseDTO;
 import com.example.pms.dto.response.ValidationDTO;
 import com.example.pms.model.Portfolio;
 
@@ -20,6 +22,10 @@ public interface PortfolioService {
     public Integer getCountOfPortfolios(Integer userId);
 
     public Integer getCountOfActivePortfolios(Integer userId);
+
+    public GetAllPortfolioResponseDTO getAllPortfolioDetails(GetAllPortfolioDTO getAllPortfolioDTO);
+
+    public Double getCurrentAum(Portfolio portfolio);
 
 
 }

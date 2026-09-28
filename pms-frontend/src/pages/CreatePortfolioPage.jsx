@@ -24,6 +24,7 @@ import { getAllSecuritiesInfo } from "../services/securityService";
 import { use } from "react";
 import { getAllThemes } from "../services/themeService";
 import { toast } from "react-toastify";
+import { createAndActivatePortfolio } from "../services/portfolioService";
 
 
 
@@ -517,7 +518,7 @@ const validateThemeAllocation = () => {
   return { isValid, result };
 };
 
-  const handleCreateAndActivatePortfolio = () => {
+  const handleCreateAndActivatePortfolio = async () => {
  
   if (!selectedTheme) {
     toast.err("Please select a theme before creating the portfolio.");
@@ -555,7 +556,7 @@ const validateThemeAllocation = () => {
     exchange: portfolio.exchange,
     reBalancingFrequency: portfolio.reBalancingFrequency,
     amount: Number(portfolio.amount) || 0,
-    userId: portfolio.userId ?? null,           
+    userId: localStorage.getItem("userId") ?? 1,           
     portfolioStatus: "DRAFT",                  
     themeId: selectedTheme?.id ?? null,
   };
@@ -563,7 +564,7 @@ const validateThemeAllocation = () => {
   
   const addPortfolioHoldingDTOList = selectedSecurities
     .map((security) => {
-      const q = quantitiesBySecurityId[security.id];
+      const q = quantitiesBySecurityId2[security.id];
       const quantity = q?.quantity ?? 0;
 
       if (quantity <= 0) {
@@ -590,9 +591,12 @@ const validateThemeAllocation = () => {
     addPortfolioHoldingDTOList,
   };
 
-  console.log("CreateAndActivatePortfolio payload:", payload);
-
-  toast.success("Portfolio created successfully!");
+  const res = await createAndActivatePortfolio(payload);
+  if(res.success){
+    toast.success("Portfolio Created and Activated.")
+  }else{
+    toast.error(res.message);
+  }
 };
 
   const handleCreatePortfolio = () => {
@@ -688,14 +692,15 @@ const validateThemeAllocation = () => {
 
       let quantity;
 
-      if (isComm) {
-        const pricePerGram = price / 10;
-        quantity = Number(
-          (amountForSecurity / pricePerGram).toFixed(2)
-        );
-      } else {
-        quantity = Math.floor(amountForSecurity / price);
-      }
+      // if (isComm) {
+      //   const pricePerGram = price / 10;
+      //   quantity = Number(
+      //     (amountForSecurity / pricePerGram).toFixed(2)
+      //   );
+      // } else {
+      //   quantity = Math.floor(amountForSecurity / price);
+      // }
+      quantity = Math.floor(amountForSecurity / price);
 
       result[sec.id] = {
         allocation,
@@ -2288,7 +2293,7 @@ const validateThemeAllocation = () => {
 
                 <button
                   onClick={
-                    handleCreatePortfolio
+                    handleCreateAndActivatePortfolio
                   }
                   className="mt-6 flex w-full items-center justify-center gap-2 rounded-md bg-blue-800 py-3 text-sm font-semibold text-white hover:bg-blue-900"
                 >

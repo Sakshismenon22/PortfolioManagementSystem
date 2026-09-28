@@ -2,6 +2,8 @@ package com.example.pms.controller;
 
 import com.example.pms.dto.request.CreateAndActivatePortfolioDTO;
 import com.example.pms.dto.request.CreatePortfolioDTO;
+import com.example.pms.dto.request.GetAllPortfolioDTO;
+import com.example.pms.dto.response.GetAllPortfolioResponseDTO;
 import com.example.pms.dto.response.ValidationDTO;
 import com.example.pms.model.Portfolio;
 import com.example.pms.response.Response;
@@ -12,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/portfolio")
@@ -37,6 +40,7 @@ public class PortfolioController {
 
     @PostMapping("/create-and-activate-portfolio")
     public ResponseEntity<?> createAndActivatePortfolio(@RequestBody CreateAndActivatePortfolioDTO createAndActivatePortfolioDTO){
+        System.out.println("Reached.");
         return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(),true,null,portfolioService.createAndActivatePortfolio(createAndActivatePortfolioDTO), LocalDateTime.now()));
     }
 
@@ -49,6 +53,11 @@ public class PortfolioController {
     @GetMapping("/count-active/{userId}")
     public Integer getCountOfActivePortfolios(@PathVariable Integer userId){
         return portfolioService.getCountOfActivePortfolios(userId);
+    }
+
+    @PostMapping("/get-all-portfolio")
+    public ResponseEntity<?> getAllPortfolio(@RequestBody GetAllPortfolioDTO getAllPortfolioDTO){
+        return ResponseEntity.ok(new Response<GetAllPortfolioResponseDTO>(HttpStatus.OK.value(), true,portfolioService.getAllPortfolioDetails(getAllPortfolioDTO),"All portfolios retrieved.",LocalDateTime.now()));
     }
 
 }

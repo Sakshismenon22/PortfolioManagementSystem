@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 import {
   AlertTriangle,
@@ -15,6 +15,7 @@ import {
 
 import SideBarComponent from "../components/SideBarComponent";
 import TopBarComponent from "../components/TopBarComponent";
+import { getAllPortfolioDetails } from "../services/portfolioService";
 
 
 const mockPortfolios = [
@@ -117,11 +118,18 @@ const PortfolioPage = () => {
   const [filter, setFilter] = useState("All");
 
   const [search, setSearch] = useState("");
+  const [portfolios,setPortfolios] = useState([]);
 
-
-
+  const loadPortfolio = async()=>{
+    const res = await getAllPortfolioDetails();
+    console.log(res);
+    setPortfolios(res.data.portfolioDetailsDTOList);
+  }
+  useEffect(()=>{
+    loadPortfolio();
+  },[]);
   const filteredPortfolios = useMemo(() => {
-    let data = [...mockPortfolios];
+    let data = [...portfolios];
 
     if (filter === "Active") {
       data = data.filter((portfolio) => portfolio.status === "active");
@@ -143,7 +151,7 @@ const PortfolioPage = () => {
     }
 
     return data;
-  }, [filter, search]);
+  }, [filter, search,portfolios]);
 
 
 
