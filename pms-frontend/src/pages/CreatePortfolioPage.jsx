@@ -21,7 +21,7 @@ import {
 import SideBarComponent from "../components/SideBarComponent";
 import TopBarComponent from "../components/TopBarComponent";
 import { getAllSecuritiesInfo } from "../services/securityService";
-import { use } from "react";
+import { useNavigate } from "react-router-dom";
 import { getAllThemes } from "../services/themeService";
 import { toast } from "react-toastify";
 import { createAndActivatePortfolio } from "../services/portfolioService";
@@ -202,6 +202,9 @@ const CreatePortfolioPage = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [securities,setSecurities] = useState([]);
   const [themes,setThemes] = useState([]);
+
+  const navigate = useNavigate();
+
   const loadSecurities = async ()=>{
     const res = await getAllSecuritiesInfo();
     setSecurities(res.data.securities);
@@ -594,6 +597,7 @@ const validateThemeAllocation = () => {
   const res = await createAndActivatePortfolio(payload);
   if(res.success){
     toast.success("Portfolio Created and Activated.")
+    navigate("/portfolio");
   }else{
     toast.error(res.message);
   }
@@ -783,7 +787,11 @@ const validateThemeAllocation = () => {
                 Quick Save
               </button>
 
-              <button className="flex items-center gap-2 rounded-md bg-[#edf2fb] px-4 py-2.5 text-sm font-semibold text-slate-600">
+              
+              <button 
+              type ="button"
+              onClick = {() => navigate("/portfolio")}
+              className="flex items-center gap-2 rounded-md bg-[#edf2fb] px-4 py-2.5 text-sm font-semibold text-slate-600">
                 <X size={16} />
                 Cancel / Exit
               </button>

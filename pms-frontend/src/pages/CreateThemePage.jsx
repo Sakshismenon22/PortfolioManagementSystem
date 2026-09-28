@@ -17,6 +17,8 @@ import { createTheme } from "../services/themeService";
 import { getAllAssets } from "../services/portfolioService";
 import { toast } from "react-toastify";
 
+import { useNavigate } from "react-router-dom";
+
 
 const RISK_OPTIONS = [
   {
@@ -84,6 +86,8 @@ const CreateThemePage = () => {
   ]);
 
   const [loading, setLoading] = useState(false);
+
+  const navigate = useNavigate();
 
 
   useEffect(() => {
@@ -303,7 +307,10 @@ const CreateThemePage = () => {
 
       toast.success(
         "Theme created successfully."
+        
       );
+
+      navigate("/home");
 
 
       /*
@@ -397,7 +404,7 @@ const CreateThemePage = () => {
 
             <button
               onClick={() =>
-                window.history.back()
+                navigate("/home")
               }
               className="flex items-center gap-2 rounded-md bg-[#edf3fd] px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-[#e4ebf8]"
             >

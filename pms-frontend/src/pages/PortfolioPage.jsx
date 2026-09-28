@@ -161,7 +161,7 @@ const PortfolioPage = () => {
   const handleCreatePortfolio = () => {
     console.log("Create portfolio clicked");
 
-    // navigate("/portfolios/create");
+    navigate("/create-portfolio");
   };
 
 

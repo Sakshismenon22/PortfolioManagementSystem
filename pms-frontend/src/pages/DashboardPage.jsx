@@ -37,6 +37,7 @@ import {
   Area,
   AreaChart,
 } from "recharts";
+import { useNavigate } from "react-router-dom";
 
 const portfolioComparisons = [
   {
@@ -858,6 +859,8 @@ const DashboardPage = () => {
 
   const selectedPortfolio = portfolioComparisons[portfolioIndex];
 
+  const navigate = useNavigate();
+
   const goPrevious = () => {
     setPortfolioIndex((current) => Math.max(0, current - 1));
   };
@@ -870,7 +873,7 @@ const DashboardPage = () => {
 
   return (
     <div className="min-h-screen bg-[#f5f7fc]">
-      <SideBarComponent />
+      <SideBarComponent activePage = "Dashboard"/>
 
       <TopBarComponent />
 
@@ -907,7 +910,9 @@ const DashboardPage = () => {
                 Export Report
               </button>
 
-              <button className="flex items-center gap-2 rounded-md bg-blue-800 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-900">
+              <button 
+              onClick={() => navigate("/create-portfolio")}
+              className="flex items-center gap-2 rounded-md bg-blue-800 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-900">
                 <Plus size={15} />
                 Quick Create Portfolio
               </button>
