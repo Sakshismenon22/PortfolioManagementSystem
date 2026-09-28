@@ -6,6 +6,7 @@ import com.example.pms.exception.PortfolioNotFoundException;
 import com.example.pms.exception.ThemeNotFoundException;
 import com.example.pms.exception.UserNotFoundException;
 import com.example.pms.model.*;
+import com.example.pms.model.enums.PortfolioStatus;
 import com.example.pms.model.enums.SecurityType;
 import com.example.pms.repository.PortFolioHoldingRepository;
 import com.example.pms.repository.PortfolioRepository;
@@ -120,6 +121,38 @@ public class PortfolioServiceImpl implements PortfolioService{
         }else{
             throw new PortfolioNotFoundException();
         }
+    }
+
+    @Override
+    public Integer getCountOfPortfolios(Integer userId) {
+        Integer count=0;
+        if(userRepository.existsById(userId)){
+            List<Portfolio> portfolios = portfolioRepository.findByUserUserId(userId);
+            for(Portfolio portfolio: portfolios){
+                count++;
+            }
+
+        }else{
+            throw new UserNotFoundException();
+        }
+        return count;
+    }
+
+    public Integer getCountOfActivePortfolios(Integer userId){
+        Integer count = 0;
+
+        if(userRepository.existsById(userId)){
+            List<Portfolio> portfolios = portfolioRepository.findByUserUserId(userId);
+            for(Portfolio portfolio : portfolios){
+                if(portfolio.getPortfolioStatus() == PortfolioStatus.ACTIVE){
+                    count++;
+                }
+            }
+        }else{
+            throw new UserNotFoundException();
+        }
+
+        return count;
     }
 }
 
