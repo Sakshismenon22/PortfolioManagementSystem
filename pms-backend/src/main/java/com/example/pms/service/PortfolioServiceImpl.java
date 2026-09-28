@@ -17,6 +17,7 @@ import com.example.pms.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import javax.sound.sampled.Port;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -164,6 +165,25 @@ public class PortfolioServiceImpl implements PortfolioService{
         }
 
         return count;
+
+    }
+
+
+    @Override
+    public Double getTotalRemainingAmount(Integer userId){
+        Double totalRemainingAmount = Double.valueOf(0);
+
+        if(userRepository.existsById(userId)){
+            List<Portfolio> portfolios = portfolioRepository.findByUserUserId(userId);
+            for(Portfolio portfolio : portfolios){
+                totalRemainingAmount += portfolio.getAmount();
+            }
+        }else{
+            throw new UserNotFoundException();
+        }
+
+        return totalRemainingAmount;
+
 
     }
 }

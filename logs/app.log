@@ -1220,3 +1220,85 @@ java.util.NoSuchElementException: No value present
 2026-09-28T15:09:11.407+05:30  INFO 24640 --- [pms] [SpringApplicationShutdownHook] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'
 2026-09-28T15:09:11.426+05:30  INFO 24640 --- [pms] [SpringApplicationShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
 2026-09-28T15:09:11.448+05:30  INFO 24640 --- [pms] [SpringApplicationShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.
+2026-09-28T15:09:29.060+05:30  INFO 26460 --- [pms] [main] com.example.pms.PmsApplication           : Starting PmsApplication using Java 21.0.12 with PID 26460 (C:\PortfolioManagementSystem\pms-backend\target\classes started by 2000209444 in C:\PortfolioManagementSystem)
+2026-09-28T15:09:29.070+05:30  INFO 26460 --- [pms] [main] com.example.pms.PmsApplication           : No active profile set, falling back to 1 default profile: "default"
+2026-09-28T15:09:31.608+05:30  INFO 26460 --- [pms] [main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-09-28T15:09:31.951+05:30  INFO 26460 --- [pms] [main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 297 ms. Found 7 JPA repository interfaces.
+2026-09-28T15:09:33.337+05:30  INFO 26460 --- [pms] [main] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 8082 (http)
+2026-09-28T15:09:33.362+05:30  INFO 26460 --- [pms] [main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-09-28T15:09:33.369+05:30  INFO 26460 --- [pms] [main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/11.0.24]
+2026-09-28T15:09:33.545+05:30  INFO 26460 --- [pms] [main] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 4295 ms
+2026-09-28T15:09:34.049+05:30  INFO 26460 --- [pms] [main] org.hibernate.orm.jpa                    : HHH008540: Processing PersistenceUnitInfo [name: default]
+2026-09-28T15:09:34.163+05:30  INFO 26460 --- [pms] [main] org.hibernate.orm.core                   : HHH000001: Hibernate ORM core version 7.4.5.Final
+2026-09-28T15:09:35.112+05:30  INFO 26460 --- [pms] [main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-09-28T15:09:35.166+05:30  INFO 26460 --- [pms] [main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-09-28T15:09:35.854+05:30  INFO 26460 --- [pms] [main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@3cead673
+2026-09-28T15:09:35.858+05:30  INFO 26460 --- [pms] [main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-09-28T15:09:35.937+05:30  WARN 26460 --- [pms] [main] org.hibernate.orm.deprecation            : HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-09-28T15:09:35.998+05:30  INFO 26460 --- [pms] [main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [jdbc:postgresql://localhost:5432/pms]
+	Database driver: PostgreSQL JDBC Driver
+	Database dialect: PostgreSQLDialect
+	Database version: 16.2
+	Default catalog/schema: pms/public
+	Autocommit mode: undefined/unknown
+	Isolation level: READ_COMMITTED [default READ_COMMITTED]
+	JDBC fetch size: none
+	Pool: DataSourceConnectionProvider
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-09-28T15:09:38.792+05:30  INFO 26460 --- [pms] [main] org.hibernate.orm.core                   : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-09-28T15:09:39.002+05:30  INFO 26460 --- [pms] [main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-09-28T15:09:39.499+05:30  INFO 26460 --- [pms] [main] o.s.d.j.r.query.QueryEnhancerFactories   : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-09-28T15:09:40.153+05:30  WARN 26460 --- [pms] [main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-09-28T15:09:40.893+05:30  INFO 26460 --- [pms] [main] o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 8082 (http) with context path '/'
+2026-09-28T15:09:40.912+05:30  INFO 26460 --- [pms] [main] com.example.pms.PmsApplication           : Started PmsApplication in 13.186 seconds (process running for 14.705)
+2026-09-28T15:09:53.003+05:30  INFO 26460 --- [pms] [http-nio-8082-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-09-28T15:09:53.003+05:30  INFO 26460 --- [pms] [http-nio-8082-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-09-28T15:09:53.009+05:30  INFO 26460 --- [pms] [http-nio-8082-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 6 ms
+2026-09-28T15:32:30.075+05:30  INFO 26460 --- [pms] [SpringApplicationShutdownHook] o.s.boot.tomcat.GracefulShutdown         : Commencing graceful shutdown. Waiting for active requests to complete
+2026-09-28T15:32:30.092+05:30  INFO 26460 --- [pms] [tomcat-shutdown] o.s.boot.tomcat.GracefulShutdown         : Graceful shutdown complete
+2026-09-28T15:32:30.098+05:30  INFO 26460 --- [pms] [SpringApplicationShutdownHook] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-09-28T15:32:30.100+05:30  INFO 26460 --- [pms] [SpringApplicationShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2026-09-28T15:32:30.128+05:30  INFO 26460 --- [pms] [SpringApplicationShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.
+2026-09-28T15:32:47.150+05:30  INFO 25792 --- [pms] [main] com.example.pms.PmsApplication           : Starting PmsApplication using Java 21.0.12 with PID 25792 (C:\PortfolioManagementSystem\pms-backend\target\classes started by 2000209444 in C:\PortfolioManagementSystem)
+2026-09-28T15:32:47.160+05:30  INFO 25792 --- [pms] [main] com.example.pms.PmsApplication           : No active profile set, falling back to 1 default profile: "default"
+2026-09-28T15:32:49.061+05:30  INFO 25792 --- [pms] [main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-09-28T15:32:49.365+05:30  INFO 25792 --- [pms] [main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 279 ms. Found 7 JPA repository interfaces.
+2026-09-28T15:32:51.100+05:30  INFO 25792 --- [pms] [main] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 8082 (http)
+2026-09-28T15:32:51.136+05:30  INFO 25792 --- [pms] [main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-09-28T15:32:51.136+05:30  INFO 25792 --- [pms] [main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/11.0.24]
+2026-09-28T15:32:51.312+05:30  INFO 25792 --- [pms] [main] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 4019 ms
+2026-09-28T15:32:51.847+05:30  INFO 25792 --- [pms] [main] org.hibernate.orm.jpa                    : HHH008540: Processing PersistenceUnitInfo [name: default]
+2026-09-28T15:32:51.962+05:30  INFO 25792 --- [pms] [main] org.hibernate.orm.core                   : HHH000001: Hibernate ORM core version 7.4.5.Final
+2026-09-28T15:32:52.946+05:30  INFO 25792 --- [pms] [main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-09-28T15:32:53.001+05:30  INFO 25792 --- [pms] [main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-09-28T15:32:53.492+05:30  INFO 25792 --- [pms] [main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@cf984d9
+2026-09-28T15:32:53.494+05:30  INFO 25792 --- [pms] [main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-09-28T15:32:53.568+05:30  WARN 25792 --- [pms] [main] org.hibernate.orm.deprecation            : HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-09-28T15:32:53.628+05:30  INFO 25792 --- [pms] [main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [jdbc:postgresql://localhost:5432/pms]
+	Database driver: PostgreSQL JDBC Driver
+	Database dialect: PostgreSQLDialect
+	Database version: 16.2
+	Default catalog/schema: pms/public
+	Autocommit mode: undefined/unknown
+	Isolation level: READ_COMMITTED [default READ_COMMITTED]
+	JDBC fetch size: none
+	Pool: DataSourceConnectionProvider
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-09-28T15:32:56.205+05:30  INFO 25792 --- [pms] [main] org.hibernate.orm.core                   : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-09-28T15:32:56.364+05:30  INFO 25792 --- [pms] [main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-09-28T15:32:56.814+05:30  INFO 25792 --- [pms] [main] o.s.d.j.r.query.QueryEnhancerFactories   : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-09-28T15:32:57.435+05:30  WARN 25792 --- [pms] [main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-09-28T15:32:58.118+05:30  INFO 25792 --- [pms] [main] o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 8082 (http) with context path '/'
+2026-09-28T15:32:58.133+05:30  INFO 25792 --- [pms] [main] com.example.pms.PmsApplication           : Started PmsApplication in 12.196 seconds (process running for 13.554)
+2026-09-28T15:33:11.863+05:30  INFO 25792 --- [pms] [http-nio-8082-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-09-28T15:33:11.864+05:30  INFO 25792 --- [pms] [http-nio-8082-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-09-28T15:33:11.870+05:30  INFO 25792 --- [pms] [http-nio-8082-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 6 ms
+2026-09-28T15:56:01.332+05:30  INFO 25792 --- [pms] [SpringApplicationShutdownHook] o.s.boot.tomcat.GracefulShutdown         : Commencing graceful shutdown. Waiting for active requests to complete
+2026-09-28T15:56:01.341+05:30  INFO 25792 --- [pms] [tomcat-shutdown] o.s.boot.tomcat.GracefulShutdown         : Graceful shutdown complete
+2026-09-28T15:56:01.345+05:30  INFO 25792 --- [pms] [SpringApplicationShutdownHook] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-09-28T15:56:01.348+05:30  INFO 25792 --- [pms] [SpringApplicationShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2026-09-28T15:56:01.353+05:30  INFO 25792 --- [pms] [SpringApplicationShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.

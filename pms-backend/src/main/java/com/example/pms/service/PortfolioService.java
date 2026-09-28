@@ -22,4 +22,8 @@ public interface PortfolioService {
     public Integer getCountOfActivePortfolios(Integer userId);
 
 
+
+    public Double getTotalRemainingAmount(Integer userId);
+
+
 }
