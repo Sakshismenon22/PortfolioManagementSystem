@@ -14,6 +14,12 @@ public interface PortfolioService {
 
     public ValidationDTO isValid(Long id);
 
+
     public String createAndActivatePortfolio(CreateAndActivatePortfolioDTO createAndActivatePortfolioDTO);
+
+    public Integer getCountOfPortfolios(Integer userId);
+
+    public Integer getCountOfActivePortfolios(Integer userId);
+
 
 }

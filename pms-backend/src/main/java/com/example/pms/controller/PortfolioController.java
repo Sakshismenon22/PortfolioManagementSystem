@@ -40,4 +40,15 @@ public class PortfolioController {
         return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(),true,null,portfolioService.createAndActivatePortfolio(createAndActivatePortfolioDTO), LocalDateTime.now()));
     }
 
+
+    @GetMapping("/count-portfolio/{userId}")
+    public Integer getCountOfPortfolios(@PathVariable Integer userId){
+        return portfolioService.getCountOfPortfolios(userId);
+    }
+
+    @GetMapping("/count-active/{userId}")
+    public Integer getCountOfActivePortfolios(@PathVariable Integer userId){
+        return portfolioService.getCountOfActivePortfolios(userId);
+    }
+
 }
