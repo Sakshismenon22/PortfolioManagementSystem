@@ -28,4 +28,8 @@ public interface PortfolioService {
     public Double getCurrentAum(Portfolio portfolio);
 
 
+
+    public Double getTotalRemainingAmount(Integer userId);
+
+
 }

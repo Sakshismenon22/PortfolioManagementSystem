@@ -60,4 +60,9 @@ public class PortfolioController {
         return ResponseEntity.ok(new Response<GetAllPortfolioResponseDTO>(HttpStatus.OK.value(), true,portfolioService.getAllPortfolioDetails(getAllPortfolioDTO),"All portfolios retrieved.",LocalDateTime.now()));
     }
 
+
+    @GetMapping("/remaining-total/{userId}")
+    public Double getTotalRemainingAmount(@PathVariable Integer userId){
+        return portfolioService.getTotalRemainingAmount(userId);
+    }
 }

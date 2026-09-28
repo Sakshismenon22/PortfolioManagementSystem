@@ -14,7 +14,7 @@ const goldEquityPortfolio = {
   reBalancingFrequency:  "QUARTERLY",
   amount:                500000.0,
   userId:                1,
-  portfolioStatus:       "CREATED",
+  portfolioStatus:       "ACTIVE",
   themeId:               1
 };
 

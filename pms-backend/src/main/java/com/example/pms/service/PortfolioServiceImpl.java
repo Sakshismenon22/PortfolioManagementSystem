@@ -22,8 +22,16 @@ import com.example.pms.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+
 import java.util.*;
 import java.util.stream.Collectors;
+
+import javax.sound.sampled.Port;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 
 @Service
 @RequiredArgsConstructor
@@ -242,13 +250,33 @@ public class PortfolioServiceImpl implements PortfolioService{
         return currentAum+portfolio.getAmount();
     }
 
-    public Double getTotalInvestedAmount(Portfolio portfolio){
+    public Double getTotalInvestedAmount(Portfolio portfolio) {
         List<PortfolioHolding> portfolioHoldings = portfolioHoldingRepository.findAllByPortfolio(portfolio);
         Double totalInvestedAmount = 0.0d;
-        for(PortfolioHolding portfolioHolding:portfolioHoldings){
+        for (PortfolioHolding portfolioHolding : portfolioHoldings) {
             totalInvestedAmount += portfolioHolding.getTotalCost();
         }
-        return totalInvestedAmount+portfolio.getAmount();
+        return totalInvestedAmount + portfolio.getAmount();
+    }
+
+
+    @Override
+    public Double getTotalRemainingAmount(Integer userId){
+        Double totalRemainingAmount = Double.valueOf(0);
+
+        if(userRepository.existsById(userId)){
+            List<Portfolio> portfolios = portfolioRepository.findByUserUserId(userId);
+            for(Portfolio portfolio : portfolios){
+                totalRemainingAmount += portfolio.getAmount();
+            }
+        }else{
+            throw new UserNotFoundException();
+        }
+
+        return totalRemainingAmount;
+
+
+
     }
 }
 
