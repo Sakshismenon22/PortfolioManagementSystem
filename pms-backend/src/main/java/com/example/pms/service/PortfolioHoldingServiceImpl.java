@@ -6,7 +6,6 @@ import com.example.pms.dto.request.BuyHoldingDTO;
 import com.example.pms.dto.request.CreatePortfolioDTO;
 import com.example.pms.dto.request.SellHoldingDTO;
 import com.example.pms.dto.response.SecurityPriceDTO;
-import com.example.pms.dto.response.ValidationDTO;
 import com.example.pms.exception.AssetNotFoundException;
 import com.example.pms.exception.PortfolioHoldingNotFoundException;
 import com.example.pms.exception.PortfolioNotFoundException;
@@ -38,7 +37,6 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
     private final PortFolioHoldingRepository portfolioHoldingRepository;
     private final SecurityMasterClient securityMasterClient;
     private final SecurityMasterService securityMasterService;
-    private final PortfolioService portfolioService;
 
 
     @Override
@@ -237,8 +235,6 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
 
     @Override
     public String buySecurities(BuyHoldingDTO buyHoldingDTO) {
-        ValidationDTO validationDTO = portfolioService.isValid(buyHoldingDTO.getPortfolioId());
-
         if(securityMasterRepository.existsById(buyHoldingDTO.getSecurityId())){
             if(portfolioRepository.existsById(buyHoldingDTO.getPortfolioId())){
 
@@ -247,13 +243,6 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
                 Portfolio portfolio = portfolioRepository.findById(buyHoldingDTO.getPortfolioId()).get();
                 Double currentPrice = securityMasterService.getCurrentPrice(buyHoldingDTO.getSecurityId());
                 Double buyAmount = currentPrice * buyHoldingDTO.getQuantity();
-                validationDTO
-                        .getAssetWiseAmount()
-                        .put(securityMaster
-                                        .getAsset()
-                                        .getAssetClass(),
-                                validationDTO.getAssetWiseAmount()
-                                        .getOrDefault(securityMaster.getAsset().getAssetClass(),0.0d)+buyAmount);
                 Double avg = buyAmount/buyHoldingDTO.getQuantity();
                 if(buyAmount<=portfolio.getAmount()){
                     portfolio.setAmount(portfolio.getAmount()-buyAmount);

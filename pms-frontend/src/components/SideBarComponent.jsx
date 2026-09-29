@@ -40,7 +40,7 @@ const SideBarComponent = ({ activePage, setActivePage }) => {
       label: "Rebalancing",
       icon: SlidersHorizontal,
       badge: "2 Alerts",
-      path: null,
+      path: "/rebalancing",
     },
     {
       label: "Notifications",
@@ -74,6 +74,10 @@ const SideBarComponent = ({ activePage, setActivePage }) => {
 
     if (location.pathname === "/create-theme") {
       return "Themes";
+    }
+
+    if (location.pathname === "/rebalancing") {
+      return "Rebalancing";
     }
 
     return activePage;

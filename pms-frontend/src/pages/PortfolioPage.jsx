@@ -167,7 +167,7 @@ const PortfolioPage = () => {
 
 
   const handleRebalance = (portfolio) => {
-    console.log("Rebalance portfolio:", portfolio);
+    navigate("/rebalancing", { state: { portfolioId: portfolio.id } });
   };
 
 

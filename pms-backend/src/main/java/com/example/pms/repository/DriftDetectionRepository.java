@@ -7,6 +7,6 @@ import java.util.List;
 
 public interface DriftDetectionRepository extends JpaRepository<DriftDetection,Integer> {
 
-    List<DriftDetection> findDriftDetectionByPortfolioId(Long portfolioId);
+    List<DriftDetection> findByPortfolioIdOrderByDetectedAtDescIdDesc(Long portfolioId);
 
 }
