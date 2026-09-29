@@ -8,7 +8,18 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class CorsConfig implements WebMvcConfigurer {
 
     public void addCorsMappings(CorsRegistry corsRegistry){
-        corsRegistry.addMapping("/**").allowedOrigins("http://localhost:5173").allowedMethods("GET","POST","DELETE","PATCH");
+        corsRegistry
+                .addMapping("/**")
+                .allowedOrigins("http://localhost:5173")
+                .allowedMethods(
+                        "GET",
+                        "POST",
+                        "DELETE",
+                        "PATCH",
+                        "PUT",
+                        "OPTIONS"
+                )
+                .allowedHeaders("*");
     }
 
 }

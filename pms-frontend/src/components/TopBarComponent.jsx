@@ -1,11 +1,28 @@
 import React from "react";
 import {
   Bell,
+  LogOut,
   Search,
   UserRound,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 const TopBarComponent = () => {
+
+  const navigate = useNavigate();
+
+  const name = localStorage.getItem("userName") || "Fund Manager";
+
+  const role = localStorage.getItem("userRole") || "FUND MANAGER";
+
+  const handleLogout = () =>{
+    localStorage.removeItem("userId");
+    localStorage.removeItem("name");
+    localStorage.removeItem("role");
+    localStorage.removeItem("email");
+
+    navigate("/login", {replace : true});
+  }
   return (
     <header className="sticky top-0 z-20 flex h-[70px] items-center justify-between border-b border-slate-200 bg-white px-5">
 
@@ -29,26 +46,7 @@ const TopBarComponent = () => {
       <div className="flex items-center gap-5">
 
    
-        <div className="flex items-center gap-2 rounded-md bg-[#eef4ff] px-4 py-2 text-xs font-semibold text-slate-600">
-
-          <span className="h-2 w-2 rounded-full bg-emerald-500" />
-
-          <span>NSE/BSE</span>
-
-          <span className="text-emerald-700">
-            Open
-          </span>
-
-          <span className="text-slate-400">
-            •
-          </span>
-
-          <span>
-            14:32 IST
-          </span>
-
-        </div>
-
+        
         <button className="relative">
 
           <Bell
@@ -70,13 +68,23 @@ const TopBarComponent = () => {
           <div className="leading-tight">
 
             <div className="text-sm font-semibold">
-              Marcus Vance
+              {name}
             </div>
 
             <div className="text-[10px] font-medium tracking-wider text-slate-500">
-              SENIOR FUND MANAGER
+              {role.replaceAll("_", " ")}
             </div>
 
+          </div>
+
+          <div>
+            <button
+            type = "button"
+            onClick={handleLogout}
+            className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-sm text-slate-600 transition hover:bg-red-50 hover:text-red-600">
+              <LogOut size = {18}/>
+              <span>Sign Out</span>
+            </button>
           </div>
 
         </div>

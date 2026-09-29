@@ -10,19 +10,14 @@ import com.example.pms.model.*;
 import com.example.pms.model.enums.HoldingStatus;
 import com.example.pms.model.enums.PortfolioStatus;
 import com.example.pms.model.enums.SecurityType;
-import com.example.pms.repository.PortFolioHoldingRepository;
-import com.example.pms.repository.PortfolioRepository;
-import com.example.pms.repository.ThemeRepository;
-import com.example.pms.repository.UserRepository;
+import com.example.pms.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 
-import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import javax.sound.sampled.Port;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -39,6 +34,8 @@ public class PortfolioServiceImpl implements PortfolioService{
     private final PortFolioHoldingRepository portfolioHoldingRepository;
     private final PortfolioHoldingService portfolioHoldingService;
     private final SecurityMasterClient securityMasterClient;
+
+    private final AssetRepository assetRepository;
 
 
     @Override
@@ -593,6 +590,36 @@ public class PortfolioServiceImpl implements PortfolioService{
                 portfolioValid,
                 result
         );
+    }
+
+    @Override
+    public AssetInvestmentDTO getEachAssetInvestment(Integer userId) {
+
+        if (!userRepository.existsById(userId)) {
+            throw new UserNotFoundException();
+        }
+
+        // Accumulates the merged asset-wise amounts across ALL portfolios
+        Map<Asset, Double> assetInvestmentMap = new LinkedHashMap<>();
+        Double totalBalance = 0.0d;
+
+        List<Portfolio> portfolios = portfolioRepository.findByUserUserId(userId);
+
+        for (Portfolio portfolio : portfolios) {
+
+            ValidationDTO validation = isValid(portfolio.getId());   // :: NOTE: you must pass portfolio id, not user id
+
+            validation.getAssetWiseAmount().forEach((assetClass, amount) -> {
+                // assetClass is a String, e.g. "Equity" / "Bonds" / "REITs"
+                Asset asset = assetRepository.findByAssetClass(assetClass);
+                assetInvestmentMap.merge(asset, amount, Double::sum);
+            });
+
+            // 2. Accumulate balance
+            totalBalance += validation.getGrantTotal();
+        }
+
+        return new AssetInvestmentDTO(assetInvestmentMap, totalBalance);
     }
 
 }

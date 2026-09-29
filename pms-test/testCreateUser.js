@@ -6,10 +6,11 @@ const registerUser = async (user)=>{
 }
 
 const user = {
-    "name":"Niranjan V",
+    "name":"ABC",
     "email":"abc2@gmail.com",
     "phoneNumber":"1234567890",
-    "role":"USER"
+    "role":"USER",
+    "password": "12345"
 }
 
 await registerUser(user);
