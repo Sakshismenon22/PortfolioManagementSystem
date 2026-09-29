@@ -1,5 +1,7 @@
 package com.example.pms.controller;
 
+import com.example.pms.dto.request.LoginRequest;
+import com.example.pms.dto.response.LoginResponse;
 import com.example.pms.model.User;
 import com.example.pms.response.Response;
 import com.example.pms.service.UserService;
@@ -22,5 +24,11 @@ public class UserController {
     @PostMapping("/register")
     public Response<String> register(@RequestBody User user){
         return new Response<>(HttpStatus.OK.value(), true, null, userService.register(user), LocalDateTime.now() );
+    }
+
+    @PostMapping("/login")
+    public Response<LoginResponse> login(@RequestBody LoginRequest loginRequest){
+        return new Response<>(HttpStatus.OK.value(), true, userService.login(loginRequest), "Login successfull" , LocalDateTime.now() );
+
     }
 }

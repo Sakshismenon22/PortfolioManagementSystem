@@ -6,10 +6,12 @@ import com.example.pms.dto.request.CreatePortfolioByDateDTO;
 import com.example.pms.dto.request.CreatePortfolioDTO;
 import com.example.pms.dto.request.GetAllPortfolioDTO;
 import com.example.pms.dto.response.*;
+import com.example.pms.model.Asset;
 import com.example.pms.model.Portfolio;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 public interface PortfolioService {
 
@@ -55,5 +57,6 @@ public interface PortfolioService {
             Integer userId
     );
 
+    public AssetInvestmentDTO getEachAssetInvestment(Integer userId);
 
 }

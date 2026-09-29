@@ -8,6 +8,7 @@ import PortfolioDetailsPage from './pages/PortfolioDetailsPage'
 import DashboardPage from './pages/DashboardPage'
 import CreateThemePage from "./pages/CreateThemePage";
 import RebalancingPage from "./pages/RebalancingPage";
+import LoginPage from './pages/LoginPage'
 
 function App() {
   
@@ -17,6 +18,7 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/register" element={<RegisterPage/>}/>
+          <Route path="/login" element={<LoginPage/>}/>
           <Route path="/portfolio" element={<PortfolioPage/>}/>
           <Route path="/create-portfolio" element={<CreatePortfolioPage/>}/>
           <Route path="/portfolio/:id" element={<PortfolioDetailsPage/>}/>
@@ -24,6 +26,7 @@ function App() {
           <Route path="/create-theme" element={<CreateThemePage />}/>
           <Route path="/rebalancing" element={<RebalancingPage />}/>
           <Route path = "/*" element={<Navigate to ="/home" replace />} />
+          <Route path = "/login" element={<Navigate to ="/login" replace />} />
 
         </Routes>
       </BrowserRouter>
