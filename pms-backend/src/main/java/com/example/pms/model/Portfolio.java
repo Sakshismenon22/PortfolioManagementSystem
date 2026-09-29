@@ -6,6 +6,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
+
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
@@ -40,6 +42,9 @@ public class Portfolio {
     private User user;
 
     private PortfolioStatus portfolioStatus;
+
+    @Column(name = "created_at")
+    private LocalDate createdAt;
 
 
 

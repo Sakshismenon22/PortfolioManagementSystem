@@ -1,572 +1,269 @@
 import React, { useEffect, useMemo, useState } from "react";
-
 import {
-  AlertTriangle,
-  Building2,
-  Clock3,
-  Download,
-  Filter,
-  MoreVertical,
-  Plus,
-  Scale,
-  ShieldCheck,
-  WalletCards,
+  AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Building2, Download,
+  Filter, Plus, RefreshCw, Scale, ShieldCheck, WalletCards,
 } from "lucide-react";
-
+import { useNavigate } from "react-router-dom";
 import SideBarComponent from "../components/SideBarComponent";
 import TopBarComponent from "../components/TopBarComponent";
-import { getAllPortfolioDetails } from "../services/portfolioService";
-import { useNavigate } from "react-router-dom";
+import {
+  getAllPortfolioDetails,
+  getPortfolioBasicInfo,
+  validatePortfolioAllocation,
+} from "../services/portfolioService";
 
-
-const mockPortfolios = [
-  {
-    id: 1,
-    initials: "GP",
-    name: "Growth Portfolio",
-    code: "APX-081",
-    description: "Mid-cap multi-sector alpha equity mandate",
-    theme: "Aggressive Growth",
-    allocationType: "Weightage",
-    aum: "84.50 Cr",
-    return1Y: "+24.6%",
-    benchmark: "NIF +18",
-    status: "active",
-    action: "Rebalance",
-  },
-
-  {
-    id: 2,
-    initials: "TM",
-    name: "Tech Momentum Fund",
-    code: "APX-104",
-    description: "High velocity thematic software & cloud SaaS",
-    theme: "High Growth Equity",
-    allocationType: "Weightage",
-    aum: "62.10 Cr",
-    return1Y: "+31.4%",
-    benchmark: "NIF +19",
-    status: "active",
-    action: "Rebalance",
-  },
-
-  {
-    id: 3,
-    initials: "BA",
-    name: "Bluechip Alpha Strategy",
-    code: "APX-012",
-    description: "Top-tier sovereign market cap leaders",
-    theme: "Large Cap Quality",
-    allocationType: "Amount",
-    aum: "112.40 Cr",
-    return1Y: "+19.8%",
-    benchmark: "NIF +18",
-    status: "active",
-    action: "View",
-  },
-
-  {
-    id: 4,
-    initials: "BH",
-    name: "Balanced Hybrid Dynamic",
-    code: "APX-047",
-    description: "Dynamic 65/35 equity-debt risk parity framework",
-    theme: "Moderate Balanced",
-    allocationType: "Weightage",
-    aum: "56.80 Cr",
-    return1Y: "+15.2%",
-    benchmark: "NIF +17",
-    status: "active",
-    action: "View",
-  },
-
-  {
-    id: 5,
-    initials: "ES",
-    name: "ESG Leaders Mandate",
-    code: "APX-095",
-    description: "Screened global standard sustainability pool",
-    theme: "Sustainable Core",
-    allocationType: "Weightage",
-    aum: "45.20 Cr",
-    return1Y: "+18.1%",
-    benchmark: "NIF +19",
-    status: "active",
-    action: "View",
-  },
-
-  {
-    id: 6,
-    initials: "DY",
-    name: "Dividend Yield Shield",
-    code: "APX-003",
-    description: "High free cash flow dividend-yielding equity portfolio",
-    theme: "Defensive Value",
-    allocationType: "Amount",
-    aum: "67.50 Cr",
-    return1Y: "+12.4%",
-    benchmark: "SEN +17",
-    status: "draft",
-    action: "Edit Draft",
-  },
-];
-
-
+const PAGE_SIZE = 8;
+const DRIFT_LIMIT = 5;
+const FILTERS = ["All", "Active", "Rebalance Required", "Draft", "Closed"];
 
 const PortfolioPage = () => {
-  const [activePage, setActivePage] = useState("Portfolios");
-
   const [filter, setFilter] = useState("All");
-
   const [search, setSearch] = useState("");
-  const [portfolios,setPortfolios] = useState([]);
-
+  const [portfolios, setPortfolios] = useState([]);
+  const [driftPortfolioIds, setDriftPortfolioIds] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [driftLoading, setDriftLoading] = useState(false);
+  const [density, setDensity] = useState("dense");
+  const [returnSort, setReturnSort] = useState(null);
+  const [page, setPage] = useState(1);
   const navigate = useNavigate();
+  const userId = localStorage.getItem("userId");
 
-  const loadPortfolio = async()=>{
-    const res = await getAllPortfolioDetails();
-    console.log(res);
-    setPortfolios(res.data.portfolioDetailsDTOList);
-  }
-  useEffect(()=>{
-    loadPortfolio();
-  },[]);
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      setLoading(true);
+      setError("");
+      if (!userId) {
+        setError("Sign in to load your portfolios.");
+        setLoading(false);
+        return;
+      }
+      try {
+        const response = await getAllPortfolioDetails(userId);
+        const payload = response?.data?.data ?? response?.data ?? response;
+        const list = payload?.portfolioDetailsDTOList;
+        if (!Array.isArray(list)) throw new Error(response?.message || "The portfolio list response was not in the expected format.");
+        if (!active) return;
+        const normalized = list.map((portfolio) => ({
+          ...portfolio,
+          id: portfolio.id ?? portfolio.portfolioId,
+          status: String(portfolio.portfolioStatus ?? portfolio.status ?? "ACTIVE").toUpperCase(),
+          name: portfolio.name || "Unnamed portfolio",
+          code: portfolio.code || `PMS-${portfolio.id ?? portfolio.portfolioId}`,
+          theme: portfolio.theme || "Unassigned theme",
+          allocationType: String(portfolio.allocationType || "—").replaceAll("_", " "),
+          aum: Number(portfolio.aum || 0),
+          returnValue: parseReturn(portfolio.return1Y),
+          benchmark: String(portfolio.benchmark || "—").replaceAll("_", " "),
+          initials: portfolio.initials || initialsFor(portfolio.name),
+        }));
+        setPortfolios(normalized);
+        setDriftLoading(true);
+        const activePortfolios = normalized.filter((item) => item.status === "ACTIVE");
+        const validations = await Promise.allSettled(activePortfolios.map((item) => validatePortfolioAllocation(item.id)));
+        if (!active) return;
+        const breachedIds = activePortfolios.filter((item, index) => {
+          const result = validations[index];
+          const allocations = result.status === "fulfilled" ? result.value?.allocations : null;
+          return Array.isArray(allocations) && allocations.some((allocation) =>
+            allocation.satisfied === false || Math.abs(Number(allocation.driftPercentage || 0)) >= DRIFT_LIMIT);
+        }).map((item) => String(item.id));
+        setDriftPortfolioIds(breachedIds);
+      } catch (loadError) {
+        if (active) setError(loadError?.response?.data?.message || loadError?.message || "Could not load portfolios.");
+      } finally {
+        if (active) {
+          setLoading(false);
+          setDriftLoading(false);
+        }
+      }
+    }
+    load();
+    return () => { active = false; };
+  }, [userId]);
+
+  const counts = useMemo(() => ({
+    All: portfolios.length,
+    Active: portfolios.filter((item) => item.status === "ACTIVE").length,
+    "Rebalance Required": driftPortfolioIds.length,
+    Draft: portfolios.filter((item) => ["DRAFT", "CREATED"].includes(item.status)).length,
+    Closed: portfolios.filter((item) => ["CANCELED", "CLOSED"].includes(item.status)).length,
+  }), [portfolios, driftPortfolioIds]);
+
   const filteredPortfolios = useMemo(() => {
-    let data = [...portfolios];
-
-    if (filter === "Active") {
-      data = data.filter((portfolio) => portfolio.status === "active");
-    }
-
-    if (filter === "Draft") {
-      data = data.filter((portfolio) => portfolio.status === "draft");
-    }
-
-    if (search.trim()) {
-      const query = search.toLowerCase();
-
-      data = data.filter(
-        (portfolio) =>
-          portfolio.name.toLowerCase().includes(query) ||
-          portfolio.code.toLowerCase().includes(query) ||
-          portfolio.theme.toLowerCase().includes(query),
-      );
-    }
-
-    return data;
-  }, [filter, search,portfolios]);
-
-
-
-  const handleCreatePortfolio = () => {
-    console.log("Create portfolio clicked");
-
-    navigate("/create-portfolio");
-  };
-
-
-
-  const handleRebalance = (portfolio) => {
-    navigate("/rebalancing", { state: { portfolioId: portfolio.id } });
-  };
-
-
-  const handleView = (portfolio) => {
-    navigate("/portfolio-details", {
-      state: {
-        portfolio: portfolio,
-      },
+    const query = search.trim().toLowerCase();
+    const result = portfolios.filter((portfolio) => {
+      const matchesFilter = filter === "All"
+        || (filter === "Active" && portfolio.status === "ACTIVE")
+        || (filter === "Rebalance Required" && driftPortfolioIds.includes(String(portfolio.id)))
+        || (filter === "Draft" && ["DRAFT", "CREATED"].includes(portfolio.status))
+        || (filter === "Closed" && ["CANCELED", "CLOSED"].includes(portfolio.status));
+      const matchesSearch = !query || [portfolio.name, portfolio.code, portfolio.theme, portfolio.benchmark]
+        .some((value) => String(value || "").toLowerCase().includes(query));
+      return matchesFilter && matchesSearch;
     });
+    if (returnSort) result.sort((a, b) => returnSort === "asc" ? a.returnValue - b.returnValue : b.returnValue - a.returnValue);
+    return result;
+  }, [portfolios, filter, search, driftPortfolioIds, returnSort]);
+
+  useEffect(() => { setPage(1); }, [filter, search]);
+  const pageCount = Math.max(1, Math.ceil(filteredPortfolios.length / PAGE_SIZE));
+  const pageRows = filteredPortfolios.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const activePortfolios = portfolios.filter((item) => item.status === "ACTIVE");
+  const totalAum = activePortfolios.reduce((sum, item) => sum + item.aum, 0);
+  const averageReturn = activePortfolios.length
+    ? activePortfolios.reduce((sum, item) => sum + item.returnValue, 0) / activePortfolios.length
+    : 0;
+  const compliance = activePortfolios.length
+    ? Math.max(0, ((activePortfolios.length - driftPortfolioIds.length) / activePortfolios.length) * 100)
+    : 100;
+
+  const openPortfolio = async (portfolio) => {
+    try {
+      const basicInfo = await getPortfolioBasicInfo(portfolio.id);
+      navigate(`/portfolio/${portfolio.id}`, { state: { portfolio: { ...portfolio, ...basicInfo } } });
+    } catch {
+      navigate(`/portfolio/${portfolio.id}`, { state: { portfolio } });
+    }
+  };
+
+  const exportPortfolios = () => {
+    const rows = [["Portfolio", "Code", "Theme", "Status", "Allocation Type", "AUM (INR)", "Return", "Benchmark"],
+      ...filteredPortfolios.map((item) => [item.name, item.code, item.theme, item.status, item.allocationType, item.aum, `${item.returnValue.toFixed(2)}%`, item.benchmark])];
+    downloadCsv(rows, "portfolio-ledger.csv");
   };
 
   return (
     <div className="min-h-screen bg-[#f6f8fd]">
-
-
-      <SideBarComponent activePage={activePage} setActivePage={setActivePage} />
-
-
-      <div className="ml-[257px] min-h-screen">
-        {/* TOP BAR */}
-
+      <SideBarComponent activePage="Portfolios" />
+      <div className="ml-[257px] min-h-screen max-[760px]:ml-0">
         <TopBarComponent />
+        <main className="mx-auto w-full max-w-[1600px] px-4 py-5 sm:px-5">
+          <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <SummaryCard title="Active portfolio AUM" value={formatMoney(totalAum)} detail={`${activePortfolios.length} active mandates`} icon={Building2} />
+            <SummaryCard title="Rebalance required" value={driftLoading ? "…" : String(driftPortfolioIds.length)} detail={driftPortfolioIds.length ? "Mandates outside allocation tolerance" : "No active drift alerts"} icon={AlertTriangle} tone={driftPortfolioIds.length ? "red" : "green"} />
+            <SummaryCard title="Allocation compliance" value={`${compliance.toFixed(1)}%`} detail="Active portfolios within ±5% threshold" icon={ShieldCheck} tone="green" />
+            <SummaryCard title="Average portfolio return" value={`${averageReturn >= 0 ? "+" : ""}${averageReturn.toFixed(2)}%`} detail="Current return across active mandates" icon={WalletCards} tone={averageReturn >= 0 ? "green" : "red"} />
+          </section>
 
-        <main className="px-5 py-4">
-     
-
-          <div className="grid grid-cols-[1fr_1fr_1fr_1.5fr] gap-3">
-            {/* AUM */}
-
-            <div className="flex items-center gap-3 rounded-lg bg-[#eef4fc] px-4 py-3">
-              <div className="rounded-md bg-blue-50 p-2 text-blue-700">
-                <Building2 size={18} />
-              </div>
-
-              <div>
-                <div className="text-[10px] font-bold tracking-wider text-slate-500">
-                  TOTAL ACTIVE AUM
-                </div>
-
-                <div className="font-mono text-[17px] text-slate-800">
-                  ₹ 428.50 Cr
-                </div>
-              </div>
-            </div>
-
-
-
-            <div className="flex items-center gap-3 rounded-lg bg-[#eef4fc] px-4 py-3">
-              <div className="rounded-md bg-red-50 p-2 text-red-600">
-                <AlertTriangle size={18} />
-              </div>
-
-              <div>
-                <div className="text-[10px] font-bold tracking-wider text-slate-500">
-                  REBALANCE CYCLES
-                </div>
-
-                <div className="font-mono text-[17px] text-red-600">
-                  2 Pending Action •
-                </div>
-              </div>
-            </div>
-
-
-
-            <div className="flex items-center gap-3 rounded-lg bg-[#eef4fc] px-4 py-3">
-              <div className="rounded-md bg-emerald-50 p-2 text-emerald-700">
-                <ShieldCheck size={18} />
-              </div>
-
-              <div>
-                <div className="text-[10px] font-bold tracking-wider text-slate-500">
-                  SYSTEM COMPLIANCE
-                </div>
-
-                <div className="font-mono text-[17px] text-slate-800">
-                  100.0% Validated
-                </div>
-              </div>
-            </div>
-
-      
-
-            <div className="flex items-center gap-3 rounded-lg bg-[#eef4fc] px-4">
-              <Clock3 size={17} className="text-emerald-700" />
-
-              <div className="text-xs font-semibold text-slate-500">
-                Rebalancing Window:
-                <span className="ml-2 font-mono text-slate-700">
-                  Closes in 4d 06h
-                </span>
-              </div>
-            </div>
-          </div>
-
-
-
-          <div className="mt-5 flex items-end justify-between">
+          <section className="mt-5 flex flex-wrap items-end justify-between gap-4">
             <div>
-              <div className="mb-2 text-[11px] font-bold tracking-wider text-slate-500">
-                PORTFOLIO MANAGEMENT SYSTEM
-                <span className="mx-1">•</span>
-                <span className="text-blue-700">LIVE ALLOCATION</span>
-              </div>
-
-              <h1 className="text-2xl font-semibold text-slate-900">
-                Fund Portfolios
-              </h1>
-
-              <p className="mt-1 max-w-[430px] text-sm leading-5 text-slate-500">
-                Manage investment portfolios, allocation themes, benchmarks, and
-                active rebalancing cycles.
-              </p>
+              <div className="mb-2 text-[10px] font-bold tracking-wider text-blue-700">PORTFOLIO MANAGEMENT SYSTEM · LIVE ALLOCATION</div>
+              <h1 className="text-2xl font-semibold text-slate-900">Fund Portfolios</h1>
+              <p className="mt-1 max-w-xl text-sm leading-5 text-slate-500">Manage mandates, allocation themes, benchmarks, and rebalance actions.</p>
             </div>
-
-      
-
             <div className="flex gap-2">
-              <button
-                onClick={() => console.log("Export ledger")}
-                className="flex items-center gap-2 rounded-md bg-[#edf3fd] px-4 py-2.5 text-sm font-semibold text-slate-700"
-              >
-                <Download size={16} />
-                Export Ledger
-              </button>
-
-              <button
-                onClick={handleCreatePortfolio}
-                className="flex items-center gap-2 rounded-md bg-blue-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-900"
-              >
-                <Plus size={17} />
-                Create Portfolio
-              </button>
+              <button onClick={exportPortfolios} disabled={!filteredPortfolios.length} className="inline-flex items-center gap-2 rounded-md bg-[#edf3fd] px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-blue-100 disabled:opacity-50"><Download size={16} /> Export Ledger</button>
+              <button onClick={() => navigate("/create-portfolio")} className="inline-flex items-center gap-2 rounded-md bg-blue-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-900"><Plus size={17} /> Create Portfolio</button>
             </div>
-          </div>
+          </section>
 
-          
-          <div className="mt-5 flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3">
-    
-
-            <div className="flex gap-1.5">
-              {[
-                ["All", 18],
-                ["Active", 14],
-                ["Rebalance Required", 2],
-                ["Draft", 2],
-                ["Closed", 0],
-              ].map(([name, count]) => (
-                <button
-                  key={name}
-                  onClick={() => setFilter(name)}
-                  className={`rounded-md px-3 py-2 text-xs font-semibold ${
-                    filter === name
-                      ? "bg-blue-800 text-white"
-                      : "bg-[#edf2fb] text-slate-600 hover:bg-[#e4ebf8]"
-                  }`}
-                >
-                  {name}
-
-                  <span className="ml-1 opacity-70">{count}</span>
-                </button>
-              ))}
+          <section className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3">
+            <div className="flex flex-wrap gap-1.5">
+              {FILTERS.map((name) => <button key={name} onClick={() => setFilter(name)} className={`rounded-md px-3 py-2 text-xs font-semibold ${filter === name ? "bg-blue-800 text-white" : "bg-[#edf2fb] text-slate-600 hover:bg-[#e4ebf8]"}`}>
+                {name}<span className="ml-1 opacity-70">{name === "Rebalance Required" && driftLoading ? "…" : counts[name]}</span>
+              </button>)}
             </div>
-
-     
-
-            <div className="flex items-center gap-2">
-              <div className="flex w-[280px] items-center gap-2 rounded-md bg-[#edf2fb] px-3 py-2">
-                <Filter size={15} className="text-slate-500" />
-
-                <input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  className="w-full bg-transparent text-xs outline-none placeholder:text-slate-500"
-                  placeholder="Filter by name, ISIN, strategy..."
-                />
-              </div>
-
-              <button className="rounded-md bg-[#edf2fb] px-3 py-2 text-[11px] font-bold text-slate-700">
-                DENSE
-              </button>
-
-              <button className="rounded-md bg-[#edf2fb] px-3 py-2 text-[11px] font-bold text-slate-500">
-                EXPANDED
-              </button>
-            </div>
-          </div>
-
-
-          <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
-   
-
-            <div className="grid grid-cols-[2.2fr_1fr_1fr_.85fr_.75fr_.7fr_1fr] bg-[#eff4fc] px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              <div>Portfolio Name</div>
-
-              <div>Theme / Strategy</div>
-
-              <div>Allocation Type</div>
-
-              <div>AUM</div>
-
-              <div>Return (1Y)</div>
-
-              <div>BEN</div>
-
-              <div className="text-right">Actions</div>
-            </div>
-
-     
-
-            {filteredPortfolios.map((portfolio) => (
-              <div
-                key={portfolio.id}
-                className="grid min-h-[92px] grid-cols-[2.2fr_1fr_1fr_.85fr_.75fr_.7fr_1fr] items-center border-t border-slate-100 px-4 py-3"
-              >
-         
-
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-[#e9effc] text-xs font-semibold text-blue-700">
-                    {portfolio.initials}
-                  </div>
-
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 text-sm font-semibold">
-                      <span className="truncate">{portfolio.name}</span>
-
-                      <span className="rounded bg-[#e6edf9] px-1.5 py-0.5 text-[9px] font-mono text-slate-500">
-                        {portfolio.code}
-                      </span>
-                    </div>
-
-                    <div className="truncate text-[11px] text-slate-500">
-                      {portfolio.description}
-                    </div>
-                  </div>
-                </div>
-
-         
-
-                <div>
-                  <span className="inline-block max-w-[115px] rounded-sm bg-[#e7eefb] px-2 py-1 text-[11px] font-semibold leading-4 text-slate-700">
-                    {portfolio.theme}
-                  </span>
-                </div>
-
-           
-
-                <div className="flex items-center gap-2 text-xs text-slate-600">
-                  {portfolio.allocationType === "Weightage" ? (
-                    <Scale size={15} />
-                  ) : (
-                    <WalletCards size={15} />
-                  )}
-
-                  {portfolio.allocationType}
-                </div>
-
-              
-                <div className="font-mono text-sm font-semibold text-slate-700">
-                  {portfolio.aum}
-                </div>
-
-        
-
-                <div className="font-mono text-sm font-semibold text-emerald-700">
-                  ↗{portfolio.return1Y}
-                </div>
-
- 
-
-                <div className="font-mono text-xs text-slate-700">
-                  {portfolio.benchmark}
-                </div>
-
-
-
-                <div className="flex items-center justify-end gap-2">
-                  {portfolio.action === "Rebalance" ? (
-                    <button
-                      onClick={() => handleRebalance(portfolio)}
-                      className="rounded-sm bg-blue-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-900"
-                    >
-                      Rebalance
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleView(portfolio)}
-                      className="rounded-sm bg-[#eaf0fb] px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-[#dfe8f8]"
-                    >
-                      {portfolio.action}
-                    </button>
-                  )}
-
-                  <button
-                    onClick={() => console.log("More options:", portfolio)}
-                    className="text-slate-500 hover:text-slate-900"
-                  >
-                    <MoreVertical size={17} />
-                  </button>
-                </div>
-              </div>
-            ))}
-
-           
-
-            <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-xs text-slate-500">
-              <span>
-                Showing 1–
-                {filteredPortfolios.length} of 18 portfolios
-              </span>
-
-              <div className="flex items-center gap-2">
-                <button className="rounded border border-slate-100 px-3 py-1.5 text-slate-400">
-                  Previous
-                </button>
-
-                <span className="rounded bg-slate-50 px-3 py-1.5 font-semibold text-slate-700">
-                  Page 1 of 3
-                </span>
-
-                <button className="rounded border border-slate-200 px-3 py-1.5 text-slate-700">
-                  Next
-                </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex w-[min(280px,75vw)] items-center gap-2 rounded-md bg-[#edf2fb] px-3 py-2"><Filter size={15} className="shrink-0 text-slate-500" /><span className="sr-only">Filter portfolios</span><input value={search} onChange={(event) => setSearch(event.target.value)} className="w-full bg-transparent text-xs outline-none placeholder:text-slate-500" placeholder="Filter by name, code, theme, benchmark…" /></label>
+              <div className="flex rounded-md bg-[#edf2fb] p-0.5" aria-label="Portfolio row density">
+                {[["dense", "DENSE"], ["expanded", "EXPANDED"]].map(([value, label]) => <button key={value} onClick={() => setDensity(value)} aria-pressed={density === value} className={`rounded px-2.5 py-1.5 text-[10px] font-bold ${density === value ? "bg-white text-blue-800 shadow-sm" : "text-slate-500"}`}>{label}</button>)}
               </div>
             </div>
-          </div>
+          </section>
 
+          <section className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
+            {error ? <div className="flex min-h-56 flex-col items-center justify-center px-5 text-center"><AlertTriangle className="text-red-500" size={28} /><p className="mt-3 text-sm font-semibold text-slate-700">Could not load portfolios</p><p className="mt-1 text-xs text-slate-500">{error}</p><button onClick={() => window.location.reload()} className="mt-4 rounded-md bg-blue-800 px-3 py-2 text-xs font-semibold text-white">Retry</button></div>
+              : loading ? <div className="flex min-h-56 items-center justify-center text-sm text-slate-500">Loading portfolios…</div>
+                : <div className="overflow-x-auto">
+                  <table className="w-full min-w-[1050px] border-collapse text-left">
+                    <thead className="bg-[#eff4fc] text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      <tr>
+                        <th scope="col" className="px-4 py-3">Portfolio</th>
+                        <th scope="col" className="px-4 py-3">Theme / strategy</th>
+                        <th scope="col" className="px-4 py-3">Allocation type</th>
+                        <th scope="col" className="px-4 py-3 text-right">AUM</th>
+                        <th scope="col" className="px-4 py-3 text-right"><button onClick={() => setReturnSort((current) => current === "asc" ? "desc" : "asc")} className="ml-auto inline-flex items-center gap-1 whitespace-nowrap hover:text-blue-800" aria-label="Sort portfolios by return">Return {returnSort === "asc" ? <ArrowUp size={12} /> : returnSort === "desc" ? <ArrowDown size={12} /> : <ArrowUpDown size={12} />}</button></th>
+                        <th scope="col" className="px-4 py-3">Benchmark</th>
+                        <th scope="col" className="px-4 py-3 text-right">Status / action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs">
+                      {pageRows.map((portfolio) => {
+                        const needsRebalance = driftPortfolioIds.includes(String(portfolio.id));
+                        return <tr key={portfolio.id} className="hover:bg-slate-50/70">
+                          <td className={`px-4 ${density === "dense" ? "py-2.5" : "py-5"}`}><div className="flex min-w-0 items-center gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#e9effc] text-xs font-semibold text-blue-700">{portfolio.initials}</div><div className="min-w-0"><button onClick={() => openPortfolio(portfolio)} className="max-w-[230px] truncate text-left text-sm font-semibold text-slate-800 hover:text-blue-800">{portfolio.name}</button><div className="mt-0.5 flex gap-2 text-[10px] text-slate-500"><span className="font-mono">{portfolio.code}</span><span>·</span><span>{formatStatus(portfolio.status)}</span></div></div></div></td>
+                          <td className={`px-4 ${density === "dense" ? "py-2.5" : "py-5"}`}><span className="inline-block max-w-[170px] truncate rounded-sm bg-[#e7eefb] px-2 py-1 text-[11px] font-semibold text-slate-700" title={portfolio.theme}>{portfolio.theme}</span></td>
+                          <td className={`px-4 text-xs text-slate-600 ${density === "dense" ? "py-2.5" : "py-5"}`}><span className="inline-flex items-center gap-2"><Scale size={14} />{formatLabel(portfolio.allocationType)}</span></td>
+                          <td className={`px-4 text-right font-mono text-sm font-semibold text-slate-700 ${density === "dense" ? "py-2.5" : "py-5"}`}>{formatMoney(portfolio.aum)}</td>
+                          <td className={`px-4 text-right font-mono text-sm font-semibold ${portfolio.returnValue >= 0 ? "text-emerald-700" : "text-red-600"} ${density === "dense" ? "py-2.5" : "py-5"}`}>{portfolio.returnValue > 0 ? "+" : ""}{portfolio.returnValue.toFixed(2)}%</td>
+                          <td className={`px-4 font-mono text-xs text-slate-700 ${density === "dense" ? "py-2.5" : "py-5"}`}>{formatLabel(portfolio.benchmark)}</td>
+                          <td className={`px-4 text-right ${density === "dense" ? "py-2.5" : "py-5"}`}><div className="flex items-center justify-end gap-2"><span className={`whitespace-nowrap rounded px-2 py-1 text-[9px] font-bold uppercase ${needsRebalance ? "bg-red-100 text-red-700" : statusTone(portfolio.status)}`}>{needsRebalance ? "Rebalance required" : formatStatus(portfolio.status)}</span>{needsRebalance && portfolio.status === "ACTIVE" ? <button onClick={() => navigate("/rebalancing", { state: { portfolioId: portfolio.id } })} className="inline-flex items-center gap-1 rounded-sm bg-blue-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-900"><RefreshCw size={13} /> Rebalance</button> : <button onClick={() => openPortfolio(portfolio)} className="rounded-sm bg-[#eaf0fb] px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-[#dfe8f8]">View</button>}</div></td>
+                        </tr>;
+                      })}
+                      {pageRows.length === 0 && <tr><td colSpan={7} className="px-5 py-16 text-center"><WalletCards className="mx-auto text-slate-300" size={30} /><p className="mt-3 text-sm font-semibold text-slate-700">No portfolios match these filters</p><p className="mt-1 text-xs text-slate-500">Change the filter or search term, or create a portfolio.</p></td></tr>}
+                    </tbody>
+                  </table>
+                </div>}
+            {!error && !loading && filteredPortfolios.length > 0 && <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-xs text-slate-500">
+              <span>Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filteredPortfolios.length)} of {filteredPortfolios.length} portfolios</span>
+              <div className="flex items-center gap-2"><button disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="rounded border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">Previous</button><span className="rounded bg-slate-50 px-3 py-1.5 font-semibold text-slate-700">Page {page} of {pageCount}</span><button disabled={page >= pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))} className="rounded border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">Next</button></div>
+            </div>}
+          </section>
 
-          <div className="mt-3 grid grid-cols-3 gap-3">
-            {/* RETURN */}
-
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="text-[10px] font-bold tracking-wider text-slate-500">
-                AVG PORTFOLIO 1Y RETURN
-              </div>
-
-              <div className="mt-1 text-2xl font-semibold text-emerald-700">
-                +20.22%
-              </div>
-
-              <div className="mt-2 text-sm text-slate-500">
-                Benchmark Spread:
-              </div>
-
-              <div className="text-lg font-medium text-slate-600">
-                +3.1%
-                <span className="text-sm"> alpha</span>
-              </div>
-            </div>
-
-
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="text-[10px] font-bold tracking-wider text-slate-500">
-                ABSOLUTE DRIFT VOLUME
-              </div>
-
-              <div className="mt-1 flex items-center justify-between">
-                <div className="text-2xl font-semibold text-slate-800">
-                  ₹ 8.74 Cr
-                </div>
-
-                <div className="rounded-lg bg-[#eff3fc] p-3 text-slate-600">
-                  <Scale size={20} />
-                </div>
-              </div>
-
-              <div className="mt-2 text-sm text-red-600">
-                △ Requires capital re-alignment
-              </div>
-            </div>
-
-   
-
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="text-[10px] font-bold tracking-wider text-slate-500">
-                AUTO-REBALANCE ENGINE
-              </div>
-
-              <div className="mt-1 flex items-center gap-2 text-sm font-semibold">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                Active & Monitoring
-              </div>
-
-              <div className="mt-3 flex items-center justify-between">
-                <div className="text-sm text-slate-500">
-                  Next systemic trigger:
-                  <span className="font-medium"> 15 Oct, 09:15</span>
-                </div>
-
-                <button className="rounded-md bg-[#eaf0fb] px-3 py-2 text-xs font-semibold text-slate-700">
-                  Configure
-                </button>
-              </div>
-            </div>
-          </div>
+          <section className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-3">
+            <InsightCard title="Average portfolio return" value={`${averageReturn >= 0 ? "+" : ""}${averageReturn.toFixed(2)}%`} detail="Calculated from backend portfolio returns." icon={ArrowUpDown} tone={averageReturn >= 0 ? "green" : "red"} />
+            <InsightCard title="Rebalance queue" value={driftLoading ? "Checking…" : `${driftPortfolioIds.length} mandate${driftPortfolioIds.length === 1 ? "" : "s"}`} detail={driftPortfolioIds.length ? "Allocation drift requires review." : "All checked mandates are within tolerance."} icon={RefreshCw} tone={driftPortfolioIds.length ? "red" : "green"} />
+            <InsightCard title="Portfolio coverage" value={`${activePortfolios.length} active · ${counts.Draft} draft`} detail={`${counts.Closed} closed portfolio${counts.Closed === 1 ? "" : "s"} in this account`} icon={ShieldCheck} />
+          </section>
         </main>
       </div>
     </div>
   );
 };
+
+function SummaryCard({ title, value, detail, icon: Icon, tone = "blue" }) {
+  const color = tone === "red" ? "text-red-600 bg-red-50" : tone === "green" ? "text-emerald-700 bg-emerald-50" : "text-blue-700 bg-blue-50";
+  return <article className="flex min-w-0 items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm"><span className={`rounded-md p-2 ${color}`}><Icon size={18} /></span><div className="min-w-0"><div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{title}</div><div className="mt-0.5 truncate font-mono text-lg font-semibold text-slate-900">{value}</div><div className="truncate text-[10px] text-slate-500">{detail}</div></div></article>;
+}
+
+function InsightCard({ title, value, detail, icon: Icon, tone = "blue" }) {
+  return <article className="rounded-xl border border-slate-200 bg-white p-4"><div className="flex items-center justify-between text-[10px] font-bold tracking-wider text-slate-500"><span>{title.toUpperCase()}</span><Icon size={16} className={tone === "red" ? "text-red-600" : tone === "green" ? "text-emerald-700" : "text-blue-700"} /></div><div className={`mt-1 text-xl font-semibold ${tone === "red" ? "text-red-700" : tone === "green" ? "text-emerald-700" : "text-slate-900"}`}>{value}</div><div className="mt-1 text-xs text-slate-500">{detail}</div></article>;
+}
+
+function parseReturn(value) {
+  if (typeof value === "number") return value;
+  const parsed = Number.parseFloat(String(value ?? "0").replaceAll(",", ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function initialsFor(name) {
+  return String(name || "P").trim().split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+}
+
+function formatMoney(value) {
+  const amount = Number(value || 0);
+  if (amount >= 10000000) return `₹ ${(amount / 10000000).toFixed(2)} Cr`;
+  if (amount >= 100000) return `₹ ${(amount / 100000).toFixed(2)} L`;
+  return `₹ ${amount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+}
+
+function formatLabel(value) { return String(value ?? "—").replaceAll("_", " "); }
+function formatStatus(status) { return status === "CANCELED" ? "Closed" : status === "CREATED" ? "Draft" : status.charAt(0) + status.slice(1).toLowerCase(); }
+function statusTone(status) {
+  return status === "ACTIVE" ? "bg-emerald-100 text-emerald-700" : ["DRAFT", "CREATED"].includes(status) ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600";
+}
+
+function downloadCsv(rows, filename) {
+  const content = rows.map((row) => row.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(",")).join("\r\n");
+  const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
 export default PortfolioPage;

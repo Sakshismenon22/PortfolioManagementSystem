@@ -29,7 +29,7 @@ public class SecurityConfig {
                                 "/v3/api-docs/**")
                         .permitAll()
                         .anyRequest()
-                        .authenticated()
+                        .permitAll()
                 );
 
         return http.build();

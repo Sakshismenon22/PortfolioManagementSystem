@@ -1,29 +1,13 @@
 import React, { useEffect, useState } from "react";
 import {
-  LayoutDashboard,
-  FolderKanban,
-  Layers3,
-  Database,
-  SlidersHorizontal,
-  Bell,
-  Settings,
-  CircleHelp,
-  Search,
-  Download,
   Plus,
-  ChevronLeft,
-  ChevronRight,
-  TrendingUp,
-  TrendingDown,
   Building2,
   ShieldCheck,
-  PieChart,
-  Activity,
   AlertTriangle,
   Eye,
-  RefreshCw,
-  BarChart3,
-  X,
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 import {
@@ -34,263 +18,14 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Area,
-  AreaChart,
 } from "recharts";
 import { useNavigate } from "react-router-dom";
 import { getAllPortfolioDetails, getCountOfActivePortfolios, getCountOfPortfolios } from "../services/portfolioService";
 import TopBarComponent from "../components/TopBarComponent";
-
-
-const portfolioComparisons = [
-  {
-    id: 1,
-    name: "Growth Portfolio",
-    benchmark: "NIFTY 50",
-    portfolioReturn: 21.8,
-    benchmarkReturn: 17.4,
-    alpha: 4.4,
-    trackingError: 1.14,
-    sharpe: 2.18,
-    beta: 0.94,
-  },
-  {
-    id: 2,
-    name: "Tech Momentum Portfolio",
-    benchmark: "NIFTY 100",
-    portfolioReturn: 28.6,
-    benchmarkReturn: 21.3,
-    alpha: 7.3,
-    trackingError: 1.82,
-    sharpe: 2.46,
-    beta: 1.08,
-  },
-  {
-    id: 3,
-    name: "Bluechip Balanced Portfolio",
-    benchmark: "NIFTY 500",
-    portfolioReturn: 16.9,
-    benchmarkReturn: 14.2,
-    alpha: 2.7,
-    trackingError: 0.91,
-    sharpe: 1.74,
-    beta: 0.87,
-  },
-];
-
-const chartData = [
-  {
-    month: "Nov '23",
-    portfolio: 0,
-    benchmark: 0,
-  },
-  {
-    month: "Dec '23",
-    portfolio: 6,
-    benchmark: 4,
-  },
-  {
-    month: "Jan '24",
-    portfolio: 11,
-    benchmark: 8,
-  },
-  {
-    month: "Feb '24",
-    portfolio: 19,
-    benchmark: 13,
-  },
-  {
-    month: "Mar '24",
-    portfolio: 22,
-    benchmark: 15,
-  },
-  {
-    month: "Apr '24",
-    portfolio: 21.8,
-    benchmark: 17.4,
-  },
-];
-
-const assetAllocation = [
-  {
-    name: "Stocks (Direct Equities)",
-    percentage: 62,
-    amount: "₹ 265.67 Cr",
-  },
-  {
-    name: "Mutual Funds",
-    percentage: 18,
-    amount: "₹ 77.13 Cr",
-  },
-  {
-    name: "Index ETFs & Liquid",
-    percentage: 12,
-    amount: "₹ 51.42 Cr",
-  },
-  {
-    name: "Commodities",
-    percentage: 8,
-    amount: "₹ 34.28 Cr",
-  },
-];
-
-const driftData = [
-  {
-    portfolio: "Growth Portfolio",
-    description: "Aggressive Equity",
-    asset: "Stocks",
-    target: "60.0%",
-    current: "66.0%",
-    drift: "+6.0%",
-    status: "Rebalance Required",
-    alert: true,
-  },
-  {
-    portfolio: "Tech Momentum Portfolio",
-    description: "Thematic Sectoral",
-    asset: "Stocks",
-    target: "70.0%",
-    current: "75.8%",
-    drift: "+5.8%",
-    status: "Rebalance Required",
-    alert: true,
-  },
-  {
-    portfolio: "Bluechip Balanced",
-    description: "Hybrid Allocator",
-    asset: "Stocks",
-    target: "50.0%",
-    current: "54.2%",
-    drift: "+4.2%",
-    status: "Within Tolerance",
-    alert: false,
-  },
-];
-
-const marketPulse = [
-  {
-    name: "NIFTY 50",
-    description: "NSE BENCHMARK",
-    value: "22,485.60",
-    change: "+0.84%",
-  },
-  {
-    name: "NIFTY 100",
-    description: "BROAD LARGE-CAP INDEX",
-    value: "23,120.40",
-    change: "+0.71%",
-  },
-  {
-    name: "BSE SENSEX",
-    description: "BOMBAY STOCK EXCHANGE",
-    value: "74,119.30",
-    change: "+0.92%",
-  },
-  {
-    name: "10Y G-Sec Yield",
-    description: "SOVEREIGN BENCHMARK",
-    value: "7.08%",
-    change: "-2 bps",
-  },
-];
-
-
-
-const SideBarComponent = () => {
-  const menuItems = [
-    {
-      label: "Dashboard",
-      icon: LayoutDashboard,
-      active: true,
-    },
-    {
-      label: "Portfolios",
-      icon: FolderKanban,
-    },
-    {
-      label: "Themes",
-      icon: Layers3,
-    },
-    {
-      label: "Securities",
-      icon: Database,
-    },
-    {
-      label: "Rebalancing",
-      icon: SlidersHorizontal,
-      badge: "2 Alerts",
-    },
-    
-  ];
-
-  
-
-  return (
-    <aside className="fixed left-0 top-0 z-30 flex h-screen w-[240px] flex-col bg-[#17283d] text-white">
-
-      <div className="flex h-[68px] items-center border-b border-white/10 px-5">
-        <div className="flex h-7 w-7 items-center justify-center rounded bg-blue-600">
-          <TrendingUp size={16} />
-        </div>
-
-        <div className="ml-3">
-          <div className="text-sm font-bold">
-            
-            <span className="text-blue-400">PMS</span>
-          </div>
-
-          <div className="text-[9px] font-semibold tracking-widest text-slate-300">
-            INSTITUTIONAL
-          </div>
-        </div>
-      </div>
-
-      <nav className="flex-1 px-3 py-5">
-        <div className="space-y-1">
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-
-            return (
-              <button
-                key={item.label}
-                className={`flex w-full items-center rounded-md px-3 py-2.5 text-sm transition ${
-                  item.active
-                    ? "bg-blue-700 text-white"
-                    : "text-slate-300 hover:bg-white/10"
-                }`}
-              >
-                <Icon size={17} />
-
-                <span className="ml-3 flex-1 text-left">{item.label}</span>
-
-                {item.badge && (
-                  <span
-                    className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                      item.label === "Rebalancing"
-                        ? "bg-red-100 text-red-600"
-                        : "bg-blue-600 text-white"
-                    }`}
-                  >
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </nav>
-
-
-
-    
-     
-    </aside>
-  );
-};
-
-
-
-
+import SideBarComponent from "../components/SideBarComponent";
+import { getPortfolioBasicInfo, getPortfolioHoldings, validatePortfolioAllocation } from "../services/portfolioService";
+import { getPortfolioDriftHistory } from "../services/driftService";
+import { getNifty50History } from "../services/benchmarkService";
 
 
 const KpiCard = ({ title, value, subtitle, icon: Icon, positive, danger }) => {
@@ -329,518 +64,435 @@ const KpiCard = ({ title, value, subtitle, icon: Icon, positive, danger }) => {
 
 
 const PortfolioBenchmarkChart = ({
-  selectedPortfolio,
-  onPrevious,
-  onNext,
-  hasPrevious,
-  hasNext,
+  portfolios,
+  selectedPortfolioId,
+  onSelectPortfolio,
+  benchmarkPoints,
+  benchmarkLoading,
+  benchmarkError,
 }) => {
+  const selected = portfolios.find((entry) => String(entry.portfolio.id) === String(selectedPortfolioId));
+  const selectedIndex = portfolios.findIndex((entry) => String(entry.portfolio.id) === String(selectedPortfolioId));
+  const allPoints = [...benchmarkPoints].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const defaultStart = new Date();
+  defaultStart.setFullYear(defaultStart.getFullYear() - 1);
+  const benchmarkStartDate = selected?.firstBuyDate || toLocalIsoDate(defaultStart);
+  // NSE returns daily closes, so a purchase made today (or on a holiday) needs
+  // the prior trading day's close as the benchmark's starting value.
+  let baselineIndex = -1;
+  allPoints.forEach((point, index) => {
+    if (point.date <= benchmarkStartDate) baselineIndex = index;
+  });
+  // Keep the fetched pre-purchase dates in the chart. For a new portfolio,
+  // NSE may not have published a close since the buy date yet; slicing to the
+  // baseline would leave a single point, which Recharts cannot draw as a line.
+  const points = allPoints;
+  const firstClose = Number(allPoints[baselineIndex >= 0 ? baselineIndex : 0]?.close || 0);
+  const lastClose = Number(allPoints[allPoints.length - 1]?.close || 0);
+  const niftyReturn = firstClose > 0 ? ((lastClose / firstClose) - 1) * 100 : null;
+  const portfolioReturn = selected?.returnPercent;
+  const alpha = portfolioReturn != null && niftyReturn != null ? portfolioReturn - niftyReturn : null;
+  const latestChartDate = toLocalIsoDate(new Date());
+  const chartDates = [...new Set([...points.map((point) => point.date), benchmarkStartDate, latestChartDate])]
+    .filter(Boolean)
+    .sort((a, b) => new Date(a + "T00:00:00") - new Date(b + "T00:00:00"));
+  const portfolioStartTime = new Date(benchmarkStartDate + "T00:00:00").getTime();
+  const portfolioEndTime = new Date(latestChartDate + "T00:00:00").getTime();
+  const chartData = chartDates.map((date) => {
+    const point = points.find((item) => item.date === date);
+    let closeAtDate = point ? Number(point.close) : null;
+    if (closeAtDate == null) {
+      for (const candidate of points) {
+        if (candidate.date <= date) closeAtDate = Number(candidate.close);
+        else break;
+      }
+    }
+    const pointTime = new Date(date + "T00:00:00").getTime();
+    const progress = portfolioEndTime <= portfolioStartTime
+      ? (date >= benchmarkStartDate ? 1 : 0)
+      : Math.max(0, Math.min(1, (pointTime - portfolioStartTime) / (portfolioEndTime - portfolioStartTime)));
+    return {
+      date,
+      label: new Date(date + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short" }),
+      niftyReturn: firstClose > 0 && closeAtDate > 0 ? ((closeAtDate / firstClose) - 1) * 100 : null,
+      // Portfolio history is not persisted yet. This guide connects the actual
+      // buy-date baseline (0%) to the latest measured portfolio return.
+      portfolioReturn: portfolioReturn == null || date < benchmarkStartDate ? null : portfolioReturn * progress,
+    };
+  });
+
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-
-      <div className="flex items-start justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">
-            Portfolio Performance vs Benchmark
-          </h2>
-
-          <p className="mt-1 text-[11px] text-slate-500">
-            Cumulative time-weighted rate of return compared against master
-            benchmark.
-          </p>
+          <h2 className="text-lg font-semibold text-slate-900">Portfolio Performance vs NIFTY 50</h2>
+          <p className="mt-1 text-[11px] text-slate-500">Portfolio return since first purchase compared with NIFTY 50 over the same period.</p>
         </div>
-
-        
-      </div>
-
-
-      <div className="mt-4 flex items-center justify-between rounded-md bg-slate-50 px-3 py-2">
-        <button
-          onClick={onPrevious}
-          disabled={!hasPrevious}
-          className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs ${
-            hasPrevious
-              ? "text-slate-700 hover:bg-white"
-              : "cursor-not-allowed text-slate-300"
-          }`}
-        >
-          <ChevronLeft size={15} />
-          Previous
-        </button>
-
-        <div className="flex items-center gap-2 text-xs">
-          <span className="font-semibold text-slate-800">
-            {selectedPortfolio.name}
-          </span>
-
-          <span className="text-slate-400">vs</span>
-
-          <span className="font-semibold text-blue-700">
-            {selectedPortfolio.benchmark}
-          </span>
-        </div>
-
-        <button
-          onClick={onNext}
-          disabled={!hasNext}
-          className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs ${
-            hasNext
-              ? "text-slate-700 hover:bg-white"
-              : "cursor-not-allowed text-slate-300"
-          }`}
-        >
-          Next
-          <ChevronRight size={15} />
-        </button>
-      </div>
-
-
-      <div className="mt-3 flex items-center gap-4 rounded-md bg-slate-50 px-3 py-2">
-        <div className="flex items-center gap-2 text-[11px]">
-          <span className="h-2 w-5 rounded bg-blue-700" />
-
-          <span className="text-slate-600">Portfolio Return:</span>
-
-          <strong className="text-blue-700">
-            {selectedPortfolio.portfolioReturn.toFixed(1)}%
-          </strong>
-        </div>
-
-        <div className="flex items-center gap-2 text-[11px]">
-          <span className="h-[2px] w-5 border-t-2 border-dashed border-slate-500" />
-
-          <span className="text-slate-600">
-            Benchmark ({selectedPortfolio.benchmark}):
-          </span>
-
-          <strong className="text-slate-700">
-            {selectedPortfolio.benchmarkReturn.toFixed(1)}%
-          </strong>
-        </div>
-
-        <div className="ml-auto rounded bg-emerald-100 px-2 py-1 text-[10px] font-bold text-emerald-700">
-          Alpha: +{selectedPortfolio.alpha.toFixed(2)}%
+        <div className="flex items-center gap-2">
+          <span className="max-w-[190px] truncate text-xs font-semibold text-slate-700" title={selected?.portfolio.name}>{selected?.portfolio.name}</span>
+          <button
+            type="button"
+            aria-label="Previous portfolio comparison"
+            title="Previous portfolio"
+            disabled={portfolios.length < 2}
+            onClick={() => onSelectPortfolio(portfolios[(selectedIndex - 1 + portfolios.length) % portfolios.length]?.portfolio.id)}
+            className="rounded-md border border-slate-200 bg-white p-1.5 text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          ><ChevronLeft size={16} /></button>
+          <span className="min-w-[42px] text-center font-mono text-[10px] text-slate-500">{portfolios.length ? selectedIndex + 1 : 0} / {portfolios.length}</span>
+          <button
+            type="button"
+            aria-label="Next portfolio comparison"
+            title="Next portfolio"
+            disabled={portfolios.length < 2}
+            onClick={() => onSelectPortfolio(portfolios[(selectedIndex + 1) % portfolios.length]?.portfolio.id)}
+            className="rounded-md border border-slate-200 bg-white p-1.5 text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          ><ChevronRight size={16} /></button>
         </div>
       </div>
 
+      {selected ? (
+        <>
+          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className="rounded-md bg-blue-50 px-3 py-2">
+              <div className="text-[9px] font-bold uppercase tracking-wide text-slate-500">{selected.portfolio.name} return</div>
+              <div className={"mt-1 font-mono text-lg font-semibold " + (portfolioReturn >= 0 ? "text-blue-800" : "text-red-700")}>{portfolioReturn == null ? "—" : (portfolioReturn > 0 ? "+" : "") + portfolioReturn.toFixed(2) + "%"}</div>
+            </div>
+            <div className="rounded-md bg-slate-50 px-3 py-2">
+              <div className="text-[9px] font-bold uppercase tracking-wide text-slate-500">NIFTY 50 return</div>
+              <div className={"mt-1 font-mono text-lg font-semibold " + (niftyReturn == null || niftyReturn >= 0 ? "text-slate-800" : "text-red-700")}>{niftyReturn == null ? "—" : (niftyReturn > 0 ? "+" : "") + niftyReturn.toFixed(2) + "%"}</div>
+            </div>
+            <div className="rounded-md bg-slate-50 px-3 py-2">
+              <div className="text-[9px] font-bold uppercase tracking-wide text-slate-500">Excess return</div>
+              <div className={"mt-1 font-mono text-lg font-semibold " + (alpha == null || alpha >= 0 ? "text-emerald-700" : "text-red-700")}>{alpha == null ? "—" : (alpha > 0 ? "+" : "") + alpha.toFixed(2) + "%"}</div>
+            </div>
+          </div>
 
-      <div className="mt-3 h-[285px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={chartData}>
-            <defs>
-              <linearGradient
-                id="portfolioGradient"
-                x1="0"
-                y1="0"
-                x2="0"
-                y2="1"
-              >
-                <stop offset="0%" stopColor="#1d4ed8" stopOpacity={0.22} />
-
-                <stop offset="100%" stopColor="#1d4ed8" stopOpacity={0.02} />
-              </linearGradient>
-            </defs>
-
-            <CartesianGrid
-              strokeDasharray="3 3"
-              vertical={false}
-              stroke="#e2e8f0"
-            />
-
-            <XAxis
-              dataKey="month"
-              tick={{
-                fontSize: 10,
-                fill: "#64748b",
-              }}
-              axisLine={false}
-              tickLine={false}
-            />
-
-            <YAxis
-              tick={{
-                fontSize: 10,
-                fill: "#64748b",
-              }}
-              axisLine={false}
-              tickLine={false}
-              tickFormatter={(value) => `${value}%`}
-            />
-
-            <Tooltip
-              contentStyle={{
-                borderRadius: "8px",
-                border: "1px solid #e2e8f0",
-                fontSize: "11px",
-              }}
-              formatter={(value) => `${value}%`}
-            />
-
-            <Area
-              type="monotone"
-              dataKey="portfolio"
-              stroke="#1d4ed8"
-              strokeWidth={3}
-              fill="url(#portfolioGradient)"
-            />
-
-            <Line
-              type="monotone"
-              dataKey="benchmark"
-              stroke="#64748b"
-              strokeWidth={2}
-              strokeDasharray="5 4"
-              dot={false}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-
-      
+          {benchmarkError ? <div className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">{benchmarkError}</div> : benchmarkLoading ? (
+            <div className="mt-3 flex h-[285px] items-center justify-center text-xs text-slate-500">Loading NIFTY 50 history…</div>
+          ) : chartData.length ? (
+            <>
+              <div className="mt-3 h-[285px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="label" tick={{ fontSize: 9, fill: "#64748b" }} axisLine={false} tickLine={false} minTickGap={25} />
+                    <YAxis tick={{ fontSize: 9, fill: "#64748b" }} axisLine={false} tickLine={false} tickFormatter={(value) => Number(value).toFixed(0) + "%"} />
+                    <Tooltip
+                      labelFormatter={(_, payload) => payload?.[0]?.payload?.date || ""}
+                      formatter={(value, name) => [Number(value).toFixed(2) + "%", name === "NIFTY 50" ? "NIFTY 50" : selected.portfolio.name + " (endpoint guide)"]}
+                      contentStyle={{ borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "11px" }}
+                    />
+                    <Line type="monotone" dataKey="niftyReturn" name="NIFTY 50" stroke="#64748b" strokeWidth={2} strokeDasharray="5 4" dot={false} activeDot={{ r: 4 }} />
+                    <Line type="linear" dataKey="portfolioReturn" name={selected.portfolio.name} stroke="#123b9d" strokeWidth={3} dot={false} activeDot={{ r: 5 }} connectNulls={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-500">
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1"><i className="h-0.5 w-5 border-t-2 border-dashed border-slate-500" />NIFTY 50 cumulative return <i className="ml-2 h-0.5 w-5 bg-blue-800" />{selected.portfolio.name} endpoint guide</span>
+                <span>{chartDates[0]} to {chartDates[chartDates.length - 1]}</span>
+              </div>
+              <p className="mt-2 text-[10px] text-slate-400">The blue line connects the portfolio’s buy-date baseline to its latest measured return; intermediate portfolio NAV history is not stored.</p>
+            </>
+          ) : <div className="mt-3 flex h-[285px] items-center justify-center rounded-md bg-slate-50 px-5 text-center text-xs text-slate-500">NIFTY 50 history is unavailable for the selected portfolio period.</div>}
+        </>
+      ) : <div className="mt-4 flex h-[300px] items-center justify-center rounded-md bg-slate-50 text-xs text-slate-500">No active portfolios available for comparison.</div>}
     </div>
   );
 };
+const dashboardColors = ["#123b9d", "#4169c9", "#59657a", "#d97706", "#16a085", "#8b5cf6"];
+const DRIFT_LIMIT = 5;
+const unwrapResponse = (response) => response?.data?.data ?? response?.data ?? response;
+const formatMoney = (value) => {
+  const amount = Number(value || 0);
+  if (amount >= 10000000) return "₹ " + (amount / 10000000).toFixed(2) + " Cr";
+  if (amount >= 100000) return "₹ " + (amount / 100000).toFixed(2) + " L";
+  return "₹ " + amount.toLocaleString("en-IN", { maximumFractionDigits: 0 });
+};
+const formatPercent = (value) => Number(value || 0).toFixed(1) + "%";
+const formatDrift = (value) => (Number(value) > 0 ? "+" : "") + Number(value || 0).toFixed(1) + "%";
+const toNseDate = (value) => {
+  const date = value ? new Date(value + "T00:00:00") : new Date();
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return day + "-" + month + "-" + date.getFullYear();
+};
+const toLocalIsoDate = (date) => date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
 
+const AssetAllocationCard = ({ aum, assetAllocation, loading }) => {
+  let cursor = 0;
+  const segments = assetAllocation.filter((asset) => Number(asset.amount) > 0).map((asset, index) => {
+    const start = cursor;
+    cursor += aum > 0 ? (Number(asset.amount) / aum) * 360 : 0;
+    return dashboardColors[index % dashboardColors.length] + " " + start + "deg " + cursor + "deg";
+  });
+  const chartBackground = segments.length ? "conic-gradient(" + segments.join(", ") + ")" : "conic-gradient(#e2e8f0 0deg 360deg)";
 
-
-
-// const AssetAllocationCard = () => {
-//   return (
-//     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-//       <div className="flex items-center justify-between">
-//         <div>
-//           <h2 className="text-lg font-semibold text-slate-900">
-//             Asset Allocation
-//           </h2>
-
-//           <p className="text-[11px] text-slate-500">
-//             All Active Portfolios Breakdown
-//           </p>
-//         </div>
-
-        
-//       </div>
-
-//       <div className="flex justify-center py-5">
-//         <div
-//           className="relative flex h-[155px] w-[155px] items-center justify-center rounded-full"
-//           style={{
-//             background:
-//               "conic-gradient(#123b9d 0deg 223deg, #4169c9 223deg 288deg, #59657a 288deg 331deg, #d97706 331deg 360deg)",
-//           }}
-//         >
-//           <div className="flex h-[105px] w-[105px] flex-col items-center justify-center rounded-full bg-white">
-//             <span className="text-[9px] text-slate-500">TOTAL POOL</span>
-
-//             <strong className="text-lg">₹428.5 Cr</strong>
-
-//             <span className="text-[10px] font-semibold text-emerald-700">
-//               100% Deployed
-//             </span>
-//           </div>
-//         </div>
-//       </div>
-
-
-//       <div className="space-y-4">
-//         {assetAllocation.map((asset, index) => (
-//           <div key={asset.name}>
-//             <div className="flex items-center justify-between text-xs">
-//               <div className="flex items-center gap-2">
-//                 <span
-//                   className={`h-2 w-2 rounded-full ${
-//                     index === 0
-//                       ? "bg-blue-800"
-//                       : index === 1
-//                         ? "bg-blue-500"
-//                         : index === 2
-//                           ? "bg-slate-500"
-//                           : "bg-orange-500"
-//                   }`}
-//                 />
-
-//                 <span className="font-medium text-slate-700">{asset.name}</span>
-//               </div>
-
-//               <div className="text-right">
-//                 <strong>{asset.percentage}%</strong>
-
-//                 <span className="ml-2 text-slate-500">({asset.amount})</span>
-//               </div>
-//             </div>
-
-//             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
-//               <div
-//                 className={`h-full ${
-//                   index === 0
-//                     ? "bg-blue-800"
-//                     : index === 1
-//                       ? "bg-blue-500"
-//                       : index === 2
-//                         ? "bg-slate-500"
-//                         : "bg-orange-500"
-//                 }`}
-//                 style={{
-//                   width: `${asset.percentage}%`,
-//                 }}
-//               />
-//             </div>
-//           </div>
-//         ))}
-//       </div>
-//     </div>
-//   );
-// };
-
-const AssetAllocationCard = ({ aum, assetAllocation }) => {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">
-            Asset Allocation
-          </h2>
-          <p className="text-[11px] text-slate-500">
-            All Active Portfolios Breakdown
-          </p>
-        </div>
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900">Asset Allocation</h2>
+        <p className="text-[11px] text-slate-500">Active portfolio value by asset class</p>
       </div>
-
       <div className="flex justify-center py-5">
-        <div
-          className="relative flex h-[155px] w-[155px] items-center justify-center rounded-full"
-          style={{
-            background:
-              "conic-gradient(#123b9d 0deg 223deg, #4169c9 223deg 288deg, #59657a 288deg 331deg, #d97706 331deg 360deg)",
-          }}
-        >
+        <div className="relative flex h-[155px] w-[155px] items-center justify-center rounded-full" style={{ background: chartBackground }}>
           <div className="flex h-[105px] w-[105px] flex-col items-center justify-center rounded-full bg-white">
             <span className="text-[9px] text-slate-500">TOTAL POOL</span>
-
-            <strong className="text-lg">
-              ₹{(aum ?? 0).toLocaleString("en-IN")}
-            </strong>
-
-            <span className="text-[10px] font-semibold text-emerald-700">
-              100% Deployed
-            </span>
+            <strong className="text-lg">{formatMoney(aum)}</strong>
+            <span className="text-[10px] font-semibold text-slate-500">Current AUM</span>
           </div>
         </div>
       </div>
-
-      <div className="space-y-4">
-        {(assetAllocation ?? []).map((asset, index) => (
-          <div key={asset.name}>
-            <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <span
-                  className={`h-2 w-2 rounded-full ${
-                    index === 0
-                      ? "bg-blue-800"
-                      : index === 1
-                        ? "bg-blue-500"
-                        : index === 2
-                          ? "bg-slate-500"
-                          : "bg-orange-500"
-                  }`}
-                />
-                <span className="font-medium text-slate-700">{asset.name}</span>
+      {loading ? <div className="py-4 text-center text-xs text-slate-400">Loading allocation…</div> : assetAllocation.length ? (
+        <div className="space-y-3">
+          {assetAllocation.map((asset, index) => (
+            <div key={asset.name}>
+              <div className="flex items-center justify-between gap-3 text-xs">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dashboardColors[index % dashboardColors.length] }} />
+                  <span className="truncate font-medium text-slate-700">{asset.name}</span>
+                </div>
+                <div className="shrink-0 text-right">
+                  <strong>{formatPercent(asset.percentage)}</strong>
+                  <span className="ml-2 text-slate-500">{formatMoney(asset.amount)}</span>
+                </div>
               </div>
-
-              <div className="text-right">
-                <strong>{asset.percentage}%</strong>
-                <span className="ml-2 text-slate-500">({asset.amount})</span>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                <div className="h-full rounded-full" style={{ width: Math.min(100, Number(asset.percentage || 0)) + "%", backgroundColor: dashboardColors[index % dashboardColors.length] }} />
               </div>
             </div>
-
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
-              <div
-                className={`h-full ${
-                  index === 0
-                    ? "bg-blue-800"
-                    : index === 1
-                      ? "bg-blue-500"
-                      : index === 2
-                        ? "bg-slate-500"
-                        : "bg-orange-500"
-                }`}
-                style={{ width: `${asset.percentage}%` }}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : <div className="py-4 text-center text-xs text-slate-500">No active portfolio allocations found.</div>}
     </div>
   );
 };
 
-
-const DriftMonitoringCard = () => {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">
-            Drift Monitoring & Rebalance Queue
-          </h2>
-
-          <p className="mt-1 text-[11px] text-slate-500">
-            Portfolios actively flagged against target allocation thresholds.
-          </p>
-        </div>
-
-        <div className="rounded bg-red-100 px-2 py-1 text-[10px] font-bold text-red-600">
-          2 Actionable
-        </div>
-      </div>
-
-
-      <div className="mt-4 grid grid-cols-[1.5fr_1fr_.7fr_.7fr_.7fr_1.2fr_.5fr] gap-2 rounded bg-blue-50 px-3 py-2 text-[9px] font-semibold uppercase text-slate-500">
-        <span>Portfolio Mandate</span>
-        <span>Asset Class</span>
-        <span>Target</span>
-        <span>Current</span>
-        <span>Drift</span>
-        <span>Status</span>
-        <span />
-      </div>
-
-  
+const DriftMonitoringCard = ({ rows, loading, error, actionableCount, onViewAll, onOpenPortfolio }) => (
+  <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
-        {driftData.map((item) => (
-          <div
-            key={item.portfolio}
-            className="grid grid-cols-[1.5fr_1fr_.7fr_.7fr_.7fr_1.2fr_.5fr] items-center gap-2 border-b border-slate-100 px-3 py-4"
-          >
-            <div>
-              <div className="text-xs font-semibold text-slate-800">
-                {item.portfolio}
-              </div>
-
-              <div className="mt-1 text-[9px] text-slate-500">
-                AUM: ₹94.20 Cr
-              </div>
-
-              <div className="text-[9px] text-slate-500">
-                {item.description}
-              </div>
-            </div>
-
-            <div>
-              <span className="rounded bg-blue-50 px-2 py-1 text-[9px] font-semibold text-blue-800">
-                ● {item.asset}
-              </span>
-            </div>
-
-            <span className="text-xs text-slate-500">{item.target}</span>
-
-            <span className="text-xs font-semibold text-slate-700">
-              {item.current}
-            </span>
-
-            <span
-              className={`text-xs font-semibold ${
-                item.alert ? "text-red-600" : "text-emerald-700"
-              }`}
-            >
-              {item.drift}
-            </span>
-
-            <div>
-              <span
-                className={`inline-flex rounded px-2 py-1 text-[9px] font-semibold ${
-                  item.alert
-                    ? "bg-red-100 text-red-600"
-                    : "bg-emerald-50 text-emerald-700"
-                }`}
-              >
-                {item.status}
-              </span>
-            </div>
-
-            <button className="rounded bg-slate-100 p-1.5 text-slate-600 hover:bg-slate-200">
-              <Eye size={14} />
-            </button>
-          </div>
-        ))}
+        <h2 className="text-lg font-semibold text-slate-900">Drift Monitoring &amp; Rebalance Queue</h2>
+        <p className="mt-1 text-[11px] text-slate-500">Live asset class drift against each active portfolio’s theme allocation.</p>
+      </div>
+      <div className="flex items-center gap-3">
+        <span className={"rounded px-2 py-1 text-[10px] font-bold " + (actionableCount ? "bg-red-100 text-red-700" : "bg-emerald-50 text-emerald-700")}>{actionableCount} Actionable</span>
+        <button onClick={onViewAll} className="inline-flex items-center gap-1 text-xs font-semibold text-blue-800 hover:text-blue-950">Rebalancing <ArrowRight size={14} /></button>
       </div>
     </div>
-  );
-};
-
-
-
-
-
+    {error ? <div className="mt-4 rounded-md bg-amber-50 px-3 py-4 text-xs text-amber-800">{error}</div> : loading ? (
+      <div className="mt-4 rounded-md bg-slate-50 px-3 py-8 text-center text-xs text-slate-500">Loading active portfolio drift…</div>
+    ) : rows.length ? (
+      <div className="mt-4 overflow-x-auto">
+        <div className="min-w-[760px]">
+          <div className="grid grid-cols-[1.5fr_1fr_.7fr_.7fr_.7fr_1.15fr_.35fr] gap-2 rounded bg-blue-50 px-3 py-2 text-[9px] font-semibold uppercase text-slate-500">
+            <span>Portfolio mandate</span><span>Asset class</span><span>Target</span><span>Current</span><span>Drift</span><span>Status</span><span />
+          </div>
+          {rows.slice(0, 8).map((item) => (
+            <div key={item.key} className="grid grid-cols-[1.5fr_1fr_.7fr_.7fr_.7fr_1.15fr_.35fr] items-center gap-2 border-b border-slate-100 px-3 py-3">
+              <div className="min-w-0">
+                <div className="truncate text-xs font-semibold text-slate-800">{item.portfolioName}</div>
+                <div className="mt-1 truncate text-[9px] text-slate-500">{item.theme || "Active mandate"} · AUM {formatMoney(item.aum)}</div>
+              </div>
+              <span className="truncate rounded bg-blue-50 px-2 py-1 text-[9px] font-semibold text-blue-800">{item.assetClass}</span>
+              <span className="text-xs text-slate-500">{formatPercent(item.target)}</span>
+              <span className="text-xs font-semibold text-slate-700">{formatPercent(item.current)}</span>
+              <span className={"text-xs font-semibold " + (item.drift > 0 ? "text-red-600" : "text-emerald-700")}>{formatDrift(item.drift)}</span>
+              <span className="inline-flex w-fit rounded bg-red-100 px-2 py-1 text-[9px] font-semibold text-red-700">Rebalance required</span>
+              <button onClick={() => onOpenPortfolio(item.portfolioId)} aria-label={"View " + item.portfolioName} className="rounded bg-slate-100 p-1.5 text-slate-600 hover:bg-slate-200"><Eye size={14} /></button>
+            </div>
+          ))}
+          {rows.length > 8 && <div className="px-3 pt-2 text-[10px] text-slate-500">Showing 8 of {rows.length} breached asset classes.</div>}
+        </div>
+      </div>
+    ) : <div className="mt-4 rounded-md bg-emerald-50 px-3 py-7 text-center text-xs text-emerald-800">No active portfolios are outside the ±{DRIFT_LIMIT}% drift threshold.</div>}
+  </div>
+);
 const DashboardPage = () => {
-  const [portfolioIndex, setPortfolioIndex] = useState(0);
   const [portfolioCount, setPortfolioCount] = useState(null);
   const [activeCount, setActiveCount] = useState(null);
   const [aum, setAum] = useState(0);
   const [assetAllocation, setAssetAllocation] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [mandates, setMandates] = useState([]);
+  const [selectedPortfolioId, setSelectedPortfolioId] = useState("");
+  const [benchmarkPoints, setBenchmarkPoints] = useState([]);
+  const [benchmarkLoading, setBenchmarkLoading] = useState(false);
+  const [benchmarkError, setBenchmarkError] = useState("");
+  const [driftRows, setDriftRows] = useState([]);
+  const [actionableCount, setActionableCount] = useState(0);
+  const [dashboardError, setDashboardError] = useState("");
+  const [driftError, setDriftError] = useState("");
+
+  const userId = localStorage.getItem("userId");
 
 
-  const userId = localStorage.getItem('userId');
-
-
-  const selectedPortfolio = portfolioComparisons[portfolioIndex];
-
+  const selectedPortfolio = mandates.find((entry) => String(entry.portfolio.id) === String(selectedPortfolioId));
   const navigate = useNavigate();
 
-    useEffect(() => {
-    if (!userId) return; // no user yet, skip the call
-
+  useEffect(() => {
     let cancelled = false;
-
     async function load() {
-      const [total, active, portfolioResp] = await Promise.all([
-        getCountOfPortfolios(userId),
-        getCountOfActivePortfolios(userId),
-        getAllPortfolioDetails(userId),
-      ]);
+      setLoading(true);
+      setDashboardError("");
+      setDriftError("");
+      if (!userId) {
+        setDashboardError("Sign in to load live portfolio dashboard data.");
+        setLoading(false);
+        return;
+      }
 
-      if (cancelled) return;
+      try {
+        const [totalResult, activeResult, listResult] = await Promise.allSettled([
+          getCountOfPortfolios(userId),
+          getCountOfActivePortfolios(userId),
+          getAllPortfolioDetails(userId),
+        ]);
+        if (cancelled) return;
 
-      const portfolio = portfolioResp?.data?.portfolioDetailsDTOList?.[0];
+        const portfolioPayload = listResult.status === "fulfilled" ? unwrapResponse(listResult.value) : null;
+        const portfolioList = portfolioPayload?.portfolioDetailsDTOList || portfolioPayload?.data?.portfolioDetailsDTOList;
+        if (!Array.isArray(portfolioList)) {
+          throw new Error(portfolioPayload?.message || "Could not load portfolios from the backend.");
+        }
+        const activePortfolios = portfolioList.filter((portfolio) => String(portfolio.portfolioStatus || "ACTIVE").toUpperCase() === "ACTIVE");
+        setPortfolioCount(totalResult.status === "fulfilled" ? Number(totalResult.value) : portfolioList.length);
+        setActiveCount(activeResult.status === "fulfilled" ? Number(activeResult.value) : activePortfolios.length);
 
-      if (!cancelled) {
-        setPortfolioCount(total);
-        setActiveCount(active);
-        setAum(portfolio?.aum ?? 0);
-        setAssetAllocation(portfolio?.assetAllocation ?? []);
+        const details = await Promise.all(activePortfolios.map(async (portfolio) => {
+          const [infoResult, holdingsResult, validationResult, historyResult] = await Promise.allSettled([
+            getPortfolioBasicInfo(portfolio.id),
+            getPortfolioHoldings(portfolio.id),
+            validatePortfolioAllocation(portfolio.id),
+            getPortfolioDriftHistory(portfolio.id),
+          ]);
+          return {
+            portfolio,
+            info: infoResult.status === "fulfilled" ? unwrapResponse(infoResult.value) : null,
+            holdings: holdingsResult.status === "fulfilled" ? unwrapResponse(holdingsResult.value) : [],
+            validation: validationResult.status === "fulfilled" ? unwrapResponse(validationResult.value) : null,
+            history: historyResult.status === "fulfilled" ? unwrapResponse(historyResult.value) : [],
+            validationFailed: validationResult.status === "rejected",
+          };
+        }));
+        if (cancelled) return;
+
+        const completeDetails = details.map((item) => {
+          const holdings = Array.isArray(item.holdings) ? item.holdings : [];
+          const investedInPositions = holdings.reduce((sum, holding) => sum + Number(holding.totalCost || 0), 0);
+          const currentPositionsValue = holdings.reduce((sum, holding) => sum + Number(holding.currentValue ?? holding.totalCost ?? 0), 0);
+          const cash = Number(item.info?.amount || 0);
+          const totalBasis = investedInPositions + cash;
+          const totalValue = currentPositionsValue + cash;
+          const buyDates = holdings.map((holding) => holding.firstBuyDate).filter(Boolean).sort();
+          return {
+            ...item,
+            holdings,
+            firstBuyDate: buyDates[0] || null,
+            returnPercent: totalBasis > 0 ? ((totalValue - totalBasis) / totalBasis) * 100 : null,
+          };
+        });
+        setMandates(completeDetails);
+        setSelectedPortfolioId((current) => completeDetails.some((item) => String(item.portfolio.id) === String(current)) ? current : String(completeDetails[0]?.portfolio.id || ""));
+
+        const totalsByAsset = new Map();
+        let totalAum = 0;
+        const nextDriftRows = [];
+        const breachedPortfolioIds = new Set();
+        let failedDriftRequests = 0;
+        completeDetails.forEach(({ portfolio, info, holdings, validation, validationFailed }) => {
+          const cash = Number(info?.amount || 0);
+          let positionsValue = 0;
+          (Array.isArray(holdings) ? holdings : []).forEach((holding) => {
+            const value = Number(holding.currentValue ?? holding.totalCost ?? 0);
+            const assetName = String(holding.assetClass || "Other");
+            totalsByAsset.set(assetName, (totalsByAsset.get(assetName) || 0) + value);
+            positionsValue += value;
+          });
+          if (cash > 0) totalsByAsset.set("Cash / unallocated", (totalsByAsset.get("Cash / unallocated") || 0) + cash);
+          totalAum += positionsValue + cash;
+          if (validationFailed) failedDriftRequests += 1;
+          (validation?.allocations || []).forEach((allocation) => {
+            const drift = Number(allocation.driftPercentage || 0);
+            if (Math.abs(drift) < DRIFT_LIMIT) return;
+            breachedPortfolioIds.add(portfolio.id);
+            nextDriftRows.push({
+              key: String(portfolio.id) + "-" + String(allocation.assetId),
+              portfolioId: portfolio.id,
+              portfolioName: portfolio.name,
+              theme: info?.themeName || portfolio.theme,
+              aum: Number(validation.totalCurrentValue || portfolio.aum || positionsValue + cash),
+              assetClass: allocation.assetClass,
+              target: Number(allocation.targetPercentage || 0),
+              current: Number(allocation.currentPercentage || 0),
+              drift,
+            });
+          });
+        });
+
+        const nextAllocation = [...totalsByAsset.entries()]
+          .map(([name, amount]) => ({ name, amount, percentage: totalAum > 0 ? (amount / totalAum) * 100 : 0 }))
+          .sort((a, b) => b.amount - a.amount);
+        nextDriftRows.sort((a, b) => Math.abs(b.drift) - Math.abs(a.drift));
+        setAum(totalAum);
+        setAssetAllocation(nextAllocation);
+        setDriftRows(nextDriftRows);
+        setActionableCount(breachedPortfolioIds.size);
+        if (failedDriftRequests === completeDetails.length && completeDetails.length) {
+          setDriftError("Drift data could not be loaded. Check the portfolio allocation API and your session.");
+        }
+      } catch (loadError) {
+        if (!cancelled) setDashboardError(loadError?.message || "Unable to load dashboard data.");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     }
-
     load();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [userId]);
 
-  const goPrevious = () => {
-    setPortfolioIndex((current) => Math.max(0, current - 1));
-  };
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedPortfolio) {
+      setBenchmarkPoints([]);
+      setBenchmarkError("");
+      setBenchmarkLoading(false);
+      return () => { cancelled = true; };
+    }
 
-  const goNext = () => {
-    setPortfolioIndex((current) =>
-      Math.min(portfolioComparisons.length - 1, current + 1),
-    );
-  };
-
-  
-
-  
+    const startDate = selectedPortfolio.firstBuyDate || (() => {
+      const date = new Date();
+      date.setFullYear(date.getFullYear() - 1);
+      return toLocalIsoDate(date);
+    })();
+    // Include enough calendar days to find the preceding trading close,
+    // including weekends and exchange holidays.
+    const requestStart = new Date(startDate + "T00:00:00");
+    requestStart.setDate(requestStart.getDate() - 10);
+    const from = toNseDate(toLocalIsoDate(requestStart));
+    const to = toNseDate(toLocalIsoDate(new Date()));
+    setBenchmarkLoading(true);
+    setBenchmarkError("");
+    getNifty50History(from, to)
+      .then((points) => {
+        if (!cancelled) setBenchmarkPoints(Array.isArray(points) ? points.filter((point) => point?.date && Number(point.close) > 0) : []);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setBenchmarkPoints([]);
+          setBenchmarkError(error.response?.data?.message || error.message || "NIFTY 50 history is unavailable.");
+        }
+      })
+      .finally(() => { if (!cancelled) setBenchmarkLoading(false); });
+    return () => { cancelled = true; };
+  }, [selectedPortfolio]);
 
   return (
     <div className="min-h-screen bg-[#f5f7fc]">
-      <SideBarComponent activePage = "Dashboard"/>
-
-      <TopBarComponent />
-
-      <main className="ml-[240px] pt-[68px]">
-        <div className="mx-auto max-w-[1400px] px-5 py-5">
+      <SideBarComponent activePage="Dashboard" />
+      <div className="ml-[257px] min-h-screen max-[760px]:ml-0">
+       <TopBarComponent />
+       <main>
+        <div className="mx-auto max-w-[1600px] px-4 py-5 sm:px-5">
     
           <div className="flex items-center justify-between">
             <div>
@@ -877,6 +529,8 @@ const DashboardPage = () => {
             </div>
           </div>
 
+          {dashboardError && <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">{dashboardError}</div>}
+
          
           <div className="mt-5 grid grid-cols-5 gap-3">
             <KpiCard
@@ -906,38 +560,45 @@ const DashboardPage = () => {
 
             <KpiCard
               title="Rebalance Drift"
-              value="2"
-              subtitle="Portfolios Alert • Exceeded 5% threshold"
+              value={loading ? "…" : String(actionableCount)}
+              subtitle="Active portfolios outside the 5% threshold"
               icon={AlertTriangle}
               danger
             />
           </div>
 
-   
-          <div className="mt-5 grid grid-cols-[minmax(0,1fr)_340px] gap-5">
+          <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
 
             <div className="space-y-5">
               <PortfolioBenchmarkChart
-                selectedPortfolio={selectedPortfolio}
-                onPrevious={goPrevious}
-                onNext={goNext}
-                hasPrevious={portfolioIndex > 0}
-                hasNext={portfolioIndex < portfolioComparisons.length - 1}
+                portfolios={mandates}
+                selectedPortfolioId={selectedPortfolioId}
+                onSelectPortfolio={setSelectedPortfolioId}
+                benchmarkPoints={benchmarkPoints}
+                benchmarkLoading={benchmarkLoading}
+                benchmarkError={benchmarkError}
               />
 
-              <DriftMonitoringCard />
+              <DriftMonitoringCard
+                rows={driftRows}
+                loading={loading}
+                error={driftError}
+                actionableCount={actionableCount}
+                onViewAll={() => navigate("/rebalancing")}
+                onOpenPortfolio={(portfolioId) => navigate(`/portfolio/${portfolioId}`)}
+              />
             </div>
 
      
             <div className="space-y-5">
-              <AssetAllocationCard  aum={aum}
-                assetAllocation={assetAllocation}/>
+              <AssetAllocationCard aum={aum} assetAllocation={assetAllocation} loading={loading} />
 
               
             </div>
           </div>
         </div>
-      </main>
+       </main>
+      </div>
     </div>
   );
 };

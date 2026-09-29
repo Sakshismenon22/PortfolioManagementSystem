@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
+
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
@@ -19,4 +21,5 @@ public class CreatePortfolioDTO {
     private Integer userId;
     private PortfolioStatus portfolioStatus;
     private Integer themeId;
+    private LocalDate createdAt;
 }

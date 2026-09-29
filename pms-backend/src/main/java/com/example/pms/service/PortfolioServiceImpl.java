@@ -13,6 +13,7 @@ import com.example.pms.model.enums.SecurityType;
 import com.example.pms.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 
 import java.util.*;
@@ -22,6 +23,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.time.LocalDate;
 
 
 @Service
@@ -36,6 +38,7 @@ public class PortfolioServiceImpl implements PortfolioService{
     private final SecurityMasterClient securityMasterClient;
 
     private final AssetRepository assetRepository;
+    private final DriftWatchListRepository driftWatchListRepository;
 
 
     @Override
@@ -44,17 +47,19 @@ public class PortfolioServiceImpl implements PortfolioService{
             if(themeRepository.existsById(createPortfolioDTO.getThemeId())){
                 User user = userRepository.findById(createPortfolioDTO.getUserId()).get();
                 Theme theme = themeRepository.findById(createPortfolioDTO.getThemeId()).get();
-                Portfolio portfolio = new Portfolio(null,
-                        createPortfolioDTO.getName(),
-                        createPortfolioDTO.getPortfolioType(),
-                        createPortfolioDTO.getCurrency(),
-                        createPortfolioDTO.getBenchmark(),
-                        createPortfolioDTO.getExchange(),
-                        theme,
-                        createPortfolioDTO.getReBalancingFrequency(),
-                        createPortfolioDTO.getAmount(),
-                        user,
-                        createPortfolioDTO.getPortfolioStatus());
+                Portfolio portfolio = new Portfolio();
+                portfolio.setName(createPortfolioDTO.getName());
+                portfolio.setPortfolioType(createPortfolioDTO.getPortfolioType());
+                portfolio.setCurrency(createPortfolioDTO.getCurrency());
+                portfolio.setBenchmark(createPortfolioDTO.getBenchmark());
+                portfolio.setExchange(createPortfolioDTO.getExchange());
+                portfolio.setTheme(theme);
+                portfolio.setReBalancingFrequency(createPortfolioDTO.getReBalancingFrequency());
+                portfolio.setAmount(createPortfolioDTO.getAmount());
+                portfolio.setUser(user);
+                portfolio.setPortfolioStatus(createPortfolioDTO.getPortfolioStatus());
+                portfolio.setCreatedAt(createPortfolioDTO.getCreatedAt() == null
+                        ? LocalDate.now() : createPortfolioDTO.getCreatedAt());
 
                 return portfolioRepository.save(portfolio);
 
@@ -67,6 +72,7 @@ public class PortfolioServiceImpl implements PortfolioService{
     }
 
     @Override
+    @Transactional
     public String buyPortfolioHoldings(Long id) {
         if(portfolioRepository.existsById(id)){
             ValidationDTO validationDTO = isValid(id);
@@ -82,6 +88,9 @@ public class PortfolioServiceImpl implements PortfolioService{
                     portfolio.setAmount(remainingAmount);
                     portfolio.setPortfolioStatus(PortfolioStatus.ACTIVE);
                     portfolioRepository.save(portfolio);
+                    if (driftWatchListRepository.findAllByPortfolioId(portfolio.getId()) == null) {
+                        driftWatchListRepository.save(DriftSchedule.newWatchList(portfolio, LocalDate.now()));
+                    }
                     return "Portfolio Holdings Brought.";
                 }else{
                     return "Portfolio Balance is insufficient";
@@ -131,6 +140,7 @@ public class PortfolioServiceImpl implements PortfolioService{
     }
 
     @Override
+    @Transactional
     public String createAndActivatePortfolio(CreateAndActivatePortfolioDTO createAndActivatePortfolioDTO) {
         Portfolio portfolio = createPortfolio(createAndActivatePortfolioDTO.getCreatePortfolioDTO());
         for(AddPortfolioHoldingDTO addPortfolioHoldingDTO:createAndActivatePortfolioDTO.getAddPortfolioHoldingDTOList()){
@@ -178,28 +188,31 @@ public class PortfolioServiceImpl implements PortfolioService{
             List<Portfolio> portfolios = portfolioRepository.findByUserUserId(getAllPortfolioDTO.getUserId());
             List<PortfolioDetailsDTO> portfolioDetailsDTOList = new ArrayList<>();
             for(Portfolio portfolio:portfolios){
-                if(portfolio.getPortfolioStatus().equals(PortfolioStatus.ACTIVE)){
-                    String initials = Arrays.stream(portfolio.getName().split(" ")).map((word)-> String.valueOf(word.charAt(0))).collect(Collectors.joining());
-                    Double currentAum = getCurrentAum(portfolio);
-                    Double totalInvestedAmount = getTotalInvestedAmount(portfolio);
-                    Double return1Y = currentAum - totalInvestedAmount;
-                    Double returnPercent = (return1Y/totalInvestedAmount) * 100;
-                    String returnPercentString = returnPercent<0?"-"+String.format("%.2f",returnPercent)+"%":"+"+String.format("%.2f",returnPercent)+"%";
+                String initials = Arrays.stream(portfolio.getName().trim().split("\\s+"))
+                        .filter(word -> !word.isBlank())
+                        .map(word -> String.valueOf(word.charAt(0)))
+                        .limit(2)
+                        .collect(Collectors.joining());
+                Double currentAum = getCurrentAum(portfolio);
+                Double totalInvestedAmount = getTotalInvestedAmount(portfolio);
+                Double returnAmount = currentAum - totalInvestedAmount;
+                Double returnPercent = totalInvestedAmount > 0 ? (returnAmount / totalInvestedAmount) * 100 : 0.0d;
+                String returnPercentString = String.format(java.util.Locale.ROOT, "%+.2f%%", returnPercent);
 
-                    PortfolioDetailsDTO portfolioDetailsDTO = new PortfolioDetailsDTO(
-                            portfolio.getId(),
-                            initials,portfolio.getName(),
-                            "PMS-0"+portfolio.getId(),
-                            portfolio.getTheme().getName(),
-                            portfolio.getPortfolioType().toString(),
-                            currentAum,
-                            returnPercentString,
-                            portfolio.getBenchmark(),
-                            portfolio.getPortfolioStatus(),
-                            "View"
-                    );
-                    portfolioDetailsDTOList.add(portfolioDetailsDTO);
-                }
+                PortfolioDetailsDTO portfolioDetailsDTO = new PortfolioDetailsDTO(
+                        portfolio.getId(),
+                        initials,
+                        portfolio.getName(),
+                        "PMS-0" + portfolio.getId(),
+                        portfolio.getTheme() == null ? null : portfolio.getTheme().getName(),
+                        portfolio.getPortfolioType() == null ? null : portfolio.getPortfolioType().toString(),
+                        currentAum,
+                        returnPercentString,
+                        portfolio.getBenchmark(),
+                        portfolio.getPortfolioStatus(),
+                        "View"
+                );
+                portfolioDetailsDTOList.add(portfolioDetailsDTO);
             }
             return new GetAllPortfolioResponseDTO(portfolioDetailsDTOList);
         }else{
@@ -322,7 +335,8 @@ public class PortfolioServiceImpl implements PortfolioService{
                 portfolio.getReBalancingFrequency(),
                 portfolio.getAmount(),
                 portfolio.getPortfolioStatus(),
-                user.getUserId()
+                user.getUserId(),
+                portfolio.getCreatedAt()
         );
     }
 
@@ -413,6 +427,13 @@ public class PortfolioServiceImpl implements PortfolioService{
                 portfolioHoldingRepository
                         .findAllByPortfolio(portfolio);
 
+        // Only active, actually-held positions belong on the portfolio details
+        // screen. Sold and not-yet-purchased draft rows are ledger history.
+        holdings = holdings.stream()
+                .filter(holding -> holding.getHoldingStatus() == HoldingStatus.BROUGHT
+                        && holding.getQuantityHeld() != null && holding.getQuantityHeld() > 0)
+                .toList();
+
         double totalInvested = holdings.stream()
                 .mapToDouble(h ->
                         h.getTotalCost() != null
@@ -437,6 +458,7 @@ public class PortfolioServiceImpl implements PortfolioService{
 
                     SecurityMaster security =
                             holding.getSecurityMaster();
+                    double currentValue = getHoldingCurrentValue(holding, totalCost);
 
                     return new PortfolioHoldingDTO(
                             holding.getId(),
@@ -448,12 +470,39 @@ public class PortfolioServiceImpl implements PortfolioService{
                             holding.getQuantityHeld(),
                             holding.getAverageCost(),
                             totalCost,
-                            totalCost,
+                            currentValue,
                             Math.round(allocation * 100.0)
-                                    / 100.0
+                                    / 100.0,
+                            holding.getFirstBuyDate()
                     );
                 })
                 .toList();
+    }
+
+    private double getHoldingCurrentValue(PortfolioHolding holding, double fallbackValue) {
+        try {
+            SecurityPriceDTO price = securityMasterClient
+                    .findBySecurityId(holding.getSecurityMaster().getId())
+                    .orElse(null);
+            if (price == null || price.getSecurityMaster() == null) {
+                return fallbackValue;
+            }
+
+            Double unitPrice = switch (price.getSecurityMaster().getSecurityType()) {
+                case ETF, EQUITY -> price.getStockData() != null && price.getStockData().getClosePrice() != null
+                        ? price.getStockData().getClosePrice().doubleValue() : null;
+                case MUTUAL_FUND -> price.getMutualFundNav() != null && price.getMutualFundNav().getNav() != null
+                        ? price.getMutualFundNav().getNav().doubleValue() : null;
+                case BOND -> price.getBond() != null
+                        ? (price.getBond().getCleanPrice() != null ? price.getBond().getCleanPrice() : price.getBond().getFaceValue()) : null;
+                case COMMODITY -> price.getCommoditySpotData() != null && price.getCommoditySpotData().getSpotPrice() != null
+                        ? price.getCommoditySpotData().getSpotPrice().doubleValue() : null;
+            };
+            return unitPrice == null ? fallbackValue : unitPrice * holding.getQuantityHeld();
+        } catch (RuntimeException exception) {
+            // Keep holdings visible if the market data service is temporarily unavailable.
+            return fallbackValue;
+        }
     }
 
     @Override

@@ -143,3 +143,20 @@ export const validatePortfolioAllocation = async (portfolioId) => {
   return response.data.data;
 };
 
+export const buyPortfolioSecurity = async ({ portfolioId, securityId, quantity }) => {
+  const response = await axios.post("http://localhost:8082/api/portfolio-holding/buy", {
+    portfolioId,
+    securityId,
+    quantity,
+  });
+  return response.data;
+};
+
+export const sellPortfolioHolding = async ({ holdingId, quantity }) => {
+  const response = await axios.post("http://localhost:8082/api/portfolio-holding/sell", {
+    id: holdingId,
+    quantity,
+  });
+  return response.data;
+};
+

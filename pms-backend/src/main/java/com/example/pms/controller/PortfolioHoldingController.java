@@ -9,6 +9,7 @@ import com.example.pms.service.PortfolioHoldingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -33,9 +34,16 @@ public class PortfolioHoldingController {
         return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(),true,null,portfolioHoldingService.sellHoldingsShare(sellHoldingDTO),LocalDateTime.now()));
     }
 
-//    @PostMapping("/buy")
-//    public ResponseEntity<?> buyHoldings(@RequestBody BuyHoldingDTO buyHoldingDTO){
-//        return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(),true,null,));
-//    }
+    @PostMapping("/buy")
+    public ResponseEntity<?> buyHoldings(@RequestBody BuyHoldingDTO buyHoldingDTO){
+        return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(), true, null,
+                portfolioHoldingService.buySecurities(buyHoldingDTO), LocalDateTime.now()));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<?> handleInvalidTrade(IllegalArgumentException exception) {
+        String message = exception.getMessage() == null ? "The requested trade is invalid." : exception.getMessage();
+        return ResponseEntity.badRequest().body(new Response<String>(HttpStatus.BAD_REQUEST.value(), false, null, message, LocalDateTime.now()));
+    }
 
 }

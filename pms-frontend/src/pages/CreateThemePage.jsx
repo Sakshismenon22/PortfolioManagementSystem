@@ -8,12 +8,18 @@ import {
   ShieldCheck,
   PieChart,
   AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  Grid2X2,
+  List,
+  RefreshCw,
+  Search,
 } from "lucide-react";
  
 import SideBarComponent from "../components/SideBarComponent";
 import TopBarComponent from "../components/TopBarComponent";
  
-import { createTheme } from "../services/themeService";
+import { createTheme, getAllThemes } from "../services/themeService";
 import { getAllAssets } from "../services/portfolioService";
 import { toast } from "react-toastify";
  
@@ -77,6 +83,13 @@ const CreateThemePage = () => {
   });
  
   const [assets, setAssets] = useState([]);
+  const [themeList, setThemeList] = useState([]);
+  const [themeListLoading, setThemeListLoading] = useState(false);
+  const [themeListError, setThemeListError] = useState("");
+  const [themeSearch, setThemeSearch] = useState("");
+  const [themePage, setThemePage] = useState(1);
+  const [themeView, setThemeView] = useState("table");
+  const themesPerPage = 6;
  
   const [allocations, setAllocations] = useState([
     {
@@ -92,7 +105,33 @@ const CreateThemePage = () => {
  
   useEffect(() => {
     loadAssets();
+    loadThemes();
   }, []);
+
+  const loadThemes = async () => {
+    setThemeListLoading(true);
+    setThemeListError("");
+    try {
+      const response = await getAllThemes();
+      const list = response?.data?.data ?? response?.data;
+      if (!Array.isArray(list)) throw new Error(response?.message || "Theme list response was invalid.");
+      setThemeList(list);
+    } catch (error) {
+      setThemeListError(error?.response?.data?.message || error?.message || "Themes could not be loaded.");
+    } finally {
+      setThemeListLoading(false);
+    }
+  };
+
+  const filteredThemes = useMemo(() => {
+    const query = themeSearch.trim().toLowerCase();
+    return themeList.filter((item) => !query || [item.name, item.risk, item.investmentHorizon]
+      .some((value) => String(value || "").toLowerCase().includes(query)));
+  }, [themeList, themeSearch]);
+  const themePageCount = Math.max(1, Math.ceil(filteredThemes.length / themesPerPage));
+  const visibleThemes = filteredThemes.slice((themePage - 1) * themesPerPage, themePage * themesPerPage);
+
+  useEffect(() => { setThemePage(1); }, [themeSearch]);
  
  
   /*
@@ -309,8 +348,8 @@ const CreateThemePage = () => {
         "Theme created successfully."
        
       );
- 
-      navigate("/home");
+
+      await loadThemes();
  
  
       /*
@@ -1016,6 +1055,21 @@ const CreateThemePage = () => {
             </button>
  
           </div>
+
+          {/* EXISTING THEMES */}
+          <section className="mt-7 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+              <div><h2 className="text-lg font-semibold text-slate-900">Investment themes</h2><p className="mt-1 text-xs text-slate-500">Browse reusable mandates and their target asset allocations.</p></div>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex h-9 items-center gap-2 rounded-md border border-slate-200 px-3 text-slate-400"><Search size={14} /><input value={themeSearch} onChange={(event) => setThemeSearch(event.target.value)} placeholder="Search themes…" className="w-40 text-xs text-slate-700 outline-none placeholder:text-slate-400" /></label>
+                <div className="flex rounded-md border border-slate-200 p-0.5"><button onClick={() => setThemeView("table")} aria-label="Table view" className={`rounded p-1.5 ${themeView === "table" ? "bg-blue-50 text-blue-800" : "text-slate-500"}`}><List size={15} /></button><button onClick={() => setThemeView("grid")} aria-label="Grid view" className={`rounded p-1.5 ${themeView === "grid" ? "bg-blue-50 text-blue-800" : "text-slate-500"}`}><Grid2X2 size={15} /></button></div>
+                <button onClick={loadThemes} disabled={themeListLoading} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 px-3 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"><RefreshCw size={13} className={themeListLoading ? "animate-spin" : ""} /> Refresh</button>
+              </div>
+            </div>
+            {themeListError && <div className="mx-5 mt-4 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{themeListError}</div>}
+            {themeListLoading ? <div className="p-10 text-center text-sm text-slate-500">Loading themes…</div> : !filteredThemes.length ? <div className="p-10 text-center text-sm text-slate-500">{themeListError ? "Theme list unavailable." : "No themes match your search."}</div> : themeView === "table" ? <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-xs"><thead className="bg-[#eef3ff] text-[10px] font-bold uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Theme</th><th className="px-4 py-3">Risk</th><th className="px-4 py-3">Investment horizon</th><th className="px-4 py-3">Asset allocation</th><th className="px-5 py-3 text-right">Status</th></tr></thead><tbody className="divide-y divide-slate-100">{visibleThemes.map((item) => <tr key={item.id} className="hover:bg-slate-50"><td className="px-5 py-3.5"><div className="font-semibold text-slate-800">{item.name || "Unnamed theme"}</div><div className="mt-0.5 text-[10px] text-slate-400">Theme ID · {item.id}</div></td><td className="px-4 py-3.5"><span className="rounded bg-blue-50 px-2 py-1 font-semibold text-blue-800">{formatThemeLabel(item.risk)}</span></td><td className="px-4 py-3.5 text-slate-600">{formatThemeLabel(item.investmentHorizon)}</td><td className="px-4 py-3.5"><div className="flex flex-wrap gap-1.5">{(item.allocationRuleList || []).map((rule) => <span key={rule.id ?? `${item.id}-${rule.asset?.id}`} className="rounded bg-slate-100 px-2 py-1 text-[10px] text-slate-600">{rule.asset?.assetClass || "Asset"} <b>{Number(rule.percentage || 0)}%</b></span>)}</div></td><td className="px-5 py-3.5 text-right"><span className={`rounded px-2 py-1 text-[9px] font-bold uppercase ${item.status === false ? "bg-slate-100 text-slate-500" : "bg-emerald-50 text-emerald-700"}`}>{item.status === false ? "Inactive" : "Active"}</span></td></tr>)}</tbody></table></div> : <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">{visibleThemes.map((item) => <article key={item.id} className="rounded-lg border border-slate-200 p-4"><div className="flex items-start justify-between gap-2"><div><h3 className="font-semibold text-slate-900">{item.name || "Unnamed theme"}</h3><p className="mt-1 text-[10px] text-slate-400">Theme ID · {item.id}</p></div><span className={`rounded px-2 py-1 text-[9px] font-bold uppercase ${item.status === false ? "bg-slate-100 text-slate-500" : "bg-emerald-50 text-emerald-700"}`}>{item.status === false ? "Inactive" : "Active"}</span></div><div className="mt-3 flex gap-2 text-[10px]"><span className="rounded bg-blue-50 px-2 py-1 font-semibold text-blue-800">{formatThemeLabel(item.risk)}</span><span className="rounded bg-slate-100 px-2 py-1 text-slate-600">{formatThemeLabel(item.investmentHorizon)}</span></div><div className="mt-3 space-y-2">{(item.allocationRuleList || []).map((rule) => <div key={rule.id ?? `${item.id}-${rule.asset?.id}`} className="flex items-center justify-between text-xs"><span className="text-slate-600">{rule.asset?.assetClass || "Asset"}</span><strong className="font-mono text-slate-800">{Number(rule.percentage || 0)}%</strong></div>)}</div></article>)}</div>}
+            {!themeListLoading && filteredThemes.length > 0 && <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-3 text-xs text-slate-500"><span>Showing {(themePage - 1) * themesPerPage + 1}–{Math.min(themePage * themesPerPage, filteredThemes.length)} of {filteredThemes.length} themes</span><div className="flex items-center gap-2"><button onClick={() => setThemePage((page) => Math.max(1, page - 1))} disabled={themePage <= 1} className="rounded border border-slate-200 p-1.5 disabled:opacity-40" aria-label="Previous page"><ChevronLeft size={15} /></button><span>Page {themePage} of {themePageCount}</span><button onClick={() => setThemePage((page) => Math.min(themePageCount, page + 1))} disabled={themePage >= themePageCount} className="rounded border border-slate-200 p-1.5 disabled:opacity-40" aria-label="Next page"><ChevronRight size={15} /></button></div></div>}
+          </section>
  
         </main>
  
@@ -1065,6 +1119,8 @@ const ValidationRow = ({
   );
  
 };
+
+const formatThemeLabel = (value) => String(value || "—").replaceAll("_", " ");
  
  
 export default CreateThemePage;

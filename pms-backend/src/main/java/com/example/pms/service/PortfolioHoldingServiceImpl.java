@@ -11,6 +11,7 @@ import com.example.pms.exception.PortfolioHoldingNotFoundException;
 import com.example.pms.exception.PortfolioNotFoundException;
 import com.example.pms.exception.SecurityNotFoundException;
 import com.example.pms.model.Asset;
+import com.example.pms.model.AllocationRule;
 import com.example.pms.model.Portfolio;
 import com.example.pms.model.PortfolioHolding;
 import com.example.pms.model.SecurityMaster;
@@ -23,6 +24,7 @@ import com.example.pms.repository.SecurityMasterRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.repository.Repository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -183,86 +185,126 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
     }
 
     @Override
+    @Transactional
     public String sellHoldingsShare(SellHoldingDTO sellHoldingDTO) {
-        if(portfolioHoldingRepository.existsById(sellHoldingDTO.getId())){
-            PortfolioHolding portfolioHolding = portfolioHoldingRepository.findById(sellHoldingDTO.getId()).get();
-            if(sellHoldingDTO.getQuantity()<= portfolioHolding.getQuantityHeld()){
-                Integer remainingShares = portfolioHolding.getQuantityHeld() - sellHoldingDTO.getQuantity();
-                Portfolio portfolio = portfolioRepository.findById(portfolioHolding.getPortfolio().getId()).get();
-                SecurityPriceDTO securityPriceDTO = securityMasterClient.findBySecurityId(portfolioHolding.getSecurityMaster().getId()).get();
-                Double soldAmount = 0.0d;
-                Double currentPrice = 0.0d;
-                switch (portfolioHolding.getSecurityMaster().getSecurityType()){
-                    case EQUITY,ETF ->{
-                        currentPrice =  securityPriceDTO.getStockData().getClosePrice().doubleValue();
-                    }
+        if (sellHoldingDTO == null || sellHoldingDTO.getId() == null) throw new IllegalArgumentException("Select a holding to sell.");
+        int quantity = sellHoldingDTO.getQuantity() == null ? 0 : sellHoldingDTO.getQuantity();
+        if (quantity <= 0) throw new IllegalArgumentException("Sell quantity must be a positive whole number.");
 
-                    case MUTUAL_FUND -> {
-                        currentPrice =  securityPriceDTO.getMutualFundNav().getNav().doubleValue();
-
-                    }
-                    case BOND -> {
-                        currentPrice =  securityPriceDTO.getBond().getFaceValue();
-
-                    }
-                    case COMMODITY -> {
-                        currentPrice =  securityPriceDTO.getCommoditySpotData().getSpotPrice().doubleValue();
-
-                    }
-                }
-                soldAmount = currentPrice * sellHoldingDTO.getQuantity();
-                Double amount = portfolio.getAmount()+soldAmount;
-                portfolioHolding.setQuantityHeld(remainingShares);
-                if(remainingShares>0){
-                    Double totalCost = remainingShares*currentPrice;
-                    Double avg = totalCost/remainingShares;
-                    portfolioHolding.setTotalCost(totalCost);
-                    portfolioHolding.setAverageCost(avg);
-                }else {
-                    portfolioHolding.setTotalCost(0.0d);
-                    portfolioHolding.setAverageCost(0.0d);
-                    portfolioHolding.setHoldingStatus(HoldingStatus.SOLD);
-                }
-                portfolio.setAmount(amount);
-                portfolioHoldingRepository.save(portfolioHolding);
-                portfolioRepository.save(portfolio);
-                return "Sold Securities.";
-            }else{
-                throw new IllegalArgumentException();
-            }
-        }else{
-            throw new PortfolioHoldingNotFoundException();
+        PortfolioHolding holding = portfolioHoldingRepository.findById(sellHoldingDTO.getId()).orElseThrow(PortfolioHoldingNotFoundException::new);
+        if (holding.getHoldingStatus() != HoldingStatus.BROUGHT || holding.getQuantityHeld() == null || holding.getQuantityHeld() <= 0) {
+            throw new IllegalArgumentException("Only currently held securities can be sold.");
         }
+        if (quantity > holding.getQuantityHeld()) throw new IllegalArgumentException("Sell quantity cannot exceed the shares currently held.");
+        Portfolio portfolio = portfolioRepository.findById(holding.getPortfolio().getId()).orElseThrow(PortfolioNotFoundException::new);
+        requireActivePortfolio(portfolio);
+        double averageCost = holding.getAverageCost() == null ? 0 : holding.getAverageCost();
+        requireTradeWithinTheme(portfolio, holding.getAsset(), averageCost * quantity, false);
+
+        double currentPrice = securityMasterService.getCurrentPrice(holding.getSecurityMaster().getId());
+        requirePositivePrice(currentPrice);
+        int remainingShares = holding.getQuantityHeld() - quantity;
+        portfolio.setAmount(safeAmount(portfolio.getAmount()) + currentPrice * quantity);
+        holding.setQuantityHeld(remainingShares);
+        // Selling must not rewrite the acquisition cost of the remaining shares.
+        holding.setTotalCost(averageCost * remainingShares);
+        holding.setUpdatedAt(LocalDate.now());
+        if (remainingShares == 0) holding.setHoldingStatus(HoldingStatus.SOLD);
+        portfolioHoldingRepository.save(holding);
+        portfolioRepository.save(portfolio);
+        return "Sold " + quantity + " share(s) of " + holding.getSecurityMaster().getName() + ".";
     }
 
     @Override
+    @Transactional
     public String buySecurities(BuyHoldingDTO buyHoldingDTO) {
-        if(securityMasterRepository.existsById(buyHoldingDTO.getSecurityId())){
-            if(portfolioRepository.existsById(buyHoldingDTO.getPortfolioId())){
-
-                SecurityMaster securityMaster = securityMasterRepository.findById(buyHoldingDTO.getSecurityId()).get();
-
-                Portfolio portfolio = portfolioRepository.findById(buyHoldingDTO.getPortfolioId()).get();
-                Double currentPrice = securityMasterService.getCurrentPrice(buyHoldingDTO.getSecurityId());
-                Double buyAmount = currentPrice * buyHoldingDTO.getQuantity();
-                Double avg = buyAmount/buyHoldingDTO.getQuantity();
-                if(buyAmount<=portfolio.getAmount()){
-                    portfolio.setAmount(portfolio.getAmount()-buyAmount);
-                    PortfolioHolding portfolioHolding = new PortfolioHolding(null,portfolio,securityMaster, buyHoldingDTO.getQuantity(),avg ,buyAmount,securityMaster.getAsset(),LocalDate.now(),LocalDate.now(),HoldingStatus.BROUGHT);
-                    portfolioHoldingRepository.save(portfolioHolding);
-                    portfolioRepository.save(portfolio);
-                    return "Securities Brought";
-                }else{
-                    throw new IllegalArgumentException();
-                }
-            }else{
-                throw new PortfolioNotFoundException();
-            }
-        }else{
-            throw new SecurityNotFoundException();
+        if (buyHoldingDTO == null || buyHoldingDTO.getPortfolioId() == null || buyHoldingDTO.getSecurityId() == null) {
+            throw new IllegalArgumentException("Select a portfolio and security before buying.");
         }
-
+        int quantity = buyHoldingDTO.getQuantity() == null ? 0 : buyHoldingDTO.getQuantity();
+        if (quantity <= 0) throw new IllegalArgumentException("Buy quantity must be a positive whole number.");
+        Portfolio portfolio = portfolioRepository.findById(buyHoldingDTO.getPortfolioId()).orElseThrow(PortfolioNotFoundException::new);
+        requireActivePortfolio(portfolio);
+        SecurityMaster security = securityMasterRepository.findById(buyHoldingDTO.getSecurityId()).orElseThrow(SecurityNotFoundException::new);
+        Asset asset = security.getAsset();
+        if (asset == null) throw new IllegalArgumentException("The selected security has no asset class mapping.");
+        double currentPrice = securityMasterService.getCurrentPrice(security.getId());
+        requirePositivePrice(currentPrice);
+        double buyAmount = currentPrice * quantity;
+        requireTradeWithinTheme(portfolio, asset, buyAmount, true);
+        double availableCash = safeAmount(portfolio.getAmount());
+        if (buyAmount > availableCash + 0.01) {
+            throw new IllegalArgumentException("Insufficient cash. Available " + formatAmount(availableCash) + ", required " + formatAmount(buyAmount) + ".");
+        }
+        portfolio.setAmount(Math.max(0, availableCash - buyAmount));
+        // Add-on buys belong to the existing active position. This keeps one
+        // current holding row and updates its weighted average acquisition cost.
+        PortfolioHolding holding = portfolioHoldingRepository.findAllByPortfolio(portfolio).stream()
+                .filter(existing -> existing.getHoldingStatus() == HoldingStatus.BROUGHT
+                        && existing.getQuantityHeld() != null && existing.getQuantityHeld() > 0
+                        && existing.getSecurityMaster() != null
+                        && existing.getSecurityMaster().getId().equals(security.getId()))
+                .findFirst()
+                .orElse(null);
+        if (holding == null) {
+            holding = new PortfolioHolding(null, portfolio, security, quantity, currentPrice, buyAmount,
+                    asset, LocalDate.now(), LocalDate.now(), HoldingStatus.BROUGHT);
+        } else {
+            int oldQuantity = holding.getQuantityHeld();
+            double oldCost = holding.getTotalCost() == null
+                    ? safeAmount(holding.getAverageCost()) * oldQuantity
+                    : holding.getTotalCost();
+            int newQuantity = oldQuantity + quantity;
+            double newCost = oldCost + buyAmount;
+            holding.setQuantityHeld(newQuantity);
+            holding.setTotalCost(newCost);
+            holding.setAverageCost(newCost / newQuantity);
+            holding.setUpdatedAt(LocalDate.now());
+        }
+        portfolioHoldingRepository.save(holding);
+        portfolioRepository.save(portfolio);
+        return "Bought " + quantity + " share(s) of " + security.getName() + ".";
     }
+
+    private void requireActivePortfolio(Portfolio portfolio) {
+        if (portfolio.getPortfolioStatus() != com.example.pms.model.enums.PortfolioStatus.ACTIVE) {
+            throw new IllegalArgumentException("Trades are allowed only for active portfolios.");
+        }
+    }
+
+    private void requirePositivePrice(Double price) {
+        if (price == null || !Double.isFinite(price) || price <= 0) {
+            throw new IllegalArgumentException("A current security price is unavailable; the trade was not placed.");
+        }
+    }
+
+    private void requireTradeWithinTheme(Portfolio portfolio, Asset asset, double amount, boolean buy) {
+        if (amount <= 0) throw new IllegalArgumentException("Trade amount must be greater than zero.");
+        AllocationRule rule = portfolio.getTheme().getAllocationRuleList().stream()
+                .filter(candidate -> candidate.getAsset() != null && candidate.getAsset().getId().equals(asset.getId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("This asset class is not included in the portfolio theme."));
+        var activeHoldings = portfolioHoldingRepository.findAllByPortfolio(portfolio).stream()
+                .filter(holding -> holding.getHoldingStatus() == HoldingStatus.BROUGHT && holding.getQuantityHeld() != null && holding.getQuantityHeld() > 0)
+                .toList();
+        double totalCost = activeHoldings.stream().mapToDouble(holding -> holding.getTotalCost() == null ? 0 : holding.getTotalCost()).sum();
+        double assetCost = activeHoldings.stream()
+                .filter(holding -> holding.getAsset() != null && holding.getAsset().getId().equals(asset.getId()))
+                .mapToDouble(holding -> holding.getTotalCost() == null ? 0 : holding.getTotalCost()).sum();
+        double target = Math.max(0, Math.min(100, rule.getPercentage() == null ? 0 : rule.getPercentage())) / 100;
+        if (target >= 1) throw new IllegalArgumentException("The selected asset class has no capacity for this trade under the theme.");
+        double allowedAmount = buy
+                ? (target * totalCost - assetCost) / (1 - target)
+                : (assetCost - target * totalCost) / (1 - target);
+        if (allowedAmount <= 0) throw new IllegalArgumentException(buy ? "This asset class is not underweight." : "This asset class is not overweight.");
+        if (amount > allowedAmount + 0.01) {
+            throw new IllegalArgumentException("Trade exceeds the amount needed to return this asset class to its theme target (" + formatAmount(allowedAmount) + ").");
+        }
+        if (!buy && totalCost <= 0) throw new IllegalArgumentException("No invested holdings are available to sell.");
+    }
+
+    private double safeAmount(Double amount) { return amount == null ? 0 : amount; }
+    private String formatAmount(double amount) { return String.format(java.util.Locale.ROOT, "%.2f", amount); }
 
 //    @Override
 //    public String buySecurities(BuyHoldingDTO buyHoldingDTO) {

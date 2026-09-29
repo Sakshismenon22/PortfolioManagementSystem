@@ -14,6 +14,7 @@ public class SecurityInfoDTO {
     private String name;
     private String symbol;
     private String isin;
+    private String gicsSector;
     private Asset asset;
     private Double price;
 

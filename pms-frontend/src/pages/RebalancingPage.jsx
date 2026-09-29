@@ -22,9 +22,13 @@ import TopBarComponent from "../components/TopBarComponent";
 import {
   getAllPortfolioDetails,
   getPortfolioBasicInfo,
+  getPortfolioHoldings,
   validatePortfolioAllocation,
+  buyPortfolioSecurity,
+  sellPortfolioHolding,
 } from "../services/portfolioService";
 import { getPortfolioDriftHistory } from "../services/driftService";
+import { getAllSecuritiesInfo } from "../services/securityService";
 
 const API_URL = "http://localhost:8082/api";
 const DRIFT_LIMIT = 5;
@@ -162,17 +166,34 @@ export default function RebalancingPage() {
   const [filter, setFilter] = useState("All mandates");
   const [selected, setSelected] = useState(null);
   const [notice, setNotice] = useState("");
+  const [tradeHoldings, setTradeHoldings] = useState([]);
+  const [tradeSecurities, setTradeSecurities] = useState([]);
+  const [tradeMode, setTradeMode] = useState("sell");
+  const [tradeLoading, setTradeLoading] = useState(false);
+  const [tradeSubmitting, setTradeSubmitting] = useState(false);
+  const [tradeError, setTradeError] = useState("");
+  const [sellHoldingId, setSellHoldingId] = useState("");
+  const [sellQuantity, setSellQuantity] = useState("");
+  const [buySecurityId, setBuySecurityId] = useState("");
+  const [buyQuantity, setBuyQuantity] = useState("");
 
   const loadData = useCallback(async ({ recalculate = false } = {}) => {
     setError("");
     setNotice("");
     if (recalculate) setRefreshing(true); else setLoading(true);
     try {
-      const listResponse = await getAllPortfolioDetails();
-      const payload = unwrapData(listResponse);
-      const list = payload?.portfolioDetailsDTOList || payload?.data?.portfolioDetailsDTOList || [];
-      const active = list.filter((portfolio) => String(portfolio.portfolioStatus || portfolio.status || "ACTIVE").toUpperCase() === "ACTIVE");
       const userId = localStorage.getItem("userId");
+      if (!userId) {
+        throw new Error("No signed-in user was found. Sign in again to load portfolio drift checks.");
+      }
+
+      const listResponse = await getAllPortfolioDetails(userId);
+      const payload = unwrapData(listResponse);
+      const list = payload?.portfolioDetailsDTOList || payload?.data?.portfolioDetailsDTOList;
+      if (!Array.isArray(list)) {
+        throw new Error(payload?.detail || payload?.message || "The portfolio list could not be loaded.");
+      }
+      const active = list.filter((portfolio) => String(portfolio.portfolioStatus || portfolio.status || "ACTIVE").toUpperCase() === "ACTIVE");
       const results = await Promise.all(active.map(async (portfolio) => {
         const [validationResult, infoResult] = await Promise.allSettled([
           recalculate && userId
@@ -205,10 +226,27 @@ export default function RebalancingPage() {
             }),
           };
         }
-        return { portfolio, validation, info, history };
+        return {
+          portfolio,
+          validation,
+          info,
+          history,
+          driftError: recalculate && validationResult.status === "rejected"
+            ? validationResult.reason?.response?.data?.message || validationResult.reason?.message || "Drift calculation failed."
+            : null,
+        };
       }));
       setPortfolios(results);
-      if (recalculate) setNotice("Drift checks completed for active mandates.");
+      if (recalculate) {
+        const failed = results.filter((item) => item.driftError);
+        if (failed.length) {
+          setError(`Drift calculation failed for ${failed.map((item) => item.portfolio.name).join(", ")}: ${failed[0].driftError}`);
+        } else if (!results.length) {
+          setNotice("There are no active portfolios to check.");
+        } else {
+          setNotice(`Drift checks completed for ${results.length} active mandate${results.length === 1 ? "" : "s"}.`);
+        }
+      }
     } catch (loadError) {
       setError(loadError?.response?.data?.message || loadError?.message || "Unable to load portfolio allocations.");
       setPortfolios([]);
@@ -233,6 +271,92 @@ export default function RebalancingPage() {
     const drift = (item.validation?.allocations || []).reduce((max, allocation) => Math.max(max, Math.abs(Number(allocation.driftPercentage || 0))), 0);
     return sum + amount * drift / 100;
   }, 0);
+
+  const openTradeDialog = async (item) => {
+    setSelected(item);
+    setTradeMode("sell");
+    setTradeError("");
+    setTradeHoldings([]);
+    setTradeSecurities([]);
+    setSellHoldingId("");
+    setSellQuantity("");
+    setBuySecurityId("");
+    setBuyQuantity("");
+    setTradeLoading(true);
+    try {
+      const [holdingsResult, securityResult, validationResult, infoResult] = await Promise.all([
+        getPortfolioHoldings(item.portfolio.id),
+        getAllSecuritiesInfo(),
+        validatePortfolioAllocation(item.portfolio.id),
+        getPortfolioBasicInfo(item.portfolio.id),
+      ]);
+      const securityPayload = unwrapData(securityResult);
+      const validation = unwrapData(validationResult);
+      const info = unwrapData(infoResult);
+      if (!Array.isArray(securityPayload?.securities)) {
+        throw new Error(securityPayload?.message || "Security prices are unavailable. Try again later.");
+      }
+      setSelected((current) => current ? { ...current, validation, info } : current);
+      setTradeHoldings(Array.isArray(holdingsResult) ? holdingsResult : []);
+      setTradeSecurities(securityPayload.securities);
+    } catch (tradeLoadError) {
+      setTradeError(tradeLoadError?.response?.data?.message || tradeLoadError?.message || "Could not load holdings and securities for this rebalance.");
+    } finally {
+      setTradeLoading(false);
+    }
+  };
+
+  const selectedAllocation = selected?.validation?.allocations || [];
+  const sellableHoldings = tradeHoldings.filter((holding) => {
+    const allocation = selectedAllocation.find((item) => Number(item.assetId) === Number(holding.assetId));
+    return Number(holding.quantity) > 0 && Number(allocation?.driftPercentage) > 0;
+  });
+  const underweightAllocations = selectedAllocation.filter((allocation) => Number(allocation.driftPercentage) < 0);
+  const buyableSecurities = tradeSecurities.filter((security) =>
+    underweightAllocations.some((allocation) => Number(allocation.assetId) === Number(security.asset?.id))
+      && Number(security.price) > 0);
+  const activeSellHolding = sellableHoldings.find((holding) => String(holding.holdingId) === String(sellHoldingId));
+  const activeSellAllocation = activeSellHolding && selectedAllocation.find((item) => Number(item.assetId) === Number(activeSellHolding.assetId));
+  const sellMaxQuantity = activeSellHolding ? getMaxSellQuantity(activeSellHolding, activeSellAllocation, selected?.validation) : 0;
+  const sellUnitPrice = activeSellHolding && Number(activeSellHolding.quantity) > 0
+    ? Number(activeSellHolding.currentValue || 0) / Number(activeSellHolding.quantity)
+    : Number(activeSellHolding?.averageCost || 0);
+  const activeBuySecurity = buyableSecurities.find((security) => String(security.id) === String(buySecurityId));
+  const activeBuyAllocation = activeBuySecurity && underweightAllocations.find((item) => Number(item.assetId) === Number(activeBuySecurity.asset?.id));
+  const availableCash = Number(selected?.info?.amount || 0);
+  const buyMaxQuantity = activeBuySecurity ? getMaxBuyQuantity(activeBuySecurity, activeBuyAllocation, selected?.validation, availableCash) : 0;
+  const parsedSellQuantity = Number(sellQuantity);
+  const parsedBuyQuantity = Number(buyQuantity);
+
+  const submitTrade = async (event) => {
+    event.preventDefault();
+    setTradeError("");
+    if (tradeSubmitting || !selected) return;
+    try {
+      setTradeSubmitting(true);
+      let result;
+      if (tradeMode === "sell") {
+        if (!activeSellHolding || !Number.isInteger(parsedSellQuantity) || parsedSellQuantity <= 0 || parsedSellQuantity > sellMaxQuantity) {
+          throw new Error(`Enter a whole-share quantity from 1 to ${sellMaxQuantity}.`);
+        }
+        result = await sellPortfolioHolding({ holdingId: activeSellHolding.holdingId, quantity: parsedSellQuantity });
+      } else {
+        if (!activeBuySecurity || !Number.isInteger(parsedBuyQuantity) || parsedBuyQuantity <= 0 || parsedBuyQuantity > buyMaxQuantity) {
+          throw new Error(`Enter a whole-share quantity from 1 to ${buyMaxQuantity}.`);
+        }
+        result = await buyPortfolioSecurity({ portfolioId: selected.portfolio.id, securityId: activeBuySecurity.id, quantity: parsedBuyQuantity });
+      }
+      if (result?.success === false) throw new Error(result.message || "The trade was rejected.");
+      const successMessage = result?.message || (tradeMode === "sell" ? "Sell order recorded." : "Buy order recorded.");
+      setSelected(null);
+      await loadData({ recalculate: true });
+      setNotice(successMessage);
+    } catch (tradeFailure) {
+      setTradeError(tradeFailure?.response?.data?.message || tradeFailure?.message || "The trade could not be placed.");
+    } finally {
+      setTradeSubmitting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#f5f7fc] font-sans text-slate-900">
@@ -269,7 +393,7 @@ export default function RebalancingPage() {
           </div>
 
           <div className="space-y-4">
-            {loading ? <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">Loading portfolio allocations…</div> : filtered.length ? filtered.map((item) => <PortfolioCard key={item.portfolio.id} item={item} onReview={setSelected} onOpen={(entry) => navigate(`/portfolio/${entry.portfolio.id}`)} />) : <div className="rounded-xl border border-slate-200 bg-white p-10 text-center"><BellRing className="mx-auto mb-2 text-slate-400" size={22} /><div className="text-sm font-semibold text-slate-800">{portfolios.length ? "No mandates match this filter" : "No active portfolios to review"}</div><p className="mt-1 text-xs text-slate-500">Active portfolio allocations will appear here once available.</p></div>}
+            {loading ? <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">Loading portfolio allocations…</div> : filtered.length ? filtered.map((item) => <PortfolioCard key={item.portfolio.id} item={item} onReview={openTradeDialog} onOpen={(entry) => navigate(`/portfolio/${entry.portfolio.id}`)} />) : <div className="rounded-xl border border-slate-200 bg-white p-10 text-center"><BellRing className="mx-auto mb-2 text-slate-400" size={22} /><div className="text-sm font-semibold text-slate-800">{portfolios.length ? "No mandates match this filter" : "No active portfolios to review"}</div><p className="mt-1 text-xs text-slate-500">Active portfolio allocations will appear here once available.</p></div>}
           </div>
 
           <section className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -282,13 +406,58 @@ export default function RebalancingPage() {
         </main>
       </div>
 
-      {selected && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelected(null); }}>
-        <section role="dialog" aria-modal="true" aria-labelledby="plan-title" className="w-full max-w-xl rounded-xl bg-white shadow-2xl">
-          <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4"><div><div className="text-[10px] font-bold uppercase tracking-wider text-blue-800">Allocation transfer plan</div><h2 id="plan-title" className="mt-1 text-lg font-bold text-slate-900">{selected.portfolio.name}</h2></div><button onClick={() => setSelected(null)} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" aria-label="Close"><X size={18} /></button></div>
-          <div className="px-5 py-4"><p className="text-sm text-slate-600">Estimated asset class transfers based on the latest allocation validation.</p><div className="mt-4 space-y-2">{(selected.validation?.allocations || []).map((allocation) => { const drift = Number(allocation.driftPercentage || 0); const amount = Number(selected.validation?.totalCurrentValue || selected.validation?.totalInvestedAmount || selected.info?.amount || selected.portfolio.aum || 0) * Math.abs(drift) / 100; return <div key={allocation.assetId} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-3"><div><div className="text-sm font-semibold text-slate-800">{allocation.assetClass}</div><div className="mt-0.5 text-[11px] text-slate-500">Target {percent(allocation.targetPercentage)} · Current {percent(allocation.currentPercentage)}</div></div><div className={`text-right font-mono text-sm font-semibold ${drift > 0 ? "text-red-700" : drift < 0 ? "text-emerald-800" : "text-slate-500"}`}>{drift > 0 ? "Sell" : drift < 0 ? "Buy" : "On target"}{drift !== 0 && <div>{money(amount)} · {driftLabel(drift)}</div>}</div></div>; })}</div><div className="mt-4 rounded-lg bg-blue-50 p-3 text-xs leading-5 text-blue-900">This is an asset class level estimate. Security level order generation and execution will follow once the rebalance execution flow is connected.</div></div>
-          <div className="flex justify-end border-t border-slate-100 px-5 py-3"><button onClick={() => setSelected(null)} className="rounded-md bg-blue-800 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-900">Done</button></div>
+      {selected && <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/40 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !tradeSubmitting) setSelected(null); }}>
+        <section role="dialog" aria-modal="true" aria-labelledby="plan-title" className="my-auto w-full max-w-2xl overflow-hidden rounded-xl bg-white shadow-2xl">
+          <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4"><div><div className="text-[10px] font-bold uppercase tracking-wider text-blue-800">Rebalance trade ticket</div><h2 id="plan-title" className="mt-1 text-lg font-bold text-slate-900">{selected.portfolio.name}</h2><p className="mt-1 text-xs text-slate-500">Place a ledger buy or sell within the theme’s remaining allocation room.</p></div><button disabled={tradeSubmitting} onClick={() => setSelected(null)} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-40" aria-label="Close"><X size={18} /></button></div>
+          <div className="border-b border-slate-100 px-5 pt-4"><div className="flex gap-2"><button onClick={() => { setTradeMode("sell"); setTradeError(""); }} className={`rounded-t-md px-4 py-2 text-xs font-semibold ${tradeMode === "sell" ? "bg-red-50 text-red-800" : "text-slate-500 hover:bg-slate-50"}`}><ArrowDownRight className="mr-1 inline" size={14} />Sell overweight</button><button onClick={() => { setTradeMode("buy"); setTradeError(""); }} className={`rounded-t-md px-4 py-2 text-xs font-semibold ${tradeMode === "buy" ? "bg-emerald-50 text-emerald-800" : "text-slate-500 hover:bg-slate-50"}`}><ArrowUpRight className="mr-1 inline" size={14} />Buy underweight</button></div></div>
+          <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
+            {tradeError && <div role="alert" className="mb-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800"><AlertTriangle size={15} className="mt-0.5 shrink-0" />{tradeError}</div>}
+            {tradeLoading ? <div className="py-12 text-center text-sm text-slate-500">Loading live holdings, prices, and eligible securities…</div> : tradeMode === "sell" ? <form onSubmit={submitTrade} className="space-y-4">
+              <div className="rounded-lg bg-red-50 p-3 text-xs leading-5 text-red-900">Only currently held securities in overweight asset classes are available. Quantity is capped so the sale cannot push that class below its theme target.</div>
+              <label className="block text-xs font-semibold text-slate-700">Holding to sell<select required value={sellHoldingId} onChange={(event) => { setSellHoldingId(event.target.value); setSellQuantity(""); }} className="mt-1.5 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-red-400"><option value="">Select an overweight holding</option>{sellableHoldings.map((holding) => <option key={holding.holdingId} value={holding.holdingId}>{holding.securityName} ({holding.symbol || "—"}) · {holding.assetClass} · {Number(holding.quantity).toLocaleString("en-IN")} held</option>)}</select></label>
+              {activeSellHolding && <><div className="grid gap-3 sm:grid-cols-3"><DetailTile label="Shares held" value={Number(activeSellHolding.quantity).toLocaleString("en-IN")} /><DetailTile label="Max sell quantity" value={sellMaxQuantity.toLocaleString("en-IN")} /><DetailTile label="Available cash" value={money(availableCash)} /></div><label className="block text-xs font-semibold text-slate-700">Sell quantity (whole shares)<input required type="number" step="1" min="1" max={sellMaxQuantity} value={sellQuantity} onChange={(event) => setSellQuantity(event.target.value)} className="mt-1.5 h-10 w-full rounded-md border border-slate-200 px-3 font-mono text-sm outline-none focus:border-red-400" /></label><div className="flex justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs"><span className="text-slate-600">Estimated proceeds at latest displayed price</span><strong className="font-mono text-slate-900">{money(sellUnitPrice * (Number.isInteger(parsedSellQuantity) ? parsedSellQuantity : 0))}</strong></div></>}
+              {!sellableHoldings.length && <div className="rounded-lg border border-slate-200 p-4 text-sm text-slate-600">There are no sellable holdings in an overweight asset class.</div>}
+              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><button type="button" onClick={() => setSelected(null)} className="rounded-md border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600">Cancel</button><button type="submit" disabled={!activeSellHolding || !Number.isInteger(parsedSellQuantity) || parsedSellQuantity <= 0 || parsedSellQuantity > sellMaxQuantity || tradeSubmitting} className="rounded-md bg-red-700 px-4 py-2 text-xs font-semibold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50">{tradeSubmitting ? "Recording…" : "Record sell"}</button></div>
+            </form> : <form onSubmit={submitTrade} className="space-y-4">
+              <div className="rounded-lg bg-emerald-50 p-3 text-xs leading-5 text-emerald-900">Choose a security mapped to an underweight theme class. The order is limited by both the remaining target allocation and available portfolio cash.</div>
+              <div className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2.5 text-xs"><span className="text-slate-600">Available portfolio cash</span><strong className="font-mono text-slate-900">{money(availableCash)}</strong></div>
+              <label className="block text-xs font-semibold text-slate-700">Security to buy<select required value={buySecurityId} onChange={(event) => { setBuySecurityId(event.target.value); setBuyQuantity(""); }} className="mt-1.5 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-emerald-400"><option value="">Select a security from an underweight class</option>{underweightAllocations.map((allocation) => <optgroup key={allocation.assetId} label={`${allocation.assetClass} · ${driftLabel(allocation.driftPercentage)} under target`}>{buyableSecurities.filter((security) => Number(security.asset?.id) === Number(allocation.assetId)).map((security) => <option key={security.id} value={security.id}>{security.name} ({security.symbol || security.isin || "—"}) · {money(security.price)}</option>)}</optgroup>)}</select></label>
+              {activeBuySecurity && <><div className="grid gap-3 sm:grid-cols-3"><DetailTile label="Current price" value={money(activeBuySecurity.price)} /><DetailTile label="Max buy quantity" value={buyMaxQuantity.toLocaleString("en-IN")} /><DetailTile label="Target allocation" value={`${percent(activeBuyAllocation?.targetPercentage)} · current ${percent(activeBuyAllocation?.currentPercentage)}`} /></div><label className="block text-xs font-semibold text-slate-700">Buy quantity (whole shares)<input required type="number" step="1" min="1" max={buyMaxQuantity} value={buyQuantity} onChange={(event) => setBuyQuantity(event.target.value)} className="mt-1.5 h-10 w-full rounded-md border border-slate-200 px-3 font-mono text-sm outline-none focus:border-emerald-400" /></label><div className="flex justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs"><span className="text-slate-600">Estimated purchase cost</span><strong className="font-mono text-slate-900">{money(Number(activeBuySecurity.price) * (Number.isInteger(parsedBuyQuantity) ? parsedBuyQuantity : 0))}</strong></div></>}
+              {!buyableSecurities.length && <div className="rounded-lg border border-slate-200 p-4 text-sm text-slate-600">No priced securities are currently available for the underweight asset classes.</div>}
+              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><button type="button" onClick={() => setSelected(null)} className="rounded-md border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600">Cancel</button><button type="submit" disabled={!activeBuySecurity || !Number.isInteger(parsedBuyQuantity) || parsedBuyQuantity <= 0 || parsedBuyQuantity > buyMaxQuantity || tradeSubmitting} className="rounded-md bg-emerald-700 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50">{tradeSubmitting ? "Recording…" : "Record buy"}</button></div>
+            </form>}
+            <p className="mt-4 text-[10px] leading-4 text-slate-400">Recording a trade updates the portfolio holdings ledger and cash balance at the backend’s current quote. It does not submit an order to a broker.</p>
+          </div>
         </section>
       </div>}
     </div>
   );
+}
+
+function DetailTile({ label, value }) {
+  return <div className="rounded-lg bg-slate-50 px-3 py-2.5"><div className="text-[9px] font-bold uppercase tracking-wide text-slate-500">{label}</div><div className="mt-1 truncate font-mono text-sm font-semibold text-slate-900">{value}</div></div>;
+}
+
+function getMaxSellQuantity(holding, allocation, validation) {
+  const total = Number(validation?.totalInvestedAmount || 0);
+  const current = Number(allocation?.currentPercentage || 0);
+  const target = Number(allocation?.targetPercentage || 0);
+  const averageCost = Number(holding?.averageCost || 0);
+  if (total <= 0 || averageCost <= 0 || current <= target || target >= 100) return 0;
+  const currentClassCost = total * current / 100;
+  const targetClassCost = total * target / 100;
+  const allowedCostReduction = (currentClassCost - targetClassCost) / (1 - target / 100);
+  return Math.max(0, Math.min(Number(holding.quantity || 0), Math.floor((allowedCostReduction + 0.01) / averageCost)));
+}
+
+function getMaxBuyQuantity(security, allocation, validation, availableCash) {
+  const total = Number(validation?.totalInvestedAmount || 0);
+  const current = Number(allocation?.currentPercentage || 0);
+  const target = Number(allocation?.targetPercentage || 0);
+  const price = Number(security?.price || 0);
+  if (total <= 0 || price <= 0 || current >= target || target >= 100) return 0;
+  const currentClassCost = total * current / 100;
+  const targetClassCost = total * target / 100;
+  const allowedCostIncrease = (targetClassCost - currentClassCost) / (1 - target / 100);
+  return Math.max(0, Math.floor((Math.min(allowedCostIncrease, Number(availableCash || 0)) + 0.01) / price));
 }

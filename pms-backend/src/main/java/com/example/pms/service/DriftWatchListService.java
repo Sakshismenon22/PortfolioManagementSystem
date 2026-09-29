@@ -77,26 +77,9 @@ public class DriftWatchListService {
                 if(driftWatchList!=null && driftWatchList.getNextDriftCalculationDate().equals(LocalDate.now())&&portfolio.getPortfolioStatus().equals(PortfolioStatus.ACTIVE)){
                     performPortfolioDriftCalculation(portfolio.getId(),user.getUserId());
                     driftWatchList.setLastDriftCalculatedAt(driftWatchList.getNextDriftCalculationDate());
-                    switch(driftWatchList.getReBalancingFrequency()){
-                        case DAILY -> {
-                            driftWatchList.setNextDriftCalculationDate(LocalDate.now().plusDays(1));
-                        }
-                        case WEEKLY -> {
-                            driftWatchList.setNextDriftCalculationDate(LocalDate.now().plusWeeks(1));
-                        }
-                        case MONTHLY -> {
-                            driftWatchList.setNextDriftCalculationDate(LocalDate.now().plusMonths(1));
-                        }
-                        case YEARLY -> {
-                            driftWatchList.setNextDriftCalculationDate(LocalDate.now().plusMonths(12));
-                        }
-                        case QUARTERLY -> {
-                            driftWatchList.setNextDriftCalculationDate(LocalDate.now().plusMonths(3));
-                        }
-                        case SEMI_ANNUAL -> {
-                            driftWatchList.setNextDriftCalculationDate(LocalDate.now().plusMonths(6));
-                        }
-                    }
+                    driftWatchList.setNextDriftCalculationDate(
+                            DriftSchedule.nextDate(driftWatchList.getLastDriftCalculatedAt(), driftWatchList.getReBalancingFrequency())
+                    );
 
                     driftWatchListRepository.save(driftWatchList);
 
@@ -107,6 +90,12 @@ public class DriftWatchListService {
 
     public String performPortfolioDriftCalculation(Long portfolioId,Integer userId){
         AllocationValidationDTO allocationValidationDTO = portfolioService.validatePortfolioAllocation(portfolioId,userId);
+        Portfolio portfolio = portfolioRepository.findById(portfolioId)
+                .orElseThrow(PortfolioNotFoundException::new);
+        if (portfolio.getPortfolioStatus() == PortfolioStatus.ACTIVE
+                && driftWatchListRepository.findAllByPortfolioId(portfolioId) == null) {
+            driftWatchListRepository.save(DriftSchedule.newWatchList(portfolio, LocalDate.now()));
+        }
         System.out.println(allocationValidationDTO);
         if(!allocationValidationDTO.getValid()){
             for(AssetAllocationValidationDTO assetAllocationValidationDTO:allocationValidationDTO.getAllocations()){

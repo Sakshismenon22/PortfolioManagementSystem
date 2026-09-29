@@ -9,6 +9,7 @@ import DashboardPage from './pages/DashboardPage'
 import CreateThemePage from "./pages/CreateThemePage";
 import RebalancingPage from "./pages/RebalancingPage";
 import LoginPage from './pages/LoginPage'
+import SecuritiesPage from './pages/SecuritiesPage'
 
 function App() {
   
@@ -24,6 +25,7 @@ function App() {
           <Route path="/portfolio/:id" element={<PortfolioDetailsPage/>}/>
           <Route path="/home" element={<DashboardPage/>}/>
           <Route path="/create-theme" element={<CreateThemePage />}/>
+          <Route path="/securities" element={<SecuritiesPage />}/>
           <Route path="/rebalancing" element={<RebalancingPage />}/>
           <Route path = "/*" element={<Navigate to ="/home" replace />} />
           <Route path = "/login" element={<Navigate to ="/login" replace />} />

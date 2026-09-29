@@ -34,7 +34,7 @@ const SideBarComponent = ({ activePage, setActivePage }) => {
     {
       label: "Securities",
       icon: WalletCards,
-      path: null,
+      path: "/securities",
     },
     {
       label: "Rebalancing",
@@ -67,13 +67,17 @@ const SideBarComponent = ({ activePage, setActivePage }) => {
     if (
       location.pathname === "/portfolio" ||
       location.pathname === "/create-portfolio" ||
-      location.pathname === "/portfolio-details"
+      location.pathname.startsWith("/portfolio/")
     ) {
       return "Portfolios";
     }
 
     if (location.pathname === "/create-theme") {
       return "Themes";
+    }
+
+    if (location.pathname === "/securities") {
+      return "Securities";
     }
 
     if (location.pathname === "/rebalancing") {
