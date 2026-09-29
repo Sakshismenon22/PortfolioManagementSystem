@@ -1,17 +1,15 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Route, Routes, Navigate} from 'react-router-dom'
+import { ToastContainer } from 'react-toastify'
+
 import RegisterPage from './pages/RegistrationPage'
 import PortfolioPage from './pages/PortfolioPage'
 import CreatePortfolioPage from './pages/CreatePortfolioPage'
 import PortfolioDetailsPage from './pages/PortfolioDetailsPage'
 import DashboardPage from './pages/DashboardPage'
 import CreateThemePage from "./pages/CreateThemePage";
-import { ToastContainer } from 'react-toastify'
+
 function App() {
-  const [count, setCount] = useState(0)
+  
 
   return (
     <>
@@ -22,8 +20,9 @@ function App() {
           <Route path="/create-portfolio" element={<CreatePortfolioPage/>}/>
           <Route path="/portfolio/:id" element={<PortfolioDetailsPage/>}/>
           <Route path="/home" element={<DashboardPage/>}/>
-          <Route path="/create-theme" element={<CreateThemePage />}
-/>
+          <Route path="/create-theme" element={<CreateThemePage />}/>
+          <Route path = "/*" element={<Navigate to ="/home" replace />} />
+
         </Routes>
       </BrowserRouter>
 

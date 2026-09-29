@@ -14,24 +14,30 @@ import SideBarComponent from "../components/SideBarComponent";
 import TopBarComponent from "../components/TopBarComponent";
 
 import { createTheme } from "../services/themeService";
-import { getAllSecuritiesInfo } from "../services/securityService";
+import { getAllAssets } from "../services/portfolioService";
 import { toast } from "react-toastify";
+
+import { useNavigate } from "react-router-dom";
+
 
 const RISK_OPTIONS = [
   {
     value: "LOW",
     label: "Low Risk",
-    description: "Capital preservation with relatively lower volatility.",
+    description:
+      "Capital preservation with relatively lower volatility.",
   },
   {
     value: "MEDIUM",
     label: "Medium Risk",
-    description: "Balanced growth with moderate market exposure.",
+    description:
+      "Balanced growth with moderate market exposure.",
   },
   {
     value: "HIGH",
     label: "High Risk",
-    description: "Higher growth potential with higher volatility.",
+    description:
+      "Higher growth potential with higher volatility.",
   },
 ];
 
@@ -78,12 +84,51 @@ const CreateThemePage = () => {
 
   const [loading, setLoading] = useState(false);
 
+  const navigate = useNavigate();
+
+
   useEffect(() => {
     loadAssets();
   }, []);
 
+
+  /*
+   * Load assets from Unified Security Master
+   *
+   * portfolioService.getAllAssets() returns:
+   *
+   * {
+   *   statusCode: 200,
+   *   success: true,
+   *   data: [ ...assets... ],
+   *   message: "All assets retrieved"
+   * }
+   *
+   * Therefore the actual array is response.data.
+   */
   const loadAssets = async () => {
     try {
+
+      const response = await getAllAssets();
+
+      console.log("Asset API response:", response);
+      console.log("Assets:", response?.data);
+
+      const assetList = Array.isArray(response?.data)
+        ? response.data
+        : [];
+
+        //Remove duplicates
+        const uniqueAssets = Array.from(
+            new Map(
+                assetList.map((asset) => [
+                    asset.assetClass, asset,
+                ])
+            ).values()
+    );
+
+      setAssets(uniqueAssets);
+
       const response = await getAllSecuritiesInfo();
 
       /*
@@ -177,14 +222,34 @@ const CreateThemePage = () => {
     }
 
     /*
-     * Replace this with however your application
-     * stores the logged-in user's ID.
+     * Get logged-in user's ID.
      */
     const userId = Number(localStorage.getItem("userId")) || 1;
 
+    /*
+     * Payload expected by AddThemeDTO
+     */
     const payload = {
+
       name: theme.name,
+
       risk: theme.risk,
+
+      investmentHorizon:
+        theme.investmentHorizon,
+
+      allocationRuleList:
+        allocations.map((allocation) => ({
+
+          assetId: Number(
+            allocation.assetId
+          ),
+
+          percentage: Number(
+            allocation.percentage
+          ),
+
+        })),
       investmentHorizon: theme.investmentHorizon,
 
       allocationRuleList: allocations.map((allocation) => ({
@@ -193,6 +258,7 @@ const CreateThemePage = () => {
       })),
 
       userId,
+
     };
 
     try {
@@ -204,7 +270,13 @@ const CreateThemePage = () => {
 
       console.log("Create Theme Response:", response);
 
-      toast.success("Theme created successfully.");
+      toast.success(
+        "Theme created successfully."
+        
+      );
+
+      navigate("/home");
+
 
       /*
        * Reset form after successful creation.
@@ -257,6 +329,9 @@ const CreateThemePage = () => {
             </div>
 
             <button
+              onClick={() =>
+                navigate("/home")
+              }
               onClick={() => window.history.back()}
               className="flex items-center gap-2 rounded-md bg-[#edf3fd] px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-[#e4ebf8]"
             >
@@ -402,6 +477,107 @@ const CreateThemePage = () => {
                     >
                       <option value="">Select Asset</option>
 
+              {allocations.map(
+                (allocation, index) => (
+
+                  <div
+                    key={index}
+                    className="grid grid-cols-[2fr_1fr_.5fr] items-center gap-4 px-4 py-3"
+                  >
+
+                    {/* ASSET */}
+
+                    <div>
+
+                      <select
+                        name="assetId"
+                        value={allocation.assetId}
+
+                        onChange={(event) =>
+                          handleAllocationChange(
+                            index,
+                            "assetId",
+                            event.target.value
+                          )
+                        }
+
+                        className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      >
+
+                        <option value="">
+                          Select Asset
+                        </option>
+
+
+                        {assets.map(
+                          (asset) => (
+
+                            <option
+                              key={asset.id}
+                              value={asset.id}
+                            >
+                              {asset.assetClass}
+                            </option>
+
+                          )
+                        )}
+
+                      </select>
+
+                    </div>
+
+
+                    {/* PERCENTAGE */}
+
+                    <div className="relative">
+
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        value={
+                          allocation.percentage
+                        }
+                        onChange={(event) =>
+                          handleAllocationChange(
+                            index,
+                            "percentage",
+                            event.target.value
+                          )
+                        }
+                        placeholder="0"
+                        className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 pr-8 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      />
+
+                      <span className="absolute right-3 top-2 text-sm text-slate-400">
+                        %
+                      </span>
+
+                    </div>
+
+
+                    {/* DELETE */}
+
+                    <div className="flex justify-end">
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          removeAllocation(index)
+                        }
+                        disabled={
+                          allocations.length === 1
+                        }
+                        className="rounded-md p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"
+                      >
+
+                        <Trash2 size={16} />
+
+                      </button>
+
+                    </div>
+
                       {assets.map((security) => (
                         <option key={security.id} value={security.id}>
                           {security.name || security.symbol}
@@ -486,19 +662,31 @@ const CreateThemePage = () => {
                 <div className="mt-1 flex items-center gap-2">
                   {isValidAllocation ? (
                     <>
+
+                      <Check
+                        size={16}
+                        className="text-emerald-700"
+                      />
                       <Check size={16} className="text-emerald-700" />
 
                       <span className="text-sm font-semibold text-emerald-700">
                         Validated
                       </span>
+
                     </>
                   ) : (
                     <>
+
+                      <AlertTriangle
+                        size={16}
+                        className="text-red-600"
+                      />
                       <AlertTriangle size={16} className="text-red-600" />
 
                       <span className="text-sm font-semibold text-red-600">
                         Requires 100%
                       </span>
+
                     </>
                   )}
                 </div>

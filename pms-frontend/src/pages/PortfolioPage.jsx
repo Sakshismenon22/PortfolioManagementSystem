@@ -16,6 +16,7 @@ import {
 import SideBarComponent from "../components/SideBarComponent";
 import TopBarComponent from "../components/TopBarComponent";
 import { getAllPortfolioDetails } from "../services/portfolioService";
+import { useNavigate } from "react-router-dom";
 
 
 const mockPortfolios = [
@@ -120,6 +121,8 @@ const PortfolioPage = () => {
   const [search, setSearch] = useState("");
   const [portfolios,setPortfolios] = useState([]);
 
+  const navigate = useNavigate();
+
   const loadPortfolio = async()=>{
     const res = await getAllPortfolioDetails();
     console.log(res);
@@ -158,7 +161,7 @@ const PortfolioPage = () => {
   const handleCreatePortfolio = () => {
     console.log("Create portfolio clicked");
 
-    // navigate("/portfolios/create");
+    navigate("/create-portfolio");
   };
 
 
@@ -169,7 +172,11 @@ const PortfolioPage = () => {
 
 
   const handleView = (portfolio) => {
-    console.log("View portfolio:", portfolio);
+    navigate("/portfolio-details", {
+      state: {
+        portfolio: portfolio,
+      },
+    });
   };
 
   return (
