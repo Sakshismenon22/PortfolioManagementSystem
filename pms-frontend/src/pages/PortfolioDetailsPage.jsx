@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
  
 import {
@@ -20,6 +20,7 @@ import {
  
 import SideBarComponent from "../components/SideBarComponent";
 import TopBarComponent from "../components/TopBarComponent";
+import { getPortfolioBasicInfo } from "../services/portfolioService";
  
 const API_BASE_URL = "http://localhost:8082";
  
@@ -32,6 +33,13 @@ const PortfolioDetailsPage = () => {
   const [portfolio, setPortfolio] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const {id} = useParams();
+
+  const loadPortolio = async()=>{
+    const res = await getPortfolioBasicInfo(id);
+    console.log(portfolio);
+    setPortfolio(res);
+  }
  
  
   /*
@@ -45,13 +53,15 @@ const PortfolioDetailsPage = () => {
    */
  
   useEffect(() => {
-    if (!selectedPortfolio) {
-      setError("Portfolio information was not provided.");
-      setLoading(false);
-      return;
-    }
+    // if (!selectedPortfolio) {
+    //   setError("Portfolio information was not provided.");
+    //   setLoading(false);
+    //   return;
+    // }
  
-    setPortfolio(selectedPortfolio);
+    // setPortfolio(selectedPortfolio);
+    
+    loadPortolio();
     setLoading(false);
   }, [selectedPortfolio]);
  
@@ -240,17 +250,17 @@ const PortfolioDetailsPage = () => {
  
                 <InfoRow
                   label="Portfolio Code"
-                  value={portfolio.code}
+                  value={"PMS-0"+portfolio.portfolioId}
                 />
  
                 <InfoRow
                   label="Theme"
-                  value={portfolio.theme}
+                  value={portfolio.themeName}
                 />
  
                 <InfoRow
                   label="Allocation Type"
-                  value={portfolio.allocationType}
+                  value={portfolio.portfolioType}
                 />
  
                 <InfoRow
