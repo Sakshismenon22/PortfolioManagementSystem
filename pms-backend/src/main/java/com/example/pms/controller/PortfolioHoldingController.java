@@ -33,9 +33,9 @@ public class PortfolioHoldingController {
         return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(),true,null,portfolioHoldingService.sellHoldingsShare(sellHoldingDTO),LocalDateTime.now()));
     }
 
-    @PostMapping("/buy")
-    public ResponseEntity<?> buyHoldings(@RequestBody BuyHoldingDTO buyHoldingDTO){
-        return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(),true,null,))
-    }
+//    @PostMapping("/buy")
+//    public ResponseEntity<?> buyHoldings(@RequestBody BuyHoldingDTO buyHoldingDTO){
+//        return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(),true,null, ));
+//    }
 
 }

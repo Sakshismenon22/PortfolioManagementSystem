@@ -39,6 +39,7 @@ import {
 } from "recharts";
 import { useNavigate } from "react-router-dom";
 import { getAllPortfolioDetails, getCountOfActivePortfolios, getCountOfPortfolios } from "../services/portfolioService";
+import TopBarComponent from "../components/TopBarComponent";
 
 
 const portfolioComparisons = [
@@ -289,45 +290,6 @@ const SideBarComponent = () => {
 
 
 
-const TopBarComponent = () => {
-  return (
-    <header className="fixed left-[240px] right-0 top-0 z-20 flex h-[68px] items-center border-b border-slate-200 bg-white px-5">
-
-      <div className="flex h-9 w-[355px] items-center rounded-md bg-slate-100 px-3">
-        <Search size={17} className="text-slate-500" />
-
-        <input
-          className="ml-2 w-full bg-transparent text-xs outline-none placeholder:text-slate-500"
-          placeholder="Search portfolios, ISIN, securities, benchmarks..."
-        />
-      </div>
-
-      <div className="ml-auto flex items-center gap-5">
-     
-        
-
-        <Bell size={18} className="text-slate-600" />
-
-
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-800 text-xs text-white">
-            MV
-          </div>
-
-          <div>
-            <div className="text-xs font-semibold text-slate-800">
-              Marcus Vance
-            </div>
-
-            <div className="text-[9px] font-medium tracking-wide text-slate-500">
-              SENIOR FUND MANAGER
-            </div>
-          </div>
-        </div>
-      </div>
-    </header>
-  );
-};
 
 
 
