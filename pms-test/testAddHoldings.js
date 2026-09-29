@@ -1,4 +1,4 @@
-const portfolioId = 1;
+const portfolioId = 2;
 import axios from 'axios';
 const addHolding = async (holding)=>{
     const res = await axios.post(`http://localhost:8082/api/portfolio-holding/add-holding`,holding);

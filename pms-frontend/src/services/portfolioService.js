@@ -23,17 +23,25 @@ export const createAndActivatePortfolio = async(portfolio) =>{
 }
 
 
-export const getAllPortfolioDetails = async() =>{
+
+export const getAllPortfolioDetails = async(userId) =>{
     try{
-        const userId = localStorage.getItem("userId");
-        const response = await axios.post(`http://localhost:8082/api/portfolio/get-all-portfolio`,{userId});
+        
+        const response = await axios.get(`http://localhost:8082/api/portfolio/all-portfolio-details`, 
+            { params: { userId } },
+    );
+
+        console.log(response.data);
 
         return response.data;
     }
     catch(error){
-        return error.data;
+        console.error("getAllPortfolioDetails failed:", error.response?.data ?? error);
+        return error.response?.data ?? null;
     }
 }
+
+
 
 
 export const getCountOfPortfolios = async(userId) =>{
@@ -134,3 +142,4 @@ export const validatePortfolioAllocation = async (portfolioId) => {
 
   return response.data.data;
 };
+

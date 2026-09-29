@@ -3,6 +3,7 @@ package com.example.pms.controller;
 import com.example.pms.dto.request.CreateAndActivatePortfolioDTO;
 import com.example.pms.dto.request.CreatePortfolioDTO;
 import com.example.pms.dto.request.GetAllPortfolioDTO;
+import com.example.pms.dto.response.AssetInvestmentDTO;
 import com.example.pms.dto.response.GetAllPortfolioResponseDTO;
 import com.example.pms.dto.response.ValidationDTO;
 import com.example.pms.model.Portfolio;
@@ -150,5 +151,17 @@ public class PortfolioController {
                 )
         );
     }
+
+    @GetMapping("/all-portfolio-details")
+    public ResponseEntity<?> getAllPortfolioDetails(@ModelAttribute  GetAllPortfolioDTO getAllPortfolioDTO){
+        return ResponseEntity.ok(new Response<>(HttpStatus.OK.value(), true, portfolioService.getAllPortfolioDetails(getAllPortfolioDTO), "All portfolio details retrieved", LocalDateTime.now()));
+    }
+
+    @GetMapping("/investment-amount/{userId}")
+    public ResponseEntity<?> getEachAssetInvestment(@PathVariable Integer userId){
+        return ResponseEntity.ok(new Response<>(HttpStatus.OK.value(), true, portfolioService.getEachAssetInvestment(userId), "All amounts received", LocalDateTime.now()));
+
+    }
+
 
 }

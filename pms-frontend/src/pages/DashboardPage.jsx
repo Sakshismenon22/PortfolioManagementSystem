@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   FolderKanban,
@@ -38,6 +38,8 @@ import {
   AreaChart,
 } from "recharts";
 import { useNavigate } from "react-router-dom";
+import { getAllPortfolioDetails, getCountOfActivePortfolios, getCountOfPortfolios } from "../services/portfolioService";
+
 
 const portfolioComparisons = [
   {
@@ -217,12 +219,10 @@ const SideBarComponent = () => {
       icon: SlidersHorizontal,
       badge: "2 Alerts",
     },
-    {
-      label: "Notifications",
-      icon: Bell,
-      badge: "3",
-    },
+    
   ];
+
+  
 
   return (
     <aside className="fixed left-0 top-0 z-30 flex h-screen w-[240px] flex-col bg-[#17283d] text-white">
@@ -234,7 +234,7 @@ const SideBarComponent = () => {
 
         <div className="ml-3">
           <div className="text-sm font-bold">
-            <span className="text-white">APEX</span>
+            
             <span className="text-blue-400">PMS</span>
           </div>
 
@@ -280,36 +280,9 @@ const SideBarComponent = () => {
       </nav>
 
 
-      <div className="mx-4 mb-4 rounded-md bg-slate-700/70 p-3">
-        <div className="flex items-center justify-between text-[10px] text-slate-300">
-          <span>FUND AUM POOL</span>
-
-          <span className="flex items-center gap-1 text-emerald-300">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
-            Live
-          </span>
-        </div>
-
-        <div className="mt-1 text-xl font-semibold">₹428.5M</div>
-
-        <div className="mt-1 flex justify-between text-[11px] text-slate-400">
-          <span>Active Strategies</span>
-          <span className="text-white">14 Active</span>
-        </div>
-      </div>
 
     
-      <div className="border-t border-white/10 px-3 py-3">
-        <button className="flex w-full items-center gap-3 px-3 py-2 text-xs text-slate-300">
-          <Settings size={16} />
-          System Settings
-        </button>
-
-        <button className="flex w-full items-center gap-3 px-3 py-2 text-xs text-slate-300">
-          <CircleHelp size={16} />
-          Institutional Support
-        </button>
-      </div>
+     
     </aside>
   );
 };
@@ -331,17 +304,7 @@ const TopBarComponent = () => {
 
       <div className="ml-auto flex items-center gap-5">
      
-        <div className="flex items-center gap-2 rounded-md bg-blue-50 px-4 py-2 text-xs">
-          <span className="h-2 w-2 rounded-full bg-emerald-600" />
-
-          <span className="font-semibold text-slate-700">NSE/BSE</span>
-
-          <span className="font-medium text-slate-700">Open</span>
-
-          <span className="text-slate-400">•</span>
-
-          <span className="font-mono text-slate-500">14:32 IST</span>
-        </div>
+        
 
         <Bell size={18} className="text-slate-600" />
 
@@ -425,20 +388,7 @@ const PortfolioBenchmarkChart = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-1 rounded-md bg-slate-100 p-1">
-          {["1M", "3M", "6M", "1Y", "YTD", "3Y"].map((period, index) => (
-            <button
-              key={period}
-              className={`rounded px-2 py-1 text-[10px] font-medium ${
-                index === 4
-                  ? "bg-white text-blue-700 shadow-sm"
-                  : "text-slate-500"
-              }`}
-            >
-              {period}
-            </button>
-          ))}
-        </div>
+        
       </div>
 
 
@@ -584,23 +534,7 @@ const PortfolioBenchmarkChart = ({
         </ResponsiveContainer>
       </div>
 
-      <div className="mt-2 flex items-center justify-between rounded bg-blue-50 px-3 py-2 text-[10px]">
-        <div className="flex gap-4">
-          <span>
-            <strong>Tracking Error:</strong> {selectedPortfolio.trackingError}%
-          </span>
-
-          <span>
-            <strong>Sharpe Ratio:</strong> {selectedPortfolio.sharpe}
-          </span>
-
-          <span>
-            <strong>Beta:</strong> {selectedPortfolio.beta}
-          </span>
-        </div>
-
-        <span className="text-slate-500">Daily NAV Sync at 17:30 IST</span>
-      </div>
+      
     </div>
   );
 };
@@ -608,7 +542,95 @@ const PortfolioBenchmarkChart = ({
 
 
 
-const AssetAllocationCard = () => {
+// const AssetAllocationCard = () => {
+//   return (
+//     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+//       <div className="flex items-center justify-between">
+//         <div>
+//           <h2 className="text-lg font-semibold text-slate-900">
+//             Asset Allocation
+//           </h2>
+
+//           <p className="text-[11px] text-slate-500">
+//             All Active Portfolios Breakdown
+//           </p>
+//         </div>
+
+        
+//       </div>
+
+//       <div className="flex justify-center py-5">
+//         <div
+//           className="relative flex h-[155px] w-[155px] items-center justify-center rounded-full"
+//           style={{
+//             background:
+//               "conic-gradient(#123b9d 0deg 223deg, #4169c9 223deg 288deg, #59657a 288deg 331deg, #d97706 331deg 360deg)",
+//           }}
+//         >
+//           <div className="flex h-[105px] w-[105px] flex-col items-center justify-center rounded-full bg-white">
+//             <span className="text-[9px] text-slate-500">TOTAL POOL</span>
+
+//             <strong className="text-lg">₹428.5 Cr</strong>
+
+//             <span className="text-[10px] font-semibold text-emerald-700">
+//               100% Deployed
+//             </span>
+//           </div>
+//         </div>
+//       </div>
+
+
+//       <div className="space-y-4">
+//         {assetAllocation.map((asset, index) => (
+//           <div key={asset.name}>
+//             <div className="flex items-center justify-between text-xs">
+//               <div className="flex items-center gap-2">
+//                 <span
+//                   className={`h-2 w-2 rounded-full ${
+//                     index === 0
+//                       ? "bg-blue-800"
+//                       : index === 1
+//                         ? "bg-blue-500"
+//                         : index === 2
+//                           ? "bg-slate-500"
+//                           : "bg-orange-500"
+//                   }`}
+//                 />
+
+//                 <span className="font-medium text-slate-700">{asset.name}</span>
+//               </div>
+
+//               <div className="text-right">
+//                 <strong>{asset.percentage}%</strong>
+
+//                 <span className="ml-2 text-slate-500">({asset.amount})</span>
+//               </div>
+//             </div>
+
+//             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+//               <div
+//                 className={`h-full ${
+//                   index === 0
+//                     ? "bg-blue-800"
+//                     : index === 1
+//                       ? "bg-blue-500"
+//                       : index === 2
+//                         ? "bg-slate-500"
+//                         : "bg-orange-500"
+//                 }`}
+//                 style={{
+//                   width: `${asset.percentage}%`,
+//                 }}
+//               />
+//             </div>
+//           </div>
+//         ))}
+//       </div>
+//     </div>
+//   );
+// };
+
+const AssetAllocationCard = ({ aum, assetAllocation }) => {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between">
@@ -616,13 +638,10 @@ const AssetAllocationCard = () => {
           <h2 className="text-lg font-semibold text-slate-900">
             Asset Allocation
           </h2>
-
           <p className="text-[11px] text-slate-500">
             All Active Portfolios Breakdown
           </p>
         </div>
-
-        <RefreshCw size={18} className="text-slate-500" />
       </div>
 
       <div className="flex justify-center py-5">
@@ -636,7 +655,9 @@ const AssetAllocationCard = () => {
           <div className="flex h-[105px] w-[105px] flex-col items-center justify-center rounded-full bg-white">
             <span className="text-[9px] text-slate-500">TOTAL POOL</span>
 
-            <strong className="text-lg">₹428.5 Cr</strong>
+            <strong className="text-lg">
+              ₹{(aum ?? 0).toLocaleString("en-IN")}
+            </strong>
 
             <span className="text-[10px] font-semibold text-emerald-700">
               100% Deployed
@@ -645,9 +666,8 @@ const AssetAllocationCard = () => {
         </div>
       </div>
 
-
       <div className="space-y-4">
-        {assetAllocation.map((asset, index) => (
+        {(assetAllocation ?? []).map((asset, index) => (
           <div key={asset.name}>
             <div className="flex items-center justify-between text-xs">
               <div className="flex items-center gap-2">
@@ -662,13 +682,11 @@ const AssetAllocationCard = () => {
                           : "bg-orange-500"
                   }`}
                 />
-
                 <span className="font-medium text-slate-700">{asset.name}</span>
               </div>
 
               <div className="text-right">
                 <strong>{asset.percentage}%</strong>
-
                 <span className="ml-2 text-slate-500">({asset.amount})</span>
               </div>
             </div>
@@ -684,9 +702,7 @@ const AssetAllocationCard = () => {
                         ? "bg-slate-500"
                         : "bg-orange-500"
                 }`}
-                style={{
-                  width: `${asset.percentage}%`,
-                }}
+                style={{ width: `${asset.percentage}%` }}
               />
             </div>
           </div>
@@ -695,7 +711,6 @@ const AssetAllocationCard = () => {
     </div>
   );
 };
-
 
 
 const DriftMonitoringCard = () => {
@@ -793,73 +808,54 @@ const DriftMonitoringCard = () => {
 
 
 
-const MarketPulseCard = () => {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">Market Pulse</h2>
-
-          <p className="text-[11px] text-slate-500">
-            Real-Time Benchmark Feeds
-          </p>
-        </div>
-
-        <span className="rounded bg-emerald-100 px-2 py-1 text-[9px] font-bold text-emerald-700">
-          ● LIVE
-        </span>
-      </div>
-
-      <div className="mt-4 space-y-2">
-        {marketPulse.map((item) => (
-          <div
-            key={item.name}
-            className="flex items-center justify-between rounded bg-blue-50 px-3 py-2.5"
-          >
-            <div>
-              <div className="text-xs font-semibold text-slate-800">
-                {item.name}
-              </div>
-
-              <div className="text-[8px] text-slate-500">
-                {item.description}
-              </div>
-            </div>
-
-            <div className="text-right">
-              <div className="font-mono text-xs font-semibold text-slate-800">
-                {item.value}
-              </div>
-
-              <div
-                className={`text-[9px] font-semibold ${
-                  item.change.startsWith("-")
-                    ? "text-red-600"
-                    : "text-emerald-700"
-                }`}
-              >
-                {item.change}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <button className="mt-3 flex w-full items-center justify-center gap-2 rounded bg-blue-50 py-2 text-xs font-medium text-slate-700 hover:bg-blue-100">
-        <Activity size={14} />
-        Launch Advanced Market Terminal
-      </button>
-    </div>
-  );
-};
 
 
 const DashboardPage = () => {
   const [portfolioIndex, setPortfolioIndex] = useState(0);
+  const [portfolioCount, setPortfolioCount] = useState(null);
+  const [activeCount, setActiveCount] = useState(null);
+  const [aum, setAum] = useState(0);
+  const [assetAllocation, setAssetAllocation] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+
+  const userId = localStorage.getItem('userId');
+
 
   const selectedPortfolio = portfolioComparisons[portfolioIndex];
 
   const navigate = useNavigate();
+
+    useEffect(() => {
+    if (!userId) return; // no user yet, skip the call
+
+    let cancelled = false;
+
+    async function load() {
+      const [total, active, portfolioResp] = await Promise.all([
+        getCountOfPortfolios(userId),
+        getCountOfActivePortfolios(userId),
+        getAllPortfolioDetails(userId),
+      ]);
+
+      if (cancelled) return;
+
+      const portfolio = portfolioResp?.data?.portfolioDetailsDTOList?.[0];
+
+      if (!cancelled) {
+        setPortfolioCount(total);
+        setActiveCount(active);
+        setAum(portfolio?.aum ?? 0);
+        setAssetAllocation(portfolio?.assetAllocation ?? []);
+      }
+    }
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   const goPrevious = () => {
     setPortfolioIndex((current) => Math.max(0, current - 1));
@@ -870,6 +866,10 @@ const DashboardPage = () => {
       Math.min(portfolioComparisons.length - 1, current + 1),
     );
   };
+
+  
+
+  
 
   return (
     <div className="min-h-screen bg-[#f5f7fc]">
@@ -905,11 +905,7 @@ const DashboardPage = () => {
             </div>
 
             <div className="flex gap-2">
-              <button className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm">
-                <Download size={15} />
-                Export Report
-              </button>
-
+             
               <button 
               onClick={() => navigate("/create-portfolio")}
               className="flex items-center gap-2 rounded-md bg-blue-800 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-900">
@@ -923,34 +919,28 @@ const DashboardPage = () => {
           <div className="mt-5 grid grid-cols-5 gap-3">
             <KpiCard
               title="Total Portfolios"
-              value="18"
-              subtitle="14 Active • 2 Draft • 2 Drift"
+               value={portfolioCount === null ? "..." : String(portfolioCount)}
+             
               icon={Building2}
             />
 
             <KpiCard
               title="Active Mandates"
-              value="14"
-              subtitle="+2 mandates vs last month"
+              value={activeCount === null ? "..." : String(activeCount)}
+             
               icon={ShieldCheck}
               positive
             />
 
-            <KpiCard
-              title="Total Assets (AUM)"
-              value="₹ 428.50 Cr"
-              subtitle="+14.2% YTD (₹ 53.2 Cr)"
-              icon={PieChart}
-              positive
-            />
+          
 
-            <KpiCard
+            {/* <KpiCard
               title="Average Return"
               value="18.4%"
               subtitle="+2.3% Alpha vs NIFTY 50"
               icon={TrendingUp}
               positive
-            />
+            /> */}
 
             <KpiCard
               title="Rebalance Drift"
@@ -978,9 +968,10 @@ const DashboardPage = () => {
 
      
             <div className="space-y-5">
-              <AssetAllocationCard />
+              <AssetAllocationCard  aum={aum}
+                assetAllocation={assetAllocation}/>
 
-              <MarketPulseCard />
+              
             </div>
           </div>
         </div>
