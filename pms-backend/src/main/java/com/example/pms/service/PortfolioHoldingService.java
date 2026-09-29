@@ -1,7 +1,9 @@
 package com.example.pms.service;
 
 import com.example.pms.dto.request.AddPortfolioHoldingDTO;
+import com.example.pms.dto.request.BuyHoldingDTO;
 import com.example.pms.dto.request.CreatePortfolioDTO;
+import com.example.pms.dto.request.SellHoldingDTO;
 import com.example.pms.model.PortfolioHolding;
 
 public interface PortfolioHoldingService {
@@ -13,4 +15,7 @@ public interface PortfolioHoldingService {
     public Double getTotalCost(PortfolioHolding portfolioHolding);
 
 
+    public String sellHoldingsShare(SellHoldingDTO sellHoldingDTO);
+
+    public String buySecurities(BuyHoldingDTO buyHoldingDTO);
 }

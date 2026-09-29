@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -59,5 +60,21 @@ public class ThemeServiceImpl implements ThemeService{
     @Override
     public List<Theme> getAllThemes() {
         return themeRepository.findAll();
+    }
+
+    @Override
+    public Boolean validateTheme(Integer id, Map<String, Double> percentageMap) {
+        if(themeRepository.existsById(id)){
+            Theme theme = themeRepository.findById(id).get();
+            for(AllocationRule allocationRule:theme.getAllocationRuleList()){
+                Double drift = percentageMap.get(allocationRule.getAsset().getAssetClass()) - allocationRule.getPercentage();
+                if(drift>=5){
+                    return false;
+                }
+            }
+        }else{
+            throw new ThemeNotFoundException();
+        }
+        return true;
     }
 }

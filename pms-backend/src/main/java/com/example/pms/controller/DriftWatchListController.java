@@ -27,4 +27,10 @@ public class DriftWatchListController {
         return ResponseEntity.ok(new Response(HttpStatus.OK.value(), true,null,driftWatchListService.performPortfolioDriftCalculation(portfolioId, userId), LocalDateTime.now()));
     }
 
+    @GetMapping("/trigger")
+    public String triggerDriftCalculation(){
+        driftWatchListService.doDriftCalculation();
+        return "Triggered.";
+    }
+
 }

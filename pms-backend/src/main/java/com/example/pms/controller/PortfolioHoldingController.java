@@ -1,7 +1,9 @@
 package com.example.pms.controller;
 
 import com.example.pms.dto.request.AddPortfolioHoldingDTO;
+import com.example.pms.dto.request.BuyHoldingDTO;
 import com.example.pms.dto.request.CreatePortfolioDTO;
+import com.example.pms.dto.request.SellHoldingDTO;
 import com.example.pms.response.Response;
 import com.example.pms.service.PortfolioHoldingService;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +26,16 @@ public class PortfolioHoldingController {
     @PostMapping("/add-holding")
     public ResponseEntity<?> addHolding(@RequestBody AddPortfolioHoldingDTO addPortfolioHoldingDTO){
         return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(),true,null,portfolioHoldingService.addPortfolioHolding(addPortfolioHoldingDTO), LocalDateTime.now()));
+    }
+
+    @PostMapping("/sell")
+    public ResponseEntity<?> sellHoldingsShares(@RequestBody SellHoldingDTO sellHoldingDTO){
+        return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(),true,null,portfolioHoldingService.sellHoldingsShare(sellHoldingDTO),LocalDateTime.now()));
+    }
+
+    @PostMapping("/buy")
+    public ResponseEntity<?> buyHoldings(@RequestBody BuyHoldingDTO buyHoldingDTO){
+        return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(),true,null,))
     }
 
 }

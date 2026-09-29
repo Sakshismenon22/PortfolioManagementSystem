@@ -10,4 +10,6 @@ public interface SecurityMasterService {
 
     public SecuritiesInfoDTO getAllSecuritiesInfo();
 
+    public Double getCurrentPrice(Long securityId);
+
 }
