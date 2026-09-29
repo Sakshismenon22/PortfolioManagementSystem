@@ -41,7 +41,6 @@ const RISK_OPTIONS = [
   },
 ];
 
-
 const HORIZON_OPTIONS = [
   {
     value: "SHORT",
@@ -65,9 +64,7 @@ const HORIZON_OPTIONS = [
   },
 ];
 
-
 const CreateThemePage = () => {
-
   const [activePage, setActivePage] = useState("Themes");
 
   const [theme, setTheme] = useState({
@@ -110,7 +107,6 @@ const CreateThemePage = () => {
    * Therefore the actual array is response.data.
    */
   const loadAssets = async () => {
-
     try {
 
       const response = await getAllAssets();
@@ -133,60 +129,48 @@ const CreateThemePage = () => {
 
       setAssets(uniqueAssets);
 
-    } catch (error) {
+      const response = await getAllSecuritiesInfo();
 
+      /*
+       * Adjust this depending on the exact response structure
+       * returned by your backend.
+       */
+      const securities = response?.data?.securities ?? [];
+
+      setAssets(securities);
+    } catch (error) {
       console.error("Failed to load assets:", error);
 
       toast.error("Unable to load assets.");
-
     }
-
   };
 
-
   const totalAllocation = useMemo(() => {
-
     return allocations.reduce(
-      (total, allocation) =>
-        total + Number(allocation.percentage || 0),
-      0
+      (total, allocation) => total + Number(allocation.percentage || 0),
+      0,
     );
-
   }, [allocations]);
 
-
-  const remainingAllocation =
-    100 - totalAllocation;
-
+  const remainingAllocation = 100 - totalAllocation;
 
   const isValidAllocation =
     totalAllocation === 100 &&
     allocations.length > 0 &&
     allocations.every(
       (allocation) =>
-        allocation.assetId !== "" &&
-        Number(allocation.percentage) > 0
+        allocation.assetId !== "" && Number(allocation.percentage) > 0,
     );
 
-
   const handleThemeChange = (field, value) => {
-
     setTheme((previous) => ({
       ...previous,
       [field]: value,
     }));
-
   };
 
-
-  const handleAllocationChange = (
-    index,
-    field,
-    value
-  ) => {
-
+  const handleAllocationChange = (index, field, value) => {
     setAllocations((previous) => {
-
       const updated = [...previous];
 
       updated[index] = {
@@ -195,14 +179,10 @@ const CreateThemePage = () => {
       };
 
       return updated;
-
     });
-
   };
 
-
   const addAllocation = () => {
-
     setAllocations((previous) => [
       ...previous,
       {
@@ -210,24 +190,15 @@ const CreateThemePage = () => {
         percentage: "",
       },
     ]);
-
   };
-
 
   const removeAllocation = (index) => {
-
     setAllocations((previous) =>
-      previous.filter(
-        (_, allocationIndex) =>
-          allocationIndex !== index
-      )
+      previous.filter((_, allocationIndex) => allocationIndex !== index),
     );
-
   };
 
-
   const handleCreateTheme = async () => {
-
     if (!theme.name.trim()) {
       toast.error("Please enter a theme name.");
       return;
@@ -245,18 +216,15 @@ const CreateThemePage = () => {
 
     if (!isValidAllocation) {
       toast.error(
-        "Allocation must contain valid assets and total exactly 100%."
+        "Allocation must contain valid assets and total exactly 100%.",
       );
       return;
     }
 
-
     /*
      * Get logged-in user's ID.
      */
-    const userId =
-      Number(localStorage.getItem("userId")) || 1;
-
+    const userId = Number(localStorage.getItem("userId")) || 1;
 
     /*
      * Payload expected by AddThemeDTO
@@ -282,28 +250,25 @@ const CreateThemePage = () => {
           ),
 
         })),
+      investmentHorizon: theme.investmentHorizon,
+
+      allocationRuleList: allocations.map((allocation) => ({
+        assetId: Number(allocation.assetId),
+        percentage: Number(allocation.percentage),
+      })),
 
       userId,
 
     };
 
-
     try {
-
       setLoading(true);
 
-      console.log(
-        "Create Theme Payload:",
-        payload
-      );
+      console.log("Create Theme Payload:", payload);
 
-      const response =
-        await createTheme(payload);
+      const response = await createTheme(payload);
 
-      console.log(
-        "Create Theme Response:",
-        response
-      );
+      console.log("Create Theme Response:", response);
 
       toast.success(
         "Theme created successfully."
@@ -328,260 +293,142 @@ const CreateThemePage = () => {
           percentage: "",
         },
       ]);
-
     } catch (error) {
+      console.error("Create theme failed:", error);
 
-      console.error(
-        "Create theme failed:",
-        error
-      );
-
-      toast.error(
-        "Failed to create theme."
-      );
-
+      toast.error("Failed to create theme.");
     } finally {
-
       setLoading(false);
-
     }
-
   };
-
 
   return (
     <div className="min-h-screen bg-[#f6f8fd]">
-
-      <SideBarComponent
-        activePage={activePage}
-        setActivePage={setActivePage}
-      />
-
+      <SideBarComponent activePage={activePage} setActivePage={setActivePage} />
 
       <div className="ml-[257px] min-h-screen">
-
         <TopBarComponent />
 
-
         <main className="px-5 py-4">
-
-          {/* HEADER */}
-
           <div className="flex items-end justify-between">
-
             <div>
-
               <div className="mb-2 text-[11px] font-bold tracking-wider text-slate-500">
-
                 PORTFOLIO MANAGEMENT SYSTEM
-
-                <span className="mx-1">
-                  •
-                </span>
-
-                <span className="text-blue-700">
-                  THEME CONFIGURATION
-                </span>
-
+                <span className="mx-1">•</span>
+                <span className="text-blue-700">THEME CONFIGURATION</span>
               </div>
-
 
               <h1 className="text-2xl font-semibold text-slate-900">
                 Create Investment Theme
               </h1>
 
-
               <p className="mt-1 max-w-[550px] text-sm leading-5 text-slate-500">
-
-                Define a reusable investment strategy
-                with risk parameters, investment horizon,
-                and target asset allocation.
-
+                Define a reusable investment strategy with risk parameters,
+                investment horizon, and target asset allocation.
               </p>
-
             </div>
-
 
             <button
               onClick={() =>
                 navigate("/home")
               }
+              onClick={() => window.history.back()}
               className="flex items-center gap-2 rounded-md bg-[#edf3fd] px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-[#e4ebf8]"
             >
-
               <ArrowLeft size={16} />
-
               Back
-
             </button>
-
           </div>
 
-
-          {/* BASIC INFORMATION */}
-
           <div className="mt-5 rounded-xl border border-slate-200 bg-white p-5">
-
             <div className="mb-5 flex items-center gap-3">
-
               <div className="flex h-8 w-8 items-center justify-center rounded-md bg-blue-100 text-blue-700">
-
                 <TrendingUp size={17} />
-
               </div>
 
-
               <div>
-
                 <h2 className="text-lg font-semibold text-slate-900">
                   Basic Information
                 </h2>
 
                 <p className="text-xs text-slate-500">
-                  Define the identity and investment characteristics of the theme.
+                  Define the identity and investment characteristics of the
+                  theme.
                 </p>
-
               </div>
-
             </div>
 
-
             <div className="grid grid-cols-3 gap-5">
-
-              {/* THEME NAME */}
-
               <div className="col-span-1">
-
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-
                   Theme Name
-
                 </label>
-
 
                 <input
                   type="text"
                   value={theme.name}
                   onChange={(event) =>
-                    handleThemeChange(
-                      "name",
-                      event.target.value
-                    )
+                    handleThemeChange("name", event.target.value)
                   }
                   placeholder="e.g. Aggressive Growth"
                   className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 />
-
               </div>
 
-
-              {/* RISK */}
-
               <div>
-
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-
                   Risk Profile
-
                 </label>
-
 
                 <select
                   value={theme.risk}
                   onChange={(event) =>
-                    handleThemeChange(
-                      "risk",
-                      event.target.value
-                    )
+                    handleThemeChange("risk", event.target.value)
                   }
                   className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 >
-
-                  <option value="">
-                    Select Risk
-                  </option>
+                  <option value="">Select Risk</option>
 
                   {RISK_OPTIONS.map((risk) => (
-
-                    <option
-                      key={risk.value}
-                      value={risk.value}
-                    >
+                    <option key={risk.value} value={risk.value}>
                       {risk.label}
                     </option>
-
                   ))}
-
                 </select>
-
               </div>
 
-
-              {/* HORIZON */}
-
               <div>
-
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-
                   Investment Horizon
-
                 </label>
-
 
                 <select
                   value={theme.investmentHorizon}
                   onChange={(event) =>
-                    handleThemeChange(
-                      "investmentHorizon",
-                      event.target.value
-                    )
+                    handleThemeChange("investmentHorizon", event.target.value)
                   }
                   className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 >
+                  <option value="">Select Horizon</option>
 
-                  <option value="">
-                    Select Horizon
-                  </option>
-
-                  {HORIZON_OPTIONS.map(
-                    (horizon) => (
-
-                      <option
-                        key={horizon.value}
-                        value={horizon.value}
-                      >
-                        {horizon.label}
-                      </option>
-
-                    )
-                  )}
-
+                  {HORIZON_OPTIONS.map((horizon) => (
+                    <option key={horizon.value} value={horizon.value}>
+                      {horizon.label}
+                    </option>
+                  ))}
                 </select>
-
               </div>
-
             </div>
-
           </div>
 
-
-          {/* ALLOCATION RULES */}
-
           <div className="mt-5 rounded-xl border border-slate-200 bg-white p-5">
-
             <div className="mb-5 flex items-center justify-between">
-
               <div className="flex items-center gap-3">
-
                 <div className="flex h-8 w-8 items-center justify-center rounded-md bg-blue-100 text-blue-700">
-
                   <PieChart size={17} />
-
                 </div>
 
-
                 <div>
-
                   <h2 className="text-lg font-semibold text-slate-900">
                     Asset Allocation
                   </h2>
@@ -589,49 +436,46 @@ const CreateThemePage = () => {
                   <p className="text-xs text-slate-500">
                     Define the target percentage for each asset.
                   </p>
-
                 </div>
-
               </div>
-
 
               <button
                 type="button"
                 onClick={addAllocation}
                 className="flex items-center gap-2 rounded-md bg-blue-800 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-900"
               >
-
                 <Plus size={15} />
-
                 Add Asset
-
               </button>
-
             </div>
-
-
-            {/* TABLE HEADER */}
 
             <div className="grid grid-cols-[2fr_1fr_.5fr] rounded-md bg-[#eff4fc] px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              <div>Asset</div>
 
-              <div>
-                Asset
-              </div>
+              <div>Target Allocation</div>
 
-              <div>
-                Target Allocation
-              </div>
-
-              <div className="text-right">
-                Action
-              </div>
-
+              <div className="text-right">Action</div>
             </div>
 
-
-            {/* ALLOCATION ROWS */}
-
             <div className="divide-y divide-slate-100">
+              {allocations.map((allocation, index) => (
+                <div
+                  key={index}
+                  className="grid grid-cols-[2fr_1fr_.5fr] items-center gap-4 px-4 py-3"
+                >
+                  <div>
+                    <select
+                      value={allocation.assetId}
+                      onChange={(event) =>
+                        handleAllocationChange(
+                          allocation.id,
+                          "assetId",
+                          event.target.value,
+                        )
+                      }
+                      className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    >
+                      <option value="">Select Asset</option>
 
               {allocations.map(
                 (allocation, index) => (
@@ -734,20 +578,55 @@ const CreateThemePage = () => {
 
                     </div>
 
+                      {assets.map((security) => (
+                        <option key={security.id} value={security.id}>
+                          {security.name || security.symbol}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
-                )
-              )}
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={allocation.percentage}
+                      onChange={(event) =>
+                        handleAllocationChange(
+                          index,
+                          "percentage",
+                          event.target.value,
+                        )
+                      }
+                      placeholder="0"
+                      className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 pr-8 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
 
+                    <span className="absolute right-3 top-2 text-sm text-slate-400">
+                      %
+                    </span>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => removeAllocation(index)}
+                      disabled={allocations.length === 1}
+                      className="rounded-md p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
-
 
             {/* ALLOCATION SUMMARY */}
 
             <div className="mt-4 grid grid-cols-3 gap-3">
-
               <div className="rounded-lg bg-[#edf4fc] p-4">
-
                 <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   Total Allocation
                 </div>
@@ -755,12 +634,9 @@ const CreateThemePage = () => {
                 <div className="mt-1 font-mono text-xl font-semibold text-slate-800">
                   {totalAllocation.toFixed(2)}%
                 </div>
-
               </div>
 
-
               <div className="rounded-lg bg-[#edf4fc] p-4">
-
                 <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   Remaining
                 </div>
@@ -776,18 +652,14 @@ const CreateThemePage = () => {
                 >
                   {remainingAllocation.toFixed(2)}%
                 </div>
-
               </div>
 
-
               <div className="rounded-lg bg-[#edf4fc] p-4">
-
                 <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   Validation
                 </div>
 
                 <div className="mt-1 flex items-center gap-2">
-
                   {isValidAllocation ? (
                     <>
 
@@ -795,6 +667,7 @@ const CreateThemePage = () => {
                         size={16}
                         className="text-emerald-700"
                       />
+                      <Check size={16} className="text-emerald-700" />
 
                       <span className="text-sm font-semibold text-emerald-700">
                         Validated
@@ -808,6 +681,7 @@ const CreateThemePage = () => {
                         size={16}
                         className="text-red-600"
                       />
+                      <AlertTriangle size={16} className="text-red-600" />
 
                       <span className="text-sm font-semibold text-red-600">
                         Requires 100%
@@ -815,256 +689,148 @@ const CreateThemePage = () => {
 
                     </>
                   )}
-
                 </div>
-
               </div>
-
             </div>
-
           </div>
-
 
           {/* THEME SUMMARY */}
 
           <div className="mt-5 grid grid-cols-3 gap-4">
-
             {/* SUMMARY */}
 
             <div className="col-span-2 rounded-xl border border-slate-200 bg-white p-5">
-
               <div className="mb-4 flex items-center gap-2">
+                <ShieldCheck size={19} className="text-emerald-700" />
 
-                <ShieldCheck
-                  size={19}
-                  className="text-emerald-700"
-                />
-
-                <h3 className="font-semibold text-slate-900">
-                  Theme Summary
-                </h3>
-
+                <h3 className="font-semibold text-slate-900">Theme Summary</h3>
               </div>
 
-
               <div className="grid grid-cols-3 gap-5">
-
                 <div>
-
                   <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
                     Theme Name
                   </div>
 
                   <div className="mt-1 text-sm font-semibold text-slate-800">
-                    {theme.name ||
-                      "Not specified"}
+                    {theme.name || "Not specified"}
                   </div>
-
                 </div>
 
-
                 <div>
-
                   <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
                     Risk
                   </div>
 
                   <div className="mt-1">
-
                     {theme.risk ? (
-
                       <span className="rounded bg-[#e7eefb] px-2 py-1 text-[10px] font-bold text-slate-700">
                         {theme.risk}
                       </span>
-
                     ) : (
                       <span className="text-sm text-slate-400">
                         Not selected
                       </span>
                     )}
-
                   </div>
-
                 </div>
 
-
                 <div>
-
                   <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
                     Investment Horizon
                   </div>
 
                   <div className="mt-1 text-sm font-semibold text-slate-800">
-
-                    {theme.investmentHorizon ||
-                      "Not selected"}
-
+                    {theme.investmentHorizon || "Not selected"}
                   </div>
-
                 </div>
-
               </div>
-
             </div>
-
 
             {/* CREATE PANEL */}
 
             <div className="rounded-xl border border-slate-200 bg-white p-5">
-
               <div className="flex items-center gap-2">
+                <ShieldCheck size={20} className="text-emerald-700" />
 
-                <ShieldCheck
-                  size={20}
-                  className="text-emerald-700"
-                />
-
-                <h3 className="font-semibold text-slate-900">
-                  Validation
-                </h3>
-
+                <h3 className="font-semibold text-slate-900">Validation</h3>
               </div>
 
-
               <div className="mt-5 space-y-3">
-
                 <ValidationRow
                   label="Theme Name"
-                  valid={
-                    theme.name.trim() !== ""
-                  }
+                  valid={theme.name.trim() !== ""}
                 />
 
-                <ValidationRow
-                  label="Risk Profile"
-                  valid={
-                    theme.risk !== ""
-                  }
-                />
+                <ValidationRow label="Risk Profile" valid={theme.risk !== ""} />
 
                 <ValidationRow
                   label="Investment Horizon"
-                  valid={
-                    theme.investmentHorizon !== ""
-                  }
+                  valid={theme.investmentHorizon !== ""}
                 />
 
                 <ValidationRow
                   label="Asset Allocation"
-                  valid={
-                    isValidAllocation
-                  }
+                  valid={isValidAllocation}
                 />
-
               </div>
-
 
               <button
                 onClick={handleCreateTheme}
                 disabled={loading}
                 className="mt-6 flex w-full items-center justify-center gap-2 rounded-md bg-blue-800 py-3 text-sm font-semibold text-white hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-60"
               >
+                {loading ? "Creating..." : "Create Theme"}
 
-                {loading
-                  ? "Creating..."
-                  : "Create Theme"}
-
-                {!loading && (
-                  <Check size={16} />
-                )}
-
+                {!loading && <Check size={16} />}
               </button>
-
             </div>
-
           </div>
-
 
           {/* BOTTOM ACTION BAR */}
 
           <div className="mt-5 flex items-center justify-between border-t border-slate-200 pt-4">
-
             <button
-              onClick={() =>
-                window.history.back()
-              }
+              onClick={() => window.history.back()}
               className="flex items-center gap-2 rounded-md bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 ring-1 ring-slate-200"
             >
-
               <ArrowLeft size={16} />
-
               Cancel
-
             </button>
 
-
-            <div className="text-xs text-slate-400">
-              Theme Configuration
-            </div>
-
+            <div className="text-xs text-slate-400">Theme Configuration</div>
 
             <button
               onClick={handleCreateTheme}
               disabled={loading}
               className="flex items-center gap-2 rounded-md bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
             >
-
               Create Theme
-
               <Check size={16} />
-
             </button>
-
           </div>
-
         </main>
-
       </div>
-
     </div>
   );
 };
 
-
-const ValidationRow = ({
-  label,
-  valid,
-}) => {
-
+const ValidationRow = ({ label, valid }) => {
   return (
-
     <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-
-      <span className="text-xs text-slate-600">
-        {label}
-      </span>
-
+      <span className="text-xs text-slate-600">{label}</span>
 
       <span
         className={`flex items-center gap-1 text-[10px] font-semibold ${
-          valid
-            ? "text-emerald-700"
-            : "text-red-600"
+          valid ? "text-emerald-700" : "text-red-600"
         }`}
       >
+        {valid ? <Check size={13} /> : <AlertTriangle size={13} />}
 
-        {valid ? (
-          <Check size={13} />
-        ) : (
-          <AlertTriangle size={13} />
-        )}
-
-        {valid
-          ? "Validated"
-          : "Required"}
-
+        {valid ? "Validated" : "Required"}
       </span>
-
     </div>
-
   );
-
 };
-
 
 export default CreateThemePage;

@@ -71,4 +71,84 @@ public class PortfolioController {
         return new Response<>(HttpStatus.OK.value(), true, portfolioService.getPortfolioDetails(id, userId), "Portfolio details retrieved", LocalDateTime.now());
     }
 
+    @GetMapping("/basic-info/{id}/{userId}")
+    public ResponseEntity<?> getPortfolioBasicInfo(
+            @PathVariable Long id,
+            @PathVariable Integer userId
+    ) {
+
+        return ResponseEntity.ok(
+                new Response<>(
+                        HttpStatus.OK.value(),
+                        true,
+                        portfolioService.getPortfolioBasicInfo(
+                                id,
+                                userId
+                        ),
+                        "Portfolio basic information retrieved.",
+                        LocalDateTime.now()
+                )
+        );
+    }
+
+    @GetMapping("/theme-allocation/{id}/{userId}")
+    public ResponseEntity<?> getThemeAllocation(
+            @PathVariable Long id,
+            @PathVariable Integer userId
+    ) {
+
+        return ResponseEntity.ok(
+                new Response<>(
+                        HttpStatus.OK.value(),
+                        true,
+                        portfolioService.getThemeAllocation(
+                                id,
+                                userId
+                        ),
+                        "Theme allocation retrieved.",
+                        LocalDateTime.now()
+                )
+        );
+    }
+
+    @GetMapping("/holdings/{id}/{userId}")
+    public ResponseEntity<?> getPortfolioHoldings(
+            @PathVariable Long id,
+            @PathVariable Integer userId
+    ) {
+
+        return ResponseEntity.ok(
+                new Response<>(
+                        HttpStatus.OK.value(),
+                        true,
+                        portfolioService.getPortfolioHoldings(
+                                id,
+                                userId
+                        ),
+                        "Portfolio holdings retrieved.",
+                        LocalDateTime.now()
+                )
+        );
+    }
+
+    @GetMapping("/allocation-validation/{id}/{userId}")
+    public ResponseEntity<?> validatePortfolioAllocation(
+            @PathVariable Long id,
+            @PathVariable Integer userId
+    ) {
+
+        return ResponseEntity.ok(
+                new Response<>(
+                        HttpStatus.OK.value(),
+                        true,
+                        portfolioService.validatePortfolioAllocation(
+                                id,
+                                userId
+                        ),
+                        "Portfolio allocation validation completed.",
+                        LocalDateTime.now()
+                )
+        );
+    }
+
 }

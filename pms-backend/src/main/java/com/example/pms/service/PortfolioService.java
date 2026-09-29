@@ -4,9 +4,10 @@ package com.example.pms.service;
 import com.example.pms.dto.request.CreateAndActivatePortfolioDTO;
 import com.example.pms.dto.request.CreatePortfolioDTO;
 import com.example.pms.dto.request.GetAllPortfolioDTO;
-import com.example.pms.dto.response.GetAllPortfolioResponseDTO;
-import com.example.pms.dto.response.ValidationDTO;
+import com.example.pms.dto.response.*;
 import com.example.pms.model.Portfolio;
+
+import java.util.List;
 
 public interface PortfolioService {
 
@@ -33,6 +34,26 @@ public interface PortfolioService {
 
 
     public Portfolio getPortfolioDetails(Long id, Integer userId);
+
+    PortfolioBasicInfoDTO getPortfolioBasicInfo(
+            Long portfolioId,
+            Integer userId
+    );
+
+    ThemeAllocationDTO getThemeAllocation(
+            Long portfolioId,
+            Integer userId
+    );
+
+    List<PortfolioHoldingDTO> getPortfolioHoldings(
+            Long portfolioId,
+            Integer userId
+    );
+
+    AllocationValidationDTO validatePortfolioAllocation(
+            Long portfolioId,
+            Integer userId
+    );
 
 
 }

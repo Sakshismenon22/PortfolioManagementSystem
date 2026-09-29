@@ -18,7 +18,7 @@ function App() {
           <Route path="/register" element={<RegisterPage/>}/>
           <Route path="/portfolio" element={<PortfolioPage/>}/>
           <Route path="/create-portfolio" element={<CreatePortfolioPage/>}/>
-          <Route path="/portfolio-details" element={<PortfolioDetailsPage/>}/>
+          <Route path="/portfolio/:id" element={<PortfolioDetailsPage/>}/>
           <Route path="/home" element={<DashboardPage/>}/>
           <Route path="/create-theme" element={<CreateThemePage />}/>
           <Route path = "/*" element={<Navigate to ="/home" replace />} />
