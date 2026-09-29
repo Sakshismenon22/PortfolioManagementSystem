@@ -1,5 +1,6 @@
 package com.example.pms.model;
 
+import com.example.pms.model.enums.ReBalancingFrequency;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -18,6 +19,8 @@ public class DriftWatchList {
     @GeneratedValue(strategy = GenerationType.AUTO)
     private Integer id;
     private Long portfolioId;
-    private LocalDate driftDetectedAt;
+    private LocalDate nextDriftCalculationDate;
+    private LocalDate lastDriftCalculatedAt;
+    private ReBalancingFrequency reBalancingFrequency;
 
 }

@@ -86,87 +86,9 @@ export const getAllAssets = async() =>{
         return e.response;
     }
 }
-export const createPortfolio = async (portfolio) => {
-  try {
-    const response = await axios.post(
-      `http://localhost:8082/api/portfolio/create-portfolio`,
-      portfolio,
-    );
 
-    return response.data;
-  } catch (error) {
-    return error.data;
-  }
-};
 
-export const createAndActivatePortfolio = async (portfolio) => {
-  try {
-    const response = await axios.post(
-      `http://localhost:8082/api/portfolio/create-and-activate-portfolio`,
-      portfolio,
-    );
 
-    return response.data;
-  } catch (error) {
-    return error.data;
-  }
-};
-
-export const getAllPortfolioDetails = async () => {
-  try {
-    const userId = localStorage.getItem("userId");
-    const response = await axios.post(
-      `http://localhost:8082/api/portfolio/get-all-portfolio`,
-      { userId },
-    );
-
-    return response.data;
-  } catch (error) {
-    return error.data;
-  }
-};
-
-export const getCountOfPortfolios = async (userId) => {
-  try {
-    const response = await axios.get(
-      `http://localhost:8082/api/portfolio/count-portfolio/${userId}`,
-    );
-
-    console.log(response.data);
-
-    return response.data;
-  } catch (error) {
-    return error.data;
-  }
-};
-
-export const getCountOfActivePortfolios = async (userId) => {
-  try {
-    const response = await axios.get(
-      `http://localhost:8082/api/portfolio/count-active/${userId}`,
-    );
-
-    console.log(response.data);
-
-    return response.data;
-  } catch (error) {
-    return error.data;
-  }
-};
-
-export const getTotalRemainingBalance = async (userId) => {
-  try {
-    const response = await axios.get(
-      `http://localhost:8082/api/portfolio/remaining-total/${userId}`,
-    );
-
-    console.log(response.data);
-
-    return response.data;
-  } catch (error) {
-    return error.data;
-  }
-};
 
 const API_URL = "http://localhost:8082/api/portfolio";
 

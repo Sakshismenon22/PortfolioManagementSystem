@@ -60,7 +60,7 @@ public class SecurityMaster {
     @Column(length = 3)
     private String currencyCode;
 
-    @Column(length = 2)
+    @Column(length = 10)
     private String countryCode;
 
     @Column(nullable = false, length = 20)
