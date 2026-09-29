@@ -1,9 +1,11 @@
 package com.example.pms.model;
 
+import com.example.pms.model.enums.HoldingStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.time.LocalDate;
 
@@ -35,6 +37,9 @@ public class PortfolioHolding {
     private LocalDate firstBuyDate;
 
     private LocalDate updatedAt;
+
+    @Enumerated(EnumType.STRING)
+    private HoldingStatus holdingStatus;
 
 
 }

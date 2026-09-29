@@ -12,6 +12,7 @@ import com.example.pms.model.Asset;
 import com.example.pms.model.Portfolio;
 import com.example.pms.model.PortfolioHolding;
 import com.example.pms.model.SecurityMaster;
+import com.example.pms.model.enums.HoldingStatus;
 import com.example.pms.model.enums.SecurityType;
 import com.example.pms.repository.AssetRepository;
 import com.example.pms.repository.PortFolioHoldingRepository;
@@ -45,7 +46,7 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
                     SecurityMaster securityMaster = securityMasterRepository.findById(addPortfolioHoldingDTO.getSecurityMasterId()).get();
 
                     PortfolioHolding portfolioHolding = new PortfolioHolding(null,
-                            portfolio,securityMaster,addPortfolioHoldingDTO.getQuantity(),null,null,asset,null, LocalDate.now());
+                            portfolio,securityMaster,addPortfolioHoldingDTO.getQuantity(),null,null,asset,null, LocalDate.now(), HoldingStatus.ADDED);
                     portfolioHoldingRepository.save(portfolioHolding);
                     return "Portfolio Saved";
                 }else{
@@ -66,6 +67,7 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
                 if(securityMasterRepository.existsById(portfolioHolding.getSecurityMaster().getId())){
                     SecurityType type = portfolioHolding.getSecurityMaster().getSecurityType();
                     LocalDate firstBuyDate = LocalDate.now();
+                    portfolioHolding.setHoldingStatus(HoldingStatus.BROUGHT);
                     switch (type) {
                         case EQUITY, ETF -> {
                             SecurityPriceDTO securityPriceDTO = securityMasterClient.findBySecurityId(portfolioHolding.getSecurityMaster().getId()).get();

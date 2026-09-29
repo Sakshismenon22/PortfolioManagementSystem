@@ -1,15 +1,13 @@
 package com.example.pms.service;
 
 import com.example.pms.client.SecurityMasterClient;
-import com.example.pms.dto.request.CreateAndActivatePortfolioDTO;
-import com.example.pms.dto.request.AddPortfolioHoldingDTO;
-import com.example.pms.dto.request.CreatePortfolioDTO;
-import com.example.pms.dto.request.GetAllPortfolioDTO;
+import com.example.pms.dto.request.*;
 import com.example.pms.dto.response.*;
 import com.example.pms.exception.PortfolioNotFoundException;
 import com.example.pms.exception.ThemeNotFoundException;
 import com.example.pms.exception.UserNotFoundException;
 import com.example.pms.model.*;
+import com.example.pms.model.enums.HoldingStatus;
 import com.example.pms.model.enums.PortfolioStatus;
 import com.example.pms.model.enums.SecurityType;
 import com.example.pms.repository.PortFolioHoldingRepository;
@@ -20,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 
+import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -251,7 +250,9 @@ public class PortfolioServiceImpl implements PortfolioService{
         List<PortfolioHolding> portfolioHoldings = portfolioHoldingRepository.findAllByPortfolio(portfolio);
         Double totalInvestedAmount = 0.0d;
         for (PortfolioHolding portfolioHolding : portfolioHoldings) {
-            totalInvestedAmount += portfolioHolding.getTotalCost();
+            if(portfolioHolding.getHoldingStatus().equals(HoldingStatus.BROUGHT)){
+                totalInvestedAmount += portfolioHolding.getTotalCost();
+            }
         }
         return totalInvestedAmount + portfolio.getAmount();
     }

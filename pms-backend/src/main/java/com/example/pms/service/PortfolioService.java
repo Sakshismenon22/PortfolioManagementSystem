@@ -2,11 +2,13 @@ package com.example.pms.service;
 
 
 import com.example.pms.dto.request.CreateAndActivatePortfolioDTO;
+import com.example.pms.dto.request.CreatePortfolioByDateDTO;
 import com.example.pms.dto.request.CreatePortfolioDTO;
 import com.example.pms.dto.request.GetAllPortfolioDTO;
 import com.example.pms.dto.response.*;
 import com.example.pms.model.Portfolio;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public interface PortfolioService {
@@ -27,8 +29,6 @@ public interface PortfolioService {
     public GetAllPortfolioResponseDTO getAllPortfolioDetails(GetAllPortfolioDTO getAllPortfolioDTO);
 
     public Double getCurrentAum(Portfolio portfolio);
-
-
 
     public Double getTotalRemainingAmount(Integer userId);
 
