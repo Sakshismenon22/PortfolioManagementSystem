@@ -10,13 +10,13 @@ const holdings = [
     portfolioId:      portfolioId,
     securityMasterId: 1,       
     quantity:         175,    
-    assetId:          1
+    assetId:          2
   },
   {
     portfolioId:      portfolioId,
     securityMasterId: 2,       
     quantity:         84,     
-    assetId:          1
+    assetId:          2
   },
 
 

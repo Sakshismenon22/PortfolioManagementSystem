@@ -184,7 +184,7 @@ public class PortfolioServiceImpl implements PortfolioService{
                     Double totalInvestedAmount = getTotalInvestedAmount(portfolio);
                     Double return1Y = currentAum - totalInvestedAmount;
                     Double returnPercent = (return1Y/totalInvestedAmount) * 100;
-                    String returnPercentString = returnPercent<0?"-"+returnPercent+"%":"+"+returnPercent+"%";
+                    String returnPercentString = returnPercent<0?"-"+String.format("%.2f",returnPercent)+"%":"+"+String.format("%.2f",returnPercent)+"%";
 
                     PortfolioDetailsDTO portfolioDetailsDTO = new PortfolioDetailsDTO(
                             portfolio.getId(),

@@ -2,8 +2,11 @@ package com.example.pms.service;
 
 import com.example.pms.client.SecurityMasterClient;
 import com.example.pms.dto.request.AddPortfolioHoldingDTO;
+import com.example.pms.dto.request.BuyHoldingDTO;
 import com.example.pms.dto.request.CreatePortfolioDTO;
+import com.example.pms.dto.request.SellHoldingDTO;
 import com.example.pms.dto.response.SecurityPriceDTO;
+import com.example.pms.dto.response.ValidationDTO;
 import com.example.pms.exception.AssetNotFoundException;
 import com.example.pms.exception.PortfolioHoldingNotFoundException;
 import com.example.pms.exception.PortfolioNotFoundException;
@@ -34,6 +37,8 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
     private final SecurityMasterRepository securityMasterRepository;
     private final PortFolioHoldingRepository portfolioHoldingRepository;
     private final SecurityMasterClient securityMasterClient;
+    private final SecurityMasterService securityMasterService;
+    private final PortfolioService portfolioService;
 
 
     @Override
@@ -175,6 +180,97 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
         }else{
             throw new PortfolioHoldingNotFoundException();
         }
+    }
+
+    @Override
+    public String sellHoldingsShare(SellHoldingDTO sellHoldingDTO) {
+        if(portfolioHoldingRepository.existsById(sellHoldingDTO.getId())){
+            PortfolioHolding portfolioHolding = portfolioHoldingRepository.findById(sellHoldingDTO.getId()).get();
+            if(sellHoldingDTO.getQuantity()<= portfolioHolding.getQuantityHeld()){
+                Integer remainingShares = portfolioHolding.getQuantityHeld() - sellHoldingDTO.getQuantity();
+                Portfolio portfolio = portfolioRepository.findById(portfolioHolding.getPortfolio().getId()).get();
+                SecurityPriceDTO securityPriceDTO = securityMasterClient.findBySecurityId(portfolioHolding.getSecurityMaster().getId()).get();
+                Double soldAmount = 0.0d;
+                Double currentPrice = 0.0d;
+                switch (portfolioHolding.getSecurityMaster().getSecurityType()){
+                    case EQUITY,ETF ->{
+                        currentPrice =  securityPriceDTO.getStockData().getClosePrice().doubleValue();
+                    }
+
+                    case MUTUAL_FUND -> {
+                        currentPrice =  securityPriceDTO.getMutualFundNav().getNav().doubleValue();
+
+                    }
+                    case BOND -> {
+                        currentPrice =  securityPriceDTO.getBond().getFaceValue();
+
+                    }
+                    case COMMODITY -> {
+                        currentPrice =  securityPriceDTO.getCommoditySpotData().getSpotPrice().doubleValue();
+
+                    }
+                }
+                soldAmount = currentPrice * sellHoldingDTO.getQuantity();
+                Double amount = portfolio.getAmount()+soldAmount;
+                portfolioHolding.setQuantityHeld(remainingShares);
+                if(remainingShares>0){
+                    Double totalCost = remainingShares*currentPrice;
+                    Double avg = totalCost/remainingShares;
+                    portfolioHolding.setTotalCost(totalCost);
+                    portfolioHolding.setAverageCost(avg);
+                }else {
+                    portfolioHolding.setTotalCost(0.0d);
+                    portfolioHolding.setAverageCost(0.0d);
+                    portfolioHolding.setHoldingStatus(HoldingStatus.SOLD);
+                }
+                portfolio.setAmount(amount);
+                portfolioHoldingRepository.save(portfolioHolding);
+                portfolioRepository.save(portfolio);
+                return "Sold Securities.";
+            }else{
+                throw new IllegalArgumentException();
+            }
+        }else{
+            throw new PortfolioHoldingNotFoundException();
+        }
+    }
+
+    @Override
+    public String buySecurities(BuyHoldingDTO buyHoldingDTO) {
+        ValidationDTO validationDTO = portfolioService.isValid(buyHoldingDTO.getPortfolioId());
+
+        if(securityMasterRepository.existsById(buyHoldingDTO.getSecurityId())){
+            if(portfolioRepository.existsById(buyHoldingDTO.getPortfolioId())){
+
+                SecurityMaster securityMaster = securityMasterRepository.findById(buyHoldingDTO.getSecurityId()).get();
+
+                Portfolio portfolio = portfolioRepository.findById(buyHoldingDTO.getPortfolioId()).get();
+                Double currentPrice = securityMasterService.getCurrentPrice(buyHoldingDTO.getSecurityId());
+                Double buyAmount = currentPrice * buyHoldingDTO.getQuantity();
+                validationDTO
+                        .getAssetWiseAmount()
+                        .put(securityMaster
+                                        .getAsset()
+                                        .getAssetClass(),
+                                validationDTO.getAssetWiseAmount()
+                                        .getOrDefault(securityMaster.getAsset().getAssetClass(),0.0d)+buyAmount);
+                Double avg = buyAmount/buyHoldingDTO.getQuantity();
+                if(buyAmount<=portfolio.getAmount()){
+                    portfolio.setAmount(portfolio.getAmount()-buyAmount);
+                    PortfolioHolding portfolioHolding = new PortfolioHolding(null,portfolio,securityMaster, buyHoldingDTO.getQuantity(),avg ,buyAmount,securityMaster.getAsset(),LocalDate.now(),LocalDate.now(),HoldingStatus.BROUGHT);
+                    portfolioHoldingRepository.save(portfolioHolding);
+                    portfolioRepository.save(portfolio);
+                    return "Securities Brought";
+                }else{
+                    throw new IllegalArgumentException();
+                }
+            }else{
+                throw new PortfolioNotFoundException();
+            }
+        }else{
+            throw new SecurityNotFoundException();
+        }
+
     }
 }
 

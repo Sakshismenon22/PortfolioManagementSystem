@@ -17,6 +17,6 @@ const buyPortfolioHoldings = async(id) =>{
     }
 }
 
-const resp = await buyPortfolioHoldings(1);
+const resp = await buyPortfolioHoldings(2);
 
 console.log(resp);
