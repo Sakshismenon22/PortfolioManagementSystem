@@ -41,6 +41,15 @@ public class PortfolioServiceImpl implements PortfolioService{
 
     private final AssetRepository assetRepository;
     private final DriftWatchListRepository driftWatchListRepository;
+    private final DriftDetectionRepository driftDetectionRepository;
+    private final SecurityMasterService securityMasterService;
+    private final SecurityMasterRepository securityMasterRepository;
+
+    private static final List<String> DEMO_PORTFOLIO_NAMES = List.of(
+            "DEMO 1Y | Equity overweight",
+            "DEMO 1Y | Commodities overweight",
+            "DEMO 1Y | Balanced control"
+    );
 
 
     @Override
@@ -157,6 +166,99 @@ public class PortfolioServiceImpl implements PortfolioService{
             portfolioHoldingService.addPortfolioHolding(addPortfolioHoldingDTO);
         }
         return buyPortfolioHoldings(portfolio.getId());
+    }
+
+    @Override
+    @Transactional
+    public String createDemoPortfolios(Integer userId) {
+        User user = userRepository.findById(userId).orElseThrow(UserNotFoundException::new);
+        Set<String> existingNames = new HashSet<>();
+        portfolioRepository.findByUserUserId(userId).stream()
+                .map(Portfolio::getName)
+                .filter(DEMO_PORTFOLIO_NAMES::contains)
+                .forEach(existingNames::add);
+
+        Theme theme = themeRepository.findAll().stream()
+                .filter(candidate -> candidate.getAllocationRuleList() != null
+                        && candidate.getAllocationRuleList().stream().anyMatch(rule -> rule.getAsset() != null
+                        && "equity".equalsIgnoreCase(rule.getAsset().getAssetClass()))
+                        && candidate.getAllocationRuleList().stream().anyMatch(rule -> rule.getAsset() != null
+                        && "commodities".equalsIgnoreCase(rule.getAsset().getAssetClass())))
+                .findFirst().orElseThrow(() -> new IllegalArgumentException(
+                        "Create a theme containing Equity and Commodities before adding demo portfolios."));
+        Asset equity = theme.getAllocationRuleList().stream().map(AllocationRule::getAsset)
+                .filter(Objects::nonNull).filter(asset -> "equity".equalsIgnoreCase(asset.getAssetClass())).findFirst().orElseThrow();
+        Asset commodities = theme.getAllocationRuleList().stream().map(AllocationRule::getAsset)
+                .filter(Objects::nonNull).filter(asset -> "commodities".equalsIgnoreCase(asset.getAssetClass())).findFirst().orElseThrow();
+        SecurityMaster equitySecurity = securityMasterRepository.findAll().stream()
+                .filter(security -> "INFY".equalsIgnoreCase(security.getSymbol())).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("INFY demo security is not available."));
+        SecurityMaster commoditySecurity = securityMasterRepository.findAll().stream()
+                .filter(security -> "GOLD".equalsIgnoreCase(security.getSymbol())).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("GOLD demo security is not available."));
+        double equityPrice = securityMasterService.getCurrentPrice(equitySecurity.getId());
+        double commodityPrice = securityMasterService.getCurrentPrice(commoditySecurity.getId());
+        if (equityPrice <= 0 || commodityPrice <= 0) throw new IllegalArgumentException("Live demo security prices are unavailable.");
+
+        LocalDate createdAt = LocalDate.now().minusYears(1);
+        int created = 0;
+        double[][] samples = {{80, 20}, {60, 40}, {70, 30}};
+        for (int index = 0; index < DEMO_PORTFOLIO_NAMES.size(); index++) {
+            String name = DEMO_PORTFOLIO_NAMES.get(index);
+            if (existingNames.contains(name)) continue;
+            int equityQuantity = (int) Math.floor(100_000_000.0 * samples[index][0] / 100 / equityPrice);
+            int commodityQuantity = (int) Math.floor(100_000_000.0 * samples[index][1] / 100 / commodityPrice);
+            double equityCost = equityQuantity * equityPrice;
+            double commodityCost = commodityQuantity * commodityPrice;
+
+            Portfolio portfolio = new Portfolio();
+            portfolio.setName(name);
+            portfolio.setPortfolioType(com.example.pms.model.enums.PortfolioType.WEIGHTAGE);
+            portfolio.setCurrency("INR");
+            portfolio.setBenchmark(com.example.pms.model.enums.Benchmark.NIFTY_50);
+            portfolio.setExchange(com.example.pms.model.enums.Exchange.NSE);
+            portfolio.setTheme(theme);
+            portfolio.setReBalancingFrequency(com.example.pms.model.enums.ReBalancingFrequency.MONTHLY);
+            portfolio.setAmount(0.0);
+            portfolio.setUser(user);
+            portfolio.setPortfolioStatus(PortfolioStatus.ACTIVE);
+            portfolio.setCreatedAt(createdAt);
+            portfolio = portfolioRepository.save(portfolio);
+
+            portfolioHoldingRepository.save(new PortfolioHolding(null, portfolio, equitySecurity, equityQuantity,
+                    equityPrice, equityCost, equity, createdAt, createdAt, HoldingStatus.BROUGHT));
+            portfolioHoldingRepository.save(new PortfolioHolding(null, portfolio, commoditySecurity, commodityQuantity,
+                    commodityPrice, commodityCost, commodities, createdAt, createdAt, HoldingStatus.BROUGHT));
+            driftWatchListRepository.save(DriftSchedule.newWatchList(portfolio, LocalDate.now()));
+
+            double invested = equityCost + commodityCost;
+            for (AllocationRule rule : theme.getAllocationRuleList()) {
+                if (rule.getAsset() == null || rule.getPercentage() == null || invested == 0) continue;
+                double amount = rule.getAsset().getId().equals(equity.getId()) ? equityCost
+                        : rule.getAsset().getId().equals(commodities.getId()) ? commodityCost : 0;
+                double drift = Math.round((amount / invested * 100 - rule.getPercentage()) * 100.0) / 100.0;
+                if (Math.abs(drift) >= 5.0) {
+                    driftDetectionRepository.save(new DriftDetection(null, portfolio.getId(), rule.getAsset().getId(), LocalDate.now(), drift));
+                }
+            }
+            created++;
+        }
+        return created == 0 ? "The three demo portfolios already exist." : "Added " + created + " one-year demo portfolios.";
+    }
+
+    @Override
+    @Transactional
+    public String deleteDemoPortfolios(Integer userId) {
+        userRepository.findById(userId).orElseThrow(UserNotFoundException::new);
+        List<Portfolio> demos = portfolioRepository.findByUserUserId(userId).stream()
+                .filter(portfolio -> DEMO_PORTFOLIO_NAMES.contains(portfolio.getName())).toList();
+        for (Portfolio portfolio : demos) {
+            driftDetectionRepository.deleteByPortfolioId(portfolio.getId());
+            driftWatchListRepository.deleteByPortfolioId(portfolio.getId());
+            portfolioHoldingRepository.deleteAllByPortfolio(portfolio);
+            portfolioRepository.delete(portfolio);
+        }
+        return "Removed " + demos.size() + " demo portfolio(s).";
     }
 
     public Integer getCountOfPortfolios(Integer userId) {
@@ -434,7 +536,10 @@ public class PortfolioServiceImpl implements PortfolioService{
 
         List<PortfolioHolding> holdings =
                 portfolioHoldingRepository
-                        .findAllByPortfolio(portfolio);
+                        .findAllByPortfolio(portfolio).stream()
+                        .filter(h -> h.getHoldingStatus() == HoldingStatus.BROUGHT
+                                && h.getQuantityHeld() != null && h.getQuantityHeld() > 0)
+                        .toList();
 
         // Only active, actually-held positions belong on the portfolio details
         // screen. Sold and not-yet-purchased draft rows are ledger history.
@@ -548,8 +653,8 @@ public class PortfolioServiceImpl implements PortfolioService{
 
         for (PortfolioHolding holding : holdings) {
 
-            Integer assetId =
-                    holding.getAsset().getId();
+            if (holding.getAsset() == null) continue;
+            Integer assetId = holding.getAsset().getId();
 
             Double amount =
                     holding.getTotalCost() != null
@@ -598,11 +703,11 @@ public class PortfolioServiceImpl implements PortfolioService{
                             0.0
                     );
 
+            double allocationCapital = totalInvested + (portfolio.getAmount() == null ? 0.0 : portfolio.getAmount());
             double current =
-                    totalInvested == 0
+                    allocationCapital == 0
                             ? 0.0
-                            : (invested /
-                            totalInvested) * 100;
+                            : (invested / allocationCapital) * 100;
 
             current =
                     Math.round(current * 100.0)

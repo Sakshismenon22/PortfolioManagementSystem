@@ -7,4 +7,6 @@ public interface DriftWatchListRepository extends JpaRepository<DriftWatchList,I
 
     DriftWatchList findAllByPortfolioId(Long id);
 
+    void deleteByPortfolioId(Long id);
+
 }

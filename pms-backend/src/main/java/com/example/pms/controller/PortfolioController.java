@@ -45,6 +45,18 @@ public class PortfolioController {
         return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(),true,null,portfolioService.createAndActivatePortfolio(createAndActivatePortfolioDTO), LocalDateTime.now()));
     }
 
+    @PostMapping("/demo-portfolios/{userId}")
+    public ResponseEntity<?> createDemoPortfolios(@PathVariable Integer userId) {
+        return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(), true, null,
+                portfolioService.createDemoPortfolios(userId), LocalDateTime.now()));
+    }
+
+    @DeleteMapping("/demo-portfolios/{userId}")
+    public ResponseEntity<?> deleteDemoPortfolios(@PathVariable Integer userId) {
+        return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(), true, null,
+                portfolioService.deleteDemoPortfolios(userId), LocalDateTime.now()));
+    }
+
 
     @GetMapping("/count-portfolio/{userId}")
     public Integer getCountOfPortfolios(@PathVariable Integer userId){

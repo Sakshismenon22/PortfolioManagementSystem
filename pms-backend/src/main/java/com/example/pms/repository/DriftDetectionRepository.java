@@ -9,4 +9,6 @@ public interface DriftDetectionRepository extends JpaRepository<DriftDetection,I
 
     List<DriftDetection> findByPortfolioIdOrderByDetectedAtDescIdDesc(Long portfolioId);
 
+    void deleteByPortfolioId(Long portfolioId);
+
 }

@@ -100,6 +100,16 @@ export const getAllAssets = async() =>{
 
 const API_URL = "http://localhost:8082/api/portfolio";
 
+export const createDemoPortfolios = async (userId) => {
+  const response = await axios.post(`${API_URL}/demo-portfolios/${userId}`);
+  return response.data;
+};
+
+export const deleteDemoPortfolios = async (userId) => {
+  const response = await axios.delete(`${API_URL}/demo-portfolios/${userId}`);
+  return response.data;
+};
+
 const getAuthConfig = (token) => ({
   headers: {
     Authorization: `Bearer ${token}`,
@@ -152,11 +162,21 @@ export const buyPortfolioSecurity = async ({ portfolioId, securityId, quantity }
   return response.data;
 };
 
+export const buyPortfolioSecurities = async (orders) => {
+  const response = await axios.post("http://localhost:8082/api/portfolio-holding/buy-batch", orders);
+  return response.data;
+};
+
 export const sellPortfolioHolding = async ({ holdingId, quantity }) => {
   const response = await axios.post("http://localhost:8082/api/portfolio-holding/sell", {
     id: holdingId,
     quantity,
   });
+  return response.data;
+};
+
+export const sellPortfolioHoldings = async (orders) => {
+  const response = await axios.post("http://localhost:8082/api/portfolio-holding/sell-batch", orders);
   return response.data;
 };
 

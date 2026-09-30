@@ -24,6 +24,10 @@ public interface PortfolioService {
 
     public String createAndActivatePortfolio(CreateAndActivatePortfolioDTO createAndActivatePortfolioDTO);
 
+    String createDemoPortfolios(Integer userId);
+
+    String deleteDemoPortfolios(Integer userId);
+
     public Integer getCountOfPortfolios(Integer userId);
 
     public Integer getCountOfActivePortfolios(Integer userId);

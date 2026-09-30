@@ -488,8 +488,8 @@ import {
   getPortfolioBasicInfo,
   getPortfolioHoldings,
   validatePortfolioAllocation,
-  buyPortfolioSecurity,
-  sellPortfolioHolding,
+  buyPortfolioSecurities,
+  sellPortfolioHoldings,
 } from "../services/portfolioService";
 import { getPortfolioDriftHistory } from "../services/driftService";
 import { getAllSecuritiesInfo } from "../services/securityService";
@@ -800,26 +800,6 @@ export default function RebalancingPage() {
           }
           const info = infoResult.status === "fulfilled" ? unwrapData(infoResult.value) : null;
           const history = userId ? await getPortfolioDriftHistory(portfolio.id).catch(() => []) : [];
-          const latestByAsset = new Map();
-          history.forEach((entry) => {
-            if (!latestByAsset.has(entry.assetId)) latestByAsset.set(entry.assetId, entry);
-          });
-          if (validation?.valid === false && Array.isArray(validation.allocations)) {
-            validation = {
-              ...validation,
-              allocations: validation.allocations.map((allocation) => {
-                const saved = latestByAsset.get(allocation.assetId);
-                return saved
-                  ? {
-                      ...allocation,
-                      driftPercentage: saved.driftPercent,
-                      currentPercentage: Number(allocation.targetPercentage || 0) + Number(saved.driftPercent || 0),
-                      driftDetectedAt: saved.detectedAt,
-                    }
-                  : allocation;
-              }),
-            };
-          }
           return {
             portfolio,
             validation,
@@ -963,11 +943,38 @@ export default function RebalancingPage() {
 
   const availableCash = Number(selected?.info?.amount || 0);
 
+  // When several overweight classes are sold together, calculate their shared
+  // sale budget against the post-sale invested total (rather than treating
+  // each sale as if it were the only trade in the basket).
+  const selectedSellClasses = new Map();
+  sellLines.forEach((line) => {
+    const holding = sellableHoldings.find((h) => String(h.holdingId) === String(line.holdingId));
+    const allocation = holding && selectedAllocation.find((a) => Number(a.assetId) === Number(holding.assetId));
+    if (holding && allocation) selectedSellClasses.set(Number(holding.assetId), allocation);
+  });
+  const sellTotalInvested = Number(selected?.validation?.totalInvestedAmount || 0);
+  const sellCapital = sellTotalInvested + availableCash;
+  const sellBudgetByAsset = new Map([...selectedSellClasses.entries()].map(([assetId, allocation]) => [
+    assetId,
+    Math.max(0, sellCapital * (Number(allocation.currentPercentage || 0) - Number(allocation.targetPercentage || 0)) / 100),
+  ]));
+
   // per-line resolver for a sell row
   const sellLineView = (line) => {
     const holding = sellableHoldings.find((h) => String(h.holdingId) === String(line.holdingId));
     const allocation = holding && selectedAllocation.find((a) => Number(a.assetId) === Number(holding.assetId));
-    const maxQuantity = holding ? getMaxSellQuantity(holding, allocation, selected?.validation) : 0;
+    const otherRowsCost = holding ? sellLines
+      .filter((other) => other !== line)
+      .reduce((sum, other) => {
+        const otherHolding = sellableHoldings.find((h) => String(h.holdingId) === String(other.holdingId));
+        return otherHolding && Number(otherHolding.assetId) === Number(holding.assetId)
+          ? sum + Number(otherHolding.averageCost || 0) * Number(other.quantity || 0)
+          : sum;
+      }, 0) : 0;
+    const remainingClassBudget = holding ? Math.max(0, Number(sellBudgetByAsset.get(Number(holding.assetId)) || 0) - otherRowsCost) : 0;
+    const maxQuantity = holding && Number(holding.averageCost) > 0
+      ? Math.min(Number(holding.quantity || 0), Math.floor((remainingClassBudget + 0.01) / Number(holding.averageCost)))
+      : 0;
     const unitPrice =
       holding && Number(holding.quantity) > 0
         ? Number(holding.currentValue || 0) / Number(holding.quantity)
@@ -982,8 +989,14 @@ export default function RebalancingPage() {
     const security = buyableSecurities.find((s) => String(s.id) === String(line.securityId));
     const allocation =
       security && underweightAllocations.find((a) => Number(a.assetId) === Number(security.asset?.id));
+    const otherClassSpend = security ? buyLines.filter((other) => other !== line).reduce((sum, other) => {
+      const otherSecurity = buyableSecurities.find((s) => String(s.id) === String(other.securityId));
+      return otherSecurity && Number(otherSecurity.asset?.id) === Number(security.asset?.id)
+        ? sum + Number(otherSecurity.price || 0) * Number(other.quantity || 0)
+        : sum;
+    }, 0) : 0;
     const maxQuantity = security
-      ? getMaxBuyQuantity(security, allocation, selected?.validation, availableCash)
+      ? getMaxBuyQuantity(security, allocation, selected?.validation, Math.max(0, availableCash - otherClassSpend), availableCash)
       : 0;
     const price = Number(security?.price || 0);
     const qty = Number(line.quantity);
@@ -1029,16 +1042,7 @@ export default function RebalancingPage() {
           seenHoldings.add(String(r.holding.holdingId));
         }
 
-        const outcomes = await Promise.allSettled(
-          rows.map((r) => sellPortfolioHolding({ holdingId: r.holding.holdingId, quantity: r.qty }))
-        );
-        const failed = outcomes.find((o) => o.status === "rejected");
-        if (failed) {
-          const reason = failed.reason;
-          throw new Error(
-            reason?.response?.data?.message || reason?.message || "One or more sell lines were rejected."
-          );
-        }
+        await sellPortfolioHoldings(rows.map((r) => ({ id: r.holding.holdingId, quantity: r.qty })));
         recorded = rows.length;
       } else {
         const rows = buyLines.map(buyLineView);
@@ -1055,18 +1059,11 @@ export default function RebalancingPage() {
           seenSecurity.add(String(r.security.id));
         }
 
-        const outcomes = await Promise.allSettled(
-          rows.map((r) =>
-            buyPortfolioSecurity({ portfolioId: selected.portfolio.id, securityId: r.security.id, quantity: r.qty })
-          )
-        );
-        const failed = outcomes.find((o) => o.status === "rejected");
-        if (failed) {
-          const reason = failed.reason;
-          throw new Error(
-            reason?.response?.data?.message || reason?.message || "One or more buy lines were rejected."
-          );
-        }
+        await buyPortfolioSecurities(rows.map((r) => ({
+          portfolioId: selected.portfolio.id,
+          securityId: r.security.id,
+          quantity: r.qty,
+        })));
         recorded = rows.length;
       }
 
@@ -1669,14 +1666,14 @@ function getMaxSellQuantity(holding, allocation, validation) {
   );
 }
 
-function getMaxBuyQuantity(security, allocation, validation, availableCash) {
-  const total = Number(validation?.totalInvestedAmount || 0);
+function getMaxBuyQuantity(security, allocation, validation, availableCash, portfolioCash = availableCash) {
+  const total = Number(validation?.totalInvestedAmount || 0) + Number(portfolioCash || 0);
   const current = Number(allocation?.currentPercentage || 0);
   const target = Number(allocation?.targetPercentage || 0);
   const price = Number(security?.price || 0);
   if (total <= 0 || price <= 0 || current >= target || target >= 100) return 0;
   const currentClassCost = (total * current) / 100;
   const targetClassCost = (total * target) / 100;
-  const allowedCostIncrease = (targetClassCost - currentClassCost) / (1 - target / 100);
+  const allowedCostIncrease = targetClassCost - currentClassCost;
   return Math.max(0, Math.floor((Math.min(allowedCostIncrease, Number(availableCash || 0)) + 0.01) / price));
 }

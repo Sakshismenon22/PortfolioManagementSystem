@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Building2, Download,
-  Filter, Plus, RefreshCw, Scale, ShieldCheck, WalletCards,
+  Filter, Plus, RefreshCw, Scale, ShieldCheck, WalletCards, Trash2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import SideBarComponent from "../components/SideBarComponent";
@@ -10,6 +10,8 @@ import {
   getAllPortfolioDetails,
   getPortfolioBasicInfo,
   validatePortfolioAllocation,
+  createDemoPortfolios,
+  deleteDemoPortfolios,
 } from "../services/portfolioService";
 
 const PAGE_SIZE = 8;
@@ -27,6 +29,9 @@ const PortfolioPage = () => {
   const [density, setDensity] = useState("dense");
   const [returnSort, setReturnSort] = useState(null);
   const [page, setPage] = useState(1);
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const [demoBusy, setDemoBusy] = useState(false);
+  const [demoMessage, setDemoMessage] = useState("");
   const navigate = useNavigate();
   const userId = localStorage.getItem("userId");
 
@@ -82,7 +87,24 @@ const PortfolioPage = () => {
     }
     load();
     return () => { active = false; };
-  }, [userId]);
+  }, [userId, refreshVersion]);
+
+  const manageDemoPortfolios = async (action) => {
+    if (!userId || demoBusy) return;
+    setDemoBusy(true);
+    setDemoMessage("");
+    try {
+      const response = action === "add"
+        ? await createDemoPortfolios(userId)
+        : await deleteDemoPortfolios(userId);
+      setDemoMessage(response?.message || (action === "add" ? "Demo portfolios added." : "Demo portfolios removed."));
+      setRefreshVersion((value) => value + 1);
+    } catch (demoError) {
+      setDemoMessage(demoError?.response?.data?.message || demoError?.message || "Could not update demo portfolios.");
+    } finally {
+      setDemoBusy(false);
+    }
+  };
 
   const counts = useMemo(() => ({
     All: portfolios.length,
@@ -154,11 +176,14 @@ const PortfolioPage = () => {
               <h1 className="text-2xl font-semibold text-slate-900">Fund Portfolios</h1>
               <p className="mt-1 max-w-xl text-sm leading-5 text-slate-500">Manage mandates, allocation themes, benchmarks, and rebalance actions.</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               <button onClick={exportPortfolios} disabled={!filteredPortfolios.length} className="inline-flex items-center gap-2 rounded-md bg-[#edf3fd] px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-blue-100 disabled:opacity-50"><Download size={16} /> Export Ledger</button>
+              <button onClick={() => manageDemoPortfolios("add")} disabled={demoBusy || !userId} className="inline-flex items-center gap-2 rounded-md border border-blue-200 bg-white px-3 py-2.5 text-sm font-semibold text-blue-800 hover:bg-blue-50 disabled:opacity-50"><Plus size={16} /> {demoBusy ? "Working…" : "Add 3 Demo Portfolios"}</button>
+              <button onClick={() => manageDemoPortfolios("remove")} disabled={demoBusy || !portfolios.some((item) => item.name.startsWith("DEMO 1Y |"))} className="inline-flex items-center gap-2 rounded-md border border-red-200 bg-white px-3 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"><Trash2 size={15} /> Remove Demos</button>
               <button onClick={() => navigate("/create-portfolio")} className="inline-flex items-center gap-2 rounded-md bg-blue-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-900"><Plus size={17} /> Create Portfolio</button>
             </div>
           </section>
+          {demoMessage && <p role="status" className="mt-2 text-xs text-slate-600">{demoMessage}</p>}
 
           <section className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3">
             <div className="flex flex-wrap gap-1.5">
