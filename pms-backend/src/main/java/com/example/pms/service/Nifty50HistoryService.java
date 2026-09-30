@@ -4,10 +4,20 @@ import com.example.pms.dto.response.BenchmarkHistoryPointDTO;
 import javafx.util.converter.LocalDateStringConverter;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
+import java.net.CookieManager;
+import java.net.CookiePolicy;
+import java.net.http.HttpClient;
+import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
@@ -25,7 +35,24 @@ public class Nifty50HistoryService {
             .appendPattern("dd-MMM-yyyy")
             .toFormatter(Locale.ENGLISH);
     private static final DateTimeFormatter QUERY_DATE = DateTimeFormatter.ofPattern("dd-MM-yyyy");
-    private final RestClient restClient = RestClient.create();
+    private final HttpClient client = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofMillis(3000))
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .cookieHandler(new CookieManager(null, CookiePolicy.ACCEPT_ALL))
+            .sslContext(trustAllSslContext()).build();
+    private final JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(client);
+    private final RestClient restClient = RestClient.builder()
+            .requestFactory(factory)
+            .defaultHeader(HttpHeaders.USER_AGENT,
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                            + "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+            .defaultHeader(HttpHeaders.ACCEPT,
+                    "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+            .defaultHeader(HttpHeaders.ACCEPT_LANGUAGE, "en-US,en;q=0.9")
+            .build();
+
+    public Nifty50HistoryService() throws Exception {
+    }
 
     public List<BenchmarkHistoryPointDTO> getHistory(LocalDate from, LocalDate to) {
         if (from == null || to == null || from.isAfter(to)) {
@@ -93,5 +120,18 @@ public class Nifty50HistoryService {
         }
         points.sort(Comparator.comparing(BenchmarkHistoryPointDTO::getDate));
         return points;
+    }
+
+    private SSLContext trustAllSslContext() throws Exception {
+        TrustManager[] trustAll = new TrustManager[]{
+                new X509TrustManager() {
+                    @Override public void checkClientTrusted(X509Certificate[] c, String a) { }
+                    @Override public void checkServerTrusted(X509Certificate[] c, String a) { }
+                    @Override public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+                }
+        };
+        SSLContext ctx = SSLContext.getInstance("TLS");
+        ctx.init(null, trustAll, new SecureRandom());
+        return ctx;
     }
 }
