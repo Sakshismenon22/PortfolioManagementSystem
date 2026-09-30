@@ -1,6 +1,7 @@
 package com.example.pms.service;
 
 import com.example.pms.dto.response.BenchmarkHistoryPointDTO;
+import javafx.util.converter.LocalDateStringConverter;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,8 @@ public class Nifty50HistoryService {
         }
 
         RestClient client = restClient;
+//        LocalDate from2 = LocalDate.of(2025, 9, 30);
+        LocalDate from2 = to.minusYears(1);
         String cookies = "";
         try {
             ResponseEntity<Void> landingPage = client.get()
@@ -55,7 +58,7 @@ public class Nifty50HistoryService {
                         .host("www.nseindia.com")
                         .path("/api/historicalOR/indicesHistory")
                         .queryParam("indexType", "NIFTY 50")
-                        .queryParam("from", from.format(QUERY_DATE))
+                        .queryParam("from", from2.format(QUERY_DATE))
                         .queryParam("to", to.format(QUERY_DATE))
                         .queryParam("csv", "true")
                         .build())

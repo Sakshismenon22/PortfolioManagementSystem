@@ -42,12 +42,12 @@ const SideBarComponent = ({ activePage, setActivePage }) => {
       badge: "2 Alerts",
       path: "/rebalancing",
     },
-    {
-      label: "Notifications",
-      icon: Bell,
-      badge: "3",
-      path: null,
-    },
+    // {
+    //   label: "Notifications",
+    //   icon: Bell,
+    //   badge: "3",
+    //   path: null,
+    // },
   ];
 
   const handleNavigation = (item) => {
@@ -92,7 +92,7 @@ const SideBarComponent = ({ activePage, setActivePage }) => {
   return (
     <aside className="fixed left-0 top-0 flex h-screen w-[257px] flex-col bg-[#22364d] text-white">
 
-      {/* LOGO */}
+      
 
       <div className="flex h-[72px] items-center gap-3 border-b border-white/10 px-6">
 
@@ -117,7 +117,7 @@ const SideBarComponent = ({ activePage, setActivePage }) => {
       </div>
 
 
-      {/* NAVIGATION */}
+    
 
       <nav className="mt-4 space-y-1 px-2">
 
@@ -171,11 +171,11 @@ const SideBarComponent = ({ activePage, setActivePage }) => {
       </nav>
 
 
-      {/* BOTTOM SECTION */}
+  
 
       <div className="mt-auto">
 
-        <div className="mx-4 mb-5 rounded-md border border-white/10 bg-white/5 p-3">
+        {/* <div className="mx-4 mb-5 rounded-md border border-white/10 bg-white/5 p-3">
 
           <div className="mb-1 flex items-center justify-between text-[11px] text-slate-300">
             <span>
@@ -202,10 +202,10 @@ const SideBarComponent = ({ activePage, setActivePage }) => {
             </span>
           </div>
 
-        </div>
+        </div> */}
 
 
-        <div className="border-t border-white/5 px-2 py-2">
+        {/* <div className="border-t border-white/5 px-2 py-2">
 
           <button
             type="button"
@@ -225,7 +225,7 @@ const SideBarComponent = ({ activePage, setActivePage }) => {
             Institutional Support
           </button>
 
-        </div>
+        </div> */}
 
       </div>
 

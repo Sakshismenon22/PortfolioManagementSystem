@@ -12,6 +12,7 @@ import com.example.pms.model.enums.PortfolioStatus;
 import com.example.pms.model.enums.SecurityType;
 import com.example.pms.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +27,7 @@ import java.util.Map;
 import java.time.LocalDate;
 
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PortfolioServiceImpl implements PortfolioService{
@@ -123,10 +125,17 @@ public class PortfolioServiceImpl implements PortfolioService{
                 double pct = (grandTotal == 0) ? 0.0 : (amount / grandTotal) * 100;
                 percentageMap.put(type, Math.round(pct * 100.0) / 100.0);
             });
-
+            log.info("Amount map: "+map.toString());
             List<AllocationRule> allocationRuleList = portfolio.getTheme().getAllocationRuleList();
+            log.info(allocationRuleList.toString());
             for(AllocationRule allocationRule:allocationRuleList){
+                log.info("Percentage Map :"+percentageMap.toString());
                 Double percent = percentageMap.get(allocationRule.getAsset().getId().toString());
+                if(percent==null){
+                    log.info("Percent is null for allocation: "+allocationRule.toString());
+                }else{
+                    log.info("Percent Asset id: "+allocationRule.getAsset().getId().toString());
+                }
                 Double drift = Math.abs(percent-allocationRule.getPercentage());
                 if(drift>=5){
                     return new ValidationDTO(false,map,percentageMap,grandTotal);
