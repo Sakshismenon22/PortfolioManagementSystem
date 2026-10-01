@@ -1725,7 +1725,7 @@ const validateThemeAllocation = () => {
                               <div className="flex justify-between text-xs">
 
                                 <span className="font-semibold">
-                                  {rule.asset.id}
+                                  {rule.asset.assetSubclass}
                                 </span>
 
                                 <span>
