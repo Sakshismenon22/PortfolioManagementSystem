@@ -12,4 +12,6 @@ public interface PortFolioHoldingRepository extends JpaRepository<PortfolioHoldi
 
     List<PortfolioHolding> findAllByPortfolio(Portfolio portfolio);
 
+    void deleteAllByPortfolio(Portfolio portfolio);
+
 }

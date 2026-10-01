@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, AlertTriangle, CalendarDays,
   CheckCircle2, Clock3, Download, Filter, LineChart, Plus, RefreshCw,
-  SlidersHorizontal, TrendingUp, WalletCards,
+  SlidersHorizontal, TrendingUp, WalletCards, Trash2,
 } from "lucide-react";
 import SideBarComponent from "../components/SideBarComponent";
 import TopBarComponent from "../components/TopBarComponent";
@@ -12,7 +12,7 @@ import {
   getPortfolioHoldings,
   getThemeAllocation,
   validatePortfolioAllocation,
-  buyPortfolioSecurity,
+  buyPortfolioSecurities,
 } from "../services/portfolioService";
 import { getAllSecuritiesInfo } from "../services/securityService";
 
@@ -31,8 +31,7 @@ const PortfolioDetailsPage = () => {
   const [assetFilter, setAssetFilter] = useState("ALL");
   const [addOpen, setAddOpen] = useState(false);
   const [securities, setSecurities] = useState([]);
-  const [selectedSecurityId, setSelectedSecurityId] = useState("");
-  const [buyQuantity, setBuyQuantity] = useState("");
+  const [buyOrders, setBuyOrders] = useState([newBuyOrder()]);
   const [addLoading, setAddLoading] = useState(false);
   const [addSubmitting, setAddSubmitting] = useState(false);
   const [addError, setAddError] = useState("");
@@ -87,8 +86,7 @@ const PortfolioDetailsPage = () => {
     setAddOpen(true);
     setAddError("");
     setAddNotice("");
-    setSelectedSecurityId("");
-    setBuyQuantity("");
+    setBuyOrders([newBuyOrder()]);
     setAddLoading(true);
     try {
       const [securityResponse, validationResponse, infoResponse] = await Promise.all([
@@ -108,25 +106,55 @@ const PortfolioDetailsPage = () => {
       setAddLoading(false);
     }
   };
-  const allowedAllocations = (validation?.allocations || []).filter((allocation) =>
-    Number(allocation.targetPercentage) > 0 && Number(allocation.currentPercentage || 0) < Number(allocation.targetPercentage) - 0.0001);
+  const themeAllocations = (validation?.allocations || []).filter((allocation) => Number(allocation.targetPercentage) > 0);
   const eligibleSecurities = securities.filter((security) => Number(security.price) > 0 &&
-    allowedAllocations.some((allocation) => Number(allocation.assetId) === Number(security.asset?.id)));
-  const activeSecurity = eligibleSecurities.find((security) => String(security.id) === String(selectedSecurityId));
-  const activeAllocation = activeSecurity && allowedAllocations.find((allocation) => Number(allocation.assetId) === Number(activeSecurity.asset?.id));
-  const activeHolding = activeSecurity && holdings.find((holding) => Number(holding.securityId) === Number(activeSecurity.id) && Number(holding.quantity) > 0);
-  const maxBuyQuantity = activeSecurity ? getAddMaxQuantity(activeSecurity, activeAllocation, validation, cashBalance) : 0;
-  const parsedBuyQuantity = Number(buyQuantity);
+    themeAllocations.some((allocation) => Number(allocation.assetId) === Number(security.asset?.id)));
+  const basketItems = buyOrders.map((order) => {
+    const security = eligibleSecurities.find((item) => String(item.id) === String(order.securityId));
+    const quantity = Number(order.quantity);
+    const validQuantity = Number.isInteger(quantity) && quantity > 0;
+    return { ...order, security, quantity, validQuantity, amount: security && validQuantity ? Number(security.price) * quantity : 0 };
+  });
+  const basketTotal = basketItems.reduce((sum, item) => sum + item.amount, 0);
+  const basketRowsValid = basketItems.length > 0 && basketItems.every((item) => item.security && item.validQuantity);
+  const projectedAllocations = (validation?.allocations || []).map((allocation) => {
+    const currentAssetCost = holdings.reduce((sum, holding) => sum + (
+      Number(holding.assetId) === Number(allocation.assetId)
+        ? Number(holding.totalCost ?? (Number(holding.averageCost || 0) * Number(holding.quantity || 0)))
+        : 0
+    ), 0);
+    const basketAssetCost = basketItems.reduce((sum, item) => sum + (
+      Number(item.security?.asset?.id) === Number(allocation.assetId) ? item.amount : 0
+    ), 0);
+    const totalAfter = holdingsInvested + basketTotal;
+    const projected = totalAfter > 0 ? Math.round(((currentAssetCost + basketAssetCost) / totalAfter) * 10000) / 100 : 0;
+    const drift = Math.round((projected - Number(allocation.targetPercentage || 0)) * 100) / 100;
+    return { ...allocation, projectedPercentage: projected, projectedDrift: drift, satisfiedAfterBuy: Math.abs(drift) < 5 };
+  });
+  const basketSatisfiesTheme = projectedAllocations.length > 0 && projectedAllocations.every((allocation) => allocation.satisfiedAfterBuy);
+  const basketWithinCash = basketTotal <= cashBalance + 0.01;
+  const basketCanSubmit = basketRowsValid && basketTotal > 0 && basketWithinCash && basketSatisfiesTheme && !addSubmitting;
+
+  const updateBuyOrder = (rowId, field, value) => {
+    setBuyOrders((previous) => previous.map((order) => order.rowId === rowId ? { ...order, [field]: value } : order));
+    setAddError("");
+  };
+  const addBuyOrder = () => setBuyOrders((previous) => [...previous, newBuyOrder()]);
+  const removeBuyOrder = (rowId) => setBuyOrders((previous) => previous.filter((order) => order.rowId !== rowId));
+
   const submitAddSecurity = async (event) => {
     event.preventDefault();
     setAddError("");
-    if (!activeSecurity || !Number.isInteger(parsedBuyQuantity) || parsedBuyQuantity < 1 || parsedBuyQuantity > maxBuyQuantity) {
-      setAddError(`Enter a whole-share quantity from 1 to ${maxBuyQuantity}.`);
-      return;
-    }
+    if (!basketRowsValid) { setAddError("Select a security and enter a positive whole-unit quantity for every row."); return; }
+    if (!basketWithinCash) { setAddError("The total basket cost exceeds the portfolio's available cash."); return; }
+    if (!basketSatisfiesTheme) { setAddError("Adjust the basket so every asset class is within 5 percentage points of its theme target."); return; }
     setAddSubmitting(true);
     try {
-      const result = await buyPortfolioSecurity({ portfolioId, securityId: activeSecurity.id, quantity: parsedBuyQuantity });
+      const result = await buyPortfolioSecurities(basketItems.map((item) => ({
+        portfolioId,
+        securityId: item.security.id,
+        quantity: item.quantity,
+      })));
       if (result?.success === false) throw new Error(result.message || "The purchase was rejected.");
       const [freshPortfolio, freshHoldings, freshValidation, freshTheme] = await Promise.all([
         getPortfolioBasicInfo(portfolioId), getPortfolioHoldings(portfolioId),
@@ -136,7 +164,7 @@ const PortfolioDetailsPage = () => {
       setHoldings(Array.isArray(freshHoldings) ? freshHoldings : []);
       setValidation(freshValidation);
       setThemeAllocation(freshTheme);
-      setAddNotice(result?.message || "Purchase recorded. Cash and holdings have been updated.");
+      setAddNotice(result?.message || `${basketItems.length} security purchase${basketItems.length === 1 ? "" : "s"} recorded. Cash and holdings have been updated.`);
       setAddOpen(false);
     } catch (failure) {
       setAddError(failure?.response?.data?.message || failure?.message || "Could not add this security.");
@@ -266,15 +294,38 @@ const PortfolioDetailsPage = () => {
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-5 py-3 text-[10px] text-slate-500"><span className="inline-flex items-center gap-1.5"><CheckCircle2 size={13} className="text-emerald-600" /> Cost basis uses recorded holding average cost and quantity.</span><span>{visibleHoldings.length} of {holdings.length} holdings</span></div>
           </section>
           {addNotice && <div role="status" className="fixed bottom-5 right-5 z-40 rounded-lg bg-emerald-700 px-4 py-3 text-sm font-medium text-white shadow-lg">{addNotice}</div>}
-          {addOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && !addSubmitting) setAddOpen(false); }}>
-            <section role="dialog" aria-modal="true" aria-labelledby="add-security-title" className="w-full max-w-xl overflow-hidden rounded-xl bg-white shadow-2xl">
-              <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4"><div><h2 id="add-security-title" className="text-lg font-bold">Add to portfolio</h2><p className="mt-1 text-xs text-slate-500">Use available cash to add a theme eligible position or increase an existing one.</p></div><button onClick={() => setAddOpen(false)} disabled={addSubmitting} aria-label="Close" className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100">×</button></div>
-              {addLoading ? <div className="p-8 text-center text-sm text-slate-500">Loading prices and theme capacity…</div> : <form onSubmit={submitAddSecurity} className="space-y-4 p-5">
-                <div className="flex items-center justify-between rounded-lg bg-blue-50 px-3 py-2.5 text-xs"><span className="font-semibold text-slate-600">Available cash</span><strong className="font-mono text-slate-900">{formatMoney(cashBalance)}</strong></div>
-                {allowedAllocations.length > 0 ? <label className="block text-xs font-semibold text-slate-700">Security<select required value={selectedSecurityId} onChange={(event) => { setSelectedSecurityId(event.target.value); setBuyQuantity(""); setAddError(""); }} className="mt-1.5 h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-blue-400"><option value="">Select a security in an underweight theme class</option>{allowedAllocations.map((allocation) => <optgroup key={allocation.assetId} label={`${formatLabel(allocation.assetClass)} · ${Number(allocation.targetPercentage - allocation.currentPercentage).toFixed(2)}% below target`}>{eligibleSecurities.filter((security) => Number(security.asset?.id) === Number(allocation.assetId)).map((security) => { const held = holdings.some((holding) => Number(holding.securityId) === Number(security.id) && Number(holding.quantity) > 0); return <option key={security.id} value={security.id}>{security.name} ({security.symbol || security.isin || "—"}) · {formatMoney(security.price)}{held ? " · add to existing holding" : " · new holding"}</option>; })}</optgroup>)}</select></label> : <div className="rounded-lg bg-emerald-50 p-3 text-xs text-emerald-800">All theme allocation classes are at target or above. No additional buys are currently allowed.</div>}
-                {activeSecurity && <><div className="grid grid-cols-3 gap-2"><OverviewItem label="Asset class" value={formatLabel(activeSecurity.asset?.assetClass)} /><OverviewItem label="Max quantity" value={maxBuyQuantity.toLocaleString("en-IN")} /><OverviewItem label="Position" value={activeHolding ? `Existing · ${Number(activeHolding.quantity).toLocaleString("en-IN")}` : "New"} /></div><label className="block text-xs font-semibold text-slate-700">Buy quantity (whole units)<input required type="number" min="1" max={maxBuyQuantity} step="1" value={buyQuantity} onChange={(event) => setBuyQuantity(event.target.value)} className="mt-1.5 h-11 w-full rounded-md border border-slate-200 px-3 font-mono text-sm outline-none focus:border-blue-400" /></label><div className="flex justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs"><span>Estimated purchase cost</span><strong className="font-mono">{formatMoney(Number(activeSecurity.price) * (Number.isInteger(parsedBuyQuantity) ? parsedBuyQuantity : 0))}</strong></div></>}
-                {addError && <div role="alert" className="rounded-md bg-red-50 px-3 py-2.5 text-xs text-red-700">{addError}</div>}
-                <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><button type="button" onClick={() => setAddOpen(false)} className="rounded-md border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600">Cancel</button><button type="submit" disabled={!activeSecurity || maxBuyQuantity < 1 || !Number.isInteger(parsedBuyQuantity) || parsedBuyQuantity < 1 || parsedBuyQuantity > maxBuyQuantity || addSubmitting} className="rounded-md bg-blue-800 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-50">{addSubmitting ? "Recording purchase…" : "Add security"}</button></div>
+          {addOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-3 sm:p-5" onMouseDown={(event) => { if (event.target === event.currentTarget && !addSubmitting) setAddOpen(false); }}>
+            <section role="dialog" aria-modal="true" aria-labelledby="add-security-title" className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+              <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4"><div><h2 id="add-security-title" className="text-lg font-bold">Build a purchase basket</h2><p className="mt-1 max-w-2xl text-xs text-slate-500">Add several securities at once. We validate the combined quantities against available cash and every theme allocation before recording any purchase.</p></div><button onClick={() => setAddOpen(false)} disabled={addSubmitting} aria-label="Close" className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-40">×</button></div>
+              {addLoading ? <div className="p-10 text-center text-sm text-slate-500">Loading prices and theme capacity…</div> : <form onSubmit={submitAddSecurity} className="flex min-h-0 flex-1 flex-col">
+                <div className="min-h-0 space-y-4 overflow-y-auto p-4 sm:p-5">
+                  <div className="grid gap-2 sm:grid-cols-3"><div className="flex items-center justify-between rounded-lg bg-blue-50 px-3 py-2.5 text-xs"><span className="font-semibold text-slate-600">Available cash</span><strong className="font-mono text-slate-900">{formatMoney(cashBalance)}</strong></div><div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2.5 text-xs"><span className="font-semibold text-slate-600">Basket cost</span><strong className={`font-mono ${basketWithinCash ? "text-slate-900" : "text-red-700"}`}>{formatMoney(basketTotal)}</strong></div><div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2.5 text-xs"><span className="font-semibold text-slate-600">Cash after purchase</span><strong className={`font-mono ${basketWithinCash ? "text-slate-900" : "text-red-700"}`}>{formatMoney(cashBalance - basketTotal)}</strong></div></div>
+
+                  {!eligibleSecurities.length ? <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">No priced securities are available for the asset classes in this theme.</div> : <>
+                    <div className="space-y-2">
+                      {buyOrders.map((order) => {
+                        const item = basketItems.find((candidate) => candidate.rowId === order.rowId);
+                        const usedElsewhere = new Set(buyOrders.filter((candidate) => candidate.rowId !== order.rowId).map((candidate) => String(candidate.securityId)).filter(Boolean));
+                        const selectable = eligibleSecurities.filter((security) => !usedElsewhere.has(String(security.id)) || String(security.id) === String(order.securityId));
+                        const cashForThisRow = cashBalance - basketItems.filter((candidate) => candidate.rowId !== order.rowId).reduce((sum, candidate) => sum + candidate.amount, 0);
+                        const maxQuantity = item?.security ? Math.max(0, Math.floor((cashForThisRow + 0.01) / Number(item.security.price))) : undefined;
+                        return <div key={order.rowId} className="grid gap-2 rounded-lg border border-slate-200 bg-white p-3 md:grid-cols-[minmax(240px,1.8fr)_minmax(130px,.7fr)_minmax(130px,.8fr)_auto] md:items-end">
+                          <label className="block text-[11px] font-semibold text-slate-700">Security<select required value={order.securityId} onChange={(event) => updateBuyOrder(order.rowId, "securityId", event.target.value)} className="mt-1.5 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-xs font-normal outline-none focus:border-blue-400"><option value="">Choose a theme security</option>{themeAllocations.map((allocation) => <optgroup key={allocation.assetId} label={`${formatLabel(allocation.assetClass)} · target ${Number(allocation.targetPercentage).toFixed(1)}%`}>{selectable.filter((security) => Number(security.asset?.id) === Number(allocation.assetId)).map((security) => <option key={security.id} value={security.id}>{security.name} ({security.symbol || security.isin || "—"}) · {formatMoney(security.price)}</option>)}</optgroup>)}</select></label>
+                          <label className="block text-[11px] font-semibold text-slate-700">Quantity<input required type="number" min="1" max={maxQuantity} step="1" value={order.quantity} onChange={(event) => updateBuyOrder(order.rowId, "quantity", event.target.value)} placeholder="Whole units" className="mt-1.5 h-10 w-full rounded-md border border-slate-200 px-3 font-mono text-xs outline-none focus:border-blue-400" /></label>
+                          <div className="rounded-md bg-slate-50 px-3 py-2"><div className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Estimated amount</div><div className="mt-1 truncate font-mono text-xs font-semibold text-slate-800">{item?.security ? formatMoney(item.amount) : "—"}</div>{item?.security && <div className="text-[9px] text-slate-500">{formatLabel(item.security.asset?.assetClass)} · {formatMoney(item.security.price)} / unit</div>}</div>
+                          <button type="button" onClick={() => removeBuyOrder(order.rowId)} disabled={buyOrders.length <= 1 || addSubmitting} aria-label="Remove security row" title="Remove security" className="flex h-10 items-center justify-center rounded-md border border-slate-200 px-3 text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-30"><Trash2 size={15} /></button>
+                        </div>;
+                      })}
+                    </div>
+                  <button type="button" onClick={addBuyOrder} disabled={eligibleSecurities.length <= buyOrders.length || addSubmitting} className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-blue-300 px-3 py-2 text-xs font-semibold text-blue-800 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"><Plus size={14} /> Add another security</button>
+                  </>}
+
+                  {!!projectedAllocations.length && <div className="overflow-hidden rounded-lg border border-slate-200"><div className="border-b border-slate-100 bg-slate-50 px-3 py-2"><h3 className="text-xs font-bold text-slate-800">Projected theme allocation</h3><p className="mt-0.5 text-[10px] text-slate-500">Allocation is calculated across all selected securities together.</p></div><div className="grid gap-2 p-3 sm:grid-cols-2 xl:grid-cols-4">{projectedAllocations.map((allocation) => <div key={allocation.assetId} className={`rounded-md p-3 ${basketRowsValid && allocation.satisfiedAfterBuy ? "bg-emerald-50" : "bg-slate-50"}`}><div className="flex items-center justify-between gap-2 text-[10px] font-semibold text-slate-600"><span>{formatLabel(allocation.assetClass)}</span><span>Target {Number(allocation.targetPercentage).toFixed(1)}%</span></div><div className="mt-1.5 flex items-baseline justify-between gap-2"><strong className="font-mono text-sm text-slate-900">{allocation.projectedPercentage.toFixed(2)}%</strong><span className={`font-mono text-[10px] ${allocation.satisfiedAfterBuy ? "text-emerald-700" : "text-amber-700"}`}>{allocation.projectedDrift > 0 ? "+" : ""}{allocation.projectedDrift.toFixed(2)}%</span></div><div className="mt-2 h-1.5 rounded-full bg-white"><div className={`h-full rounded-full ${allocation.satisfiedAfterBuy ? "bg-emerald-500" : "bg-amber-500"}`} style={{ width: `${Math.max(0, Math.min(100, allocation.projectedPercentage))}%` }} /></div></div>)}</div></div>}
+
+                  <div className={`flex items-start gap-2 rounded-lg p-3 text-xs ${basketRowsValid && basketWithinCash && basketSatisfiesTheme ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"}`}>{basketRowsValid && basketWithinCash && basketSatisfiesTheme ? <CheckCircle2 size={15} className="mt-0.5 shrink-0" /> : <AlertTriangle size={15} className="mt-0.5 shrink-0" />}<span>{!basketRowsValid ? "Choose a security and whole-unit quantity in every row." : !basketWithinCash ? "Reduce quantities so the basket fits the remaining cash." : basketSatisfiesTheme ? "The complete basket satisfies every theme allocation band (±5%)." : "Adjust quantities across the selected asset classes until each projected allocation is within ±5% of its theme target."}</span></div>
+                  {addError && <div role="alert" className="rounded-md bg-red-50 px-3 py-2.5 text-xs text-red-700">{addError}</div>}
+                </div>
+                <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 px-4 py-3 sm:px-5"><button type="button" onClick={() => setAddOpen(false)} disabled={addSubmitting} className="rounded-md border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 disabled:opacity-40">Cancel</button><button type="submit" disabled={!basketCanSubmit || !eligibleSecurities.length} className="rounded-md bg-blue-800 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-50">{addSubmitting ? "Validating & recording…" : `Buy ${basketItems.filter((item) => item.security).length} ${basketItems.filter((item) => item.security).length === 1 ? "security" : "securities"}`}</button></div>
               </form>}
             </section>
           </div>}
@@ -311,15 +362,8 @@ const normalizeAssetClass = (assetClass) => String(assetClass || "OTHER").trim()
 const formatLabel = (value) => String(value ?? "—").replaceAll("_", " ");
 const formatMoney = (value) => value == null || !Number.isFinite(Number(value)) ? "—" : `₹${Number(value).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-function getAddMaxQuantity(security, allocation, validation, cash) {
-  const price = Number(security?.price || 0);
-  const total = Number(validation?.totalInvestedAmount || 0);
-  const target = Number(allocation?.targetPercentage || 0) / 100;
-  const assetCurrent = total * Number(allocation?.currentPercentage || 0) / 100;
-  if (price <= 0 || total <= 0 || target <= 0 || target >= 1) return 0;
-  const classCapacity = Math.max(0, (target * total - assetCurrent) / (1 - target));
-  return Math.max(0, Math.floor((Math.min(classCapacity, Number(cash || 0)) + 0.01) / price));
-}
+let nextBuyOrderId = 0;
+const newBuyOrder = () => ({ rowId: `basket-${++nextBuyOrderId}`, securityId: "", quantity: "" });
 
 function downloadHoldings(rows, name) {
   const columns = ["Security", "Symbol", "Asset class", "Quantity", "Average cost", "Invested value", "Current value", "Return %"];

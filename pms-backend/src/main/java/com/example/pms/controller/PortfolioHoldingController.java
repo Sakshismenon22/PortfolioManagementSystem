@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/portfolio-holding")
@@ -34,10 +35,22 @@ public class PortfolioHoldingController {
         return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(),true,null,portfolioHoldingService.sellHoldingsShare(sellHoldingDTO),LocalDateTime.now()));
     }
 
+    @PostMapping("/sell-batch")
+    public ResponseEntity<?> sellHoldingsBatch(@RequestBody List<SellHoldingDTO> sellHoldingDTOList){
+        return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(),true,null,
+                portfolioHoldingService.sellHoldingsBatch(sellHoldingDTOList),LocalDateTime.now()));
+    }
+
     @PostMapping("/buy")
     public ResponseEntity<?> buyHoldings(@RequestBody BuyHoldingDTO buyHoldingDTO){
         return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(), true, null,
                 portfolioHoldingService.buySecurities(buyHoldingDTO), LocalDateTime.now()));
+    }
+
+    @PostMapping("/buy-batch")
+    public ResponseEntity<?> buyHoldingsBatch(@RequestBody List<BuyHoldingDTO> buyHoldingDTOList){
+        return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(), true, null,
+                portfolioHoldingService.buySecuritiesBatch(buyHoldingDTOList), LocalDateTime.now()));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

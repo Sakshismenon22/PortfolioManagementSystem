@@ -10,6 +10,7 @@ import CreateThemePage from "./pages/CreateThemePage";
 import RebalancingPage from "./pages/RebalancingPage";
 import LoginPage from './pages/LoginPage'
 import SecuritiesPage from './pages/SecuritiesPage'
+import TradeCardComponent from './components/TradeCardComponent'
 
 function App() {
   
@@ -29,6 +30,15 @@ function App() {
           <Route path="/rebalancing" element={<RebalancingPage />}/>
           <Route path = "/*" element={<Navigate to ="/home" replace />} />
           <Route path = "/login" element={<Navigate to ="/login" replace />} />
+          <Route path='/trade' element={<TradeCardComponent
+  portfolioId="PF-1042"
+  securities={[
+    { id: "S1", name: "Reliance Indutries", symbol: "RELIANCE", price: 2871.5 },
+    { id: "S2", name: "Infosys",           symbol: "INFY",   price: 1642.1 },
+  ]}
+  onTrade={(payload) => console.log("Trade submitted:", payload)}
+  onClose={() => setSelected(null)}
+/>}/>
 
         </Routes>
       </BrowserRouter>
