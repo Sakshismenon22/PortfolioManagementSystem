@@ -495,11 +495,11 @@ const PortfolioDetailsPage = () => {
   const basketRowsValid =
     basketItems.length > 0 && basketItems.every((i) => i.security && i.validQuantity);
   const projectedAllocations = (validation?.allocations || []).map((allocation) => {
-    const currentAssetCost = holdings.reduce(
+    const currentAssetValue = holdings.reduce(
       (sum, h) =>
         sum +
         (Number(h.assetId) === Number(allocation.assetId)
-          ? Number(h.totalCost ?? Number(h.averageCost || 0) * Number(h.quantity || 0))
+          ? Number(h.currentValue ?? h.totalCost ?? Number(h.averageCost || 0) * Number(h.quantity || 0))
           : 0),
       0
     );
@@ -508,10 +508,10 @@ const PortfolioDetailsPage = () => {
         sum + (Number(i.security?.asset?.id) === Number(allocation.assetId) ? i.amount : 0),
       0
     );
-    const totalAfter = holdingsInvested + basketTotal;
+    const totalAfter = currentValue;
     const projected =
       totalAfter > 0
-        ? Math.round(((currentAssetCost + basketAssetCost) / totalAfter) * 10000) / 100
+        ? Math.round(((currentAssetValue + basketAssetCost) / totalAfter) * 10000) / 100
         : 0;
     const drift = Math.round((projected - Number(allocation.targetPercentage || 0)) * 100) / 100;
     return {

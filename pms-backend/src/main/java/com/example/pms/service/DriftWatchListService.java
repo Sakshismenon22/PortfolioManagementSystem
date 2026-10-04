@@ -8,13 +8,16 @@ import com.example.pms.exception.UserNotFoundException;
 import com.example.pms.model.Asset;
 import com.example.pms.model.DriftDetection;
 import com.example.pms.model.DriftWatchList;
+import com.example.pms.model.Notification;
 import com.example.pms.model.Portfolio;
 import com.example.pms.model.User;
 import com.example.pms.model.enums.PortfolioStatus;
+import com.example.pms.model.enums.NotificationStatus;
 import com.example.pms.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.Map;
@@ -33,6 +36,7 @@ public class DriftWatchListService {
     private final DriftDetectionRepository driftDetectionRepository;
     private final DriftWatchListRepository driftWatchListRepository;
     private final AssetRepository assetRepository;
+    private final NotificationRepository notificationRepository;
 
     public List<DriftHistoryDTO> getDriftHistory(Long portfolioId, Integer userId) {
         User user = userRepository.findById(userId)
@@ -88,6 +92,7 @@ public class DriftWatchListService {
         }
     }
 
+    @Transactional
     public String performPortfolioDriftCalculation(Long portfolioId,Integer userId){
         AllocationValidationDTO allocationValidationDTO = portfolioService.validatePortfolioAllocation(portfolioId,userId);
         Portfolio portfolio = portfolioRepository.findById(portfolioId)
@@ -97,18 +102,27 @@ public class DriftWatchListService {
             driftWatchListRepository.save(DriftSchedule.newWatchList(portfolio, LocalDate.now()));
         }
         System.out.println(allocationValidationDTO);
-        if(!allocationValidationDTO.getValid()){
-            for(AssetAllocationValidationDTO assetAllocationValidationDTO:allocationValidationDTO.getAllocations()){
-                if (!assetAllocationValidationDTO.getSatisfied()) {
-                    System.out.println(assetAllocationValidationDTO.getAssetClass()+": "+assetAllocationValidationDTO.getDriftPercentage());
-                    DriftDetection driftDetection = new DriftDetection(null,portfolioId,assetAllocationValidationDTO.getAssetId(), LocalDate.now(), assetAllocationValidationDTO.getDriftPercentage());
-                    driftDetectionRepository.save(driftDetection);
-                }
+        for (AssetAllocationValidationDTO allocation : allocationValidationDTO.getAllocations()) {
+            if (allocation.getDriftPercentage() == null
+                    || Math.abs(allocation.getDriftPercentage()) < 5.0) {
+                continue;
             }
-            return "Portfolio Not Valid";
-        }else{
-            return "Portfolio Valid";
+
+            driftDetectionRepository.save(new DriftDetection(
+                    null, portfolioId, allocation.getAssetId(), LocalDate.now(), allocation.getDriftPercentage()));
+
+            String message = allocation.getAssetClass()
+                    + " allocation drift is "
+                    + (allocation.getDriftPercentage() > 0 ? "overweight" : "underweight")
+                    + " by " + Math.abs(allocation.getDriftPercentage())
+                    + "% (threshold: 5%).";
+            if (!notificationRepository.existsByPortfolioIdAndUserUserIdAndMessageAndDate(
+                    portfolioId, userId, message, LocalDate.now())) {
+                notificationRepository.save(new Notification(
+                        null, portfolio, message, NotificationStatus.UNSEEN, LocalDate.now(), portfolio.getUser()));
+            }
         }
+        return allocationValidationDTO.getValid() ? "Portfolio Valid" : "Portfolio Not Valid";
     }
 
 }
