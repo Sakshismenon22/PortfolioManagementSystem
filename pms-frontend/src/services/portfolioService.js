@@ -18,7 +18,7 @@ export const createAndActivatePortfolio = async(portfolio) =>{
         return response.data;
     }
     catch(error){
-        return error.data;
+        return error.response?.data || { success: false, message: error.message || "Portfolio creation failed." };
     }
 }
 

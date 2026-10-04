@@ -1,2508 +1,378 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  ArrowRight,
-  ArrowLeft,
-  Check,
-  ChevronRight,
-  CircleHelp,
-  Edit3,
-  Search,
-  Plus,
-  X,
-  CalendarDays,
-  ShieldCheck,
   AlertTriangle,
-  Building2,
+  ArrowLeft,
+  CheckCircle2,
+  Plus,
+  Search,
+  ShieldCheck,
+  Trash2,
   WalletCards,
-  Scale,
-  TrendingUp,
 } from "lucide-react";
-
+import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 import SideBarComponent from "../components/SideBarComponent";
 import TopBarComponent from "../components/TopBarComponent";
 import { getAllSecuritiesInfo } from "../services/securityService";
-import { useNavigate } from "react-router-dom";
 import { getAllThemes } from "../services/themeService";
-import { toast } from "react-toastify";
 import { createAndActivatePortfolio } from "../services/portfolioService";
 
-
-
-// const themes = [
-//   {
-//     id: 1,
-//     name: "Aggressive Growth",
-//     risk: "HIGH",
-//     investmentHorizon: "LONG_TERM",
-//     allocationRules: [
-//       {
-//         asset: "Stock",
-//         percentage: 60,
-//       },
-//       {
-//         asset: "Mutual Fund",
-//         percentage: 15,
-//       },
-//       {
-//         asset: "ETF",
-//         percentage: 15,
-//       },
-//       {
-//         asset: "Commodity",
-//         percentage: 10,
-//       },
-//     ],
-//   },
-//   {
-//     id: 2,
-//     name: "Balanced Growth",
-//     risk: "MODERATE",
-//     investmentHorizon: "MEDIUM_TERM",
-//     allocationRules: [
-//       {
-//         asset: "Stock",
-//         percentage: 50,
-//       },
-//       {
-//         asset: "Mutual Fund",
-//         percentage: 25,
-//       },
-//       {
-//         asset: "ETF",
-//         percentage: 15,
-//       },
-//       {
-//         asset: "Commodity",
-//         percentage: 10,
-//       },
-//     ],
-//   },
-//   {
-//     id: 3,
-//     name: "Conservative",
-//     risk: "LOW",
-//     investmentHorizon: "SHORT_TERM",
-//     allocationRules: [
-//       {
-//         asset: "Stock",
-//         percentage: 30,
-//       },
-//       {
-//         asset: "Mutual Fund",
-//         percentage: 40,
-//       },
-//       {
-//         asset: "ETF",
-//         percentage: 20,
-//       },
-//       {
-//         asset: "Commodity",
-//         percentage: 10,
-//       },
-//     ],
-//   },
-// ];
-
-// const securities = [
-//   {
-//     id: 1,
-//     symbol: "RELIANCE",
-//     name: "Reliance Industries Ltd",
-//     isin: "INE002A01018",
-//     assetClass: "Stock",
-//     price: 2940.5,
-//   },
-//   {
-//     id: 2,
-//     symbol: "TCS",
-//     name: "Tata Consultancy Services",
-//     isin: "INE467B01029",
-//     assetClass: "Stock",
-//     price: 3920.0,
-//   },
-//   {
-//     id: 3,
-//     symbol: "HDFCBANK",
-//     name: "HDFC Bank Ltd",
-//     isin: "INE040A01034",
-//     assetClass: "Stock",
-//     price: 1530.2,
-//   },
-//   {
-//     id: 4,
-//     symbol: "SBIDIRECT",
-//     name: "SBI Bluechip Direct Growth",
-//     isin: "INF200K01135",
-//     assetClass: "Mutual Fund",
-//     price: 84.2,
-//   },
-//   {
-//     id: 5,
-//     symbol: "NIFTYBEES",
-//     name: "Nippon India Nifty 50 BeES",
-//     isin: "INF204KB14I2",
-//     assetClass: "ETF",
-//     price: 248.1,
-//   },
-//   {
-//     id: 6,
-//     symbol: "GOLDBEES",
-//     name: "Sovereign Gold Bond / Gold",
-//     isin: "INF732E01037",
-//     assetClass: "Commodity",
-//     price: 6420.0,
-//   },
-// ];
-
-const benchmarks = [
-  {
-    id: "NIFTY_50",
-    name: "NIFTY 50",
-    category: "NSE LARGE CAP",
-    description:
-      "National Stock Exchange benchmark tracking 50 premier large-cap companies.",
-    beta: "1.00",
-    return1Y: "+18.4%",
-  },
-  {
-    id: "NIFTY_100",
-    name: "NIFTY 100",
-    category: "NSE BROAD MARKET",
-    description:
-      "Captures top 100 liquid blue-chip companies across multiple sectors.",
-    beta: "1.04",
-    return1Y: "+19.2%",
-  },
-  {
-    id: "NIFTY_500",
-    name: "NIFTY 500",
-    category: "BROAD MULTI-CAP",
-    description:
-      "Covers approximately 96% of free float market capitalization.",
-    beta: "1.08",
-    return1Y: "+22.1%",
-  },
-  {
-    id: "SENSEX",
-    name: "S&P BSE SENSEX",
-    category: "BSE BELLWETHER",
-    description:
-      "Calculated based on well-established and financially sound BSE equities.",
-    beta: "0.98",
-    return1Y: "+17.8%",
-  },
+const FREQUENCIES = [
+  ["DAILY", "Daily"],
+  ["WEEKLY", "Weekly"],
+  ["MONTHLY", "Monthly"],
+  ["QUARTERLY", "Quarterly"],
+  ["SEMI_ANNUAL", "Semi-annual"],
+  ["YEARLY", "Yearly"],
 ];
 
+const formatMoney = (value) =>
+  `₹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
-
+const formatLabel = (value) =>
+  String(value || "—")
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 
 const CreatePortfolioPage = () => {
-
-
-  const [currentStep, setCurrentStep] = useState(1);
-  const [securities,setSecurities] = useState([]);
-  const [themes,setThemes] = useState([]);
-
   const navigate = useNavigate();
-
-  const loadSecurities = async ()=>{
-    const res = await getAllSecuritiesInfo();
-    setSecurities(res.data.securities);
-    console.log(securities);
-  }
-
-  const loadThemes = async ()=>{
-    const res = await getAllThemes();
-    setThemes(res.data);
-    
-    console.log(res.data)
-    
-  }
-  
-
-  useEffect(()=>{
-    loadSecurities();
-    loadThemes();
-  },[]);
-
+  const [securities, setSecurities] = useState([]);
+  const [themes, setThemes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [securitySearch, setSecuritySearch] = useState("");
+  const [selectedSecurities, setSelectedSecurities] = useState([]);
   const [portfolio, setPortfolio] = useState({
     name: "",
     portfolioType: "WEIGHTAGE",
+    amount: "",
     currency: "INR",
     exchange: "NSE",
-    amount: "",
-    theme: null,
-    benchmark: null,
+    themeId: "",
+    benchmark: "NIFTY_50",
     reBalancingFrequency: "MONTHLY",
   });
 
-
-
-  const [selectedSecurities, setSelectedSecurities] =
-    useState([]);
-
-  const [securitySearch, setSecuritySearch] =
-    useState("");
-
-
-  const [selectedTheme, setSelectedTheme] =
-    useState(null);
-
-  
-
-  
-
-
-  const [selectedBenchmark, setSelectedBenchmark] =
-    useState(null);
-
-
-
-  const filteredSecurities = useMemo(() => {
-    if (!securitySearch.trim()) {
-      return securities;
-    }
-
-    const query = securitySearch.toLowerCase();
-
-    return securities.filter(
-      (security) =>
-        security.name?.toLowerCase().includes(query) ||
-        security.symbol?.toLowerCase().includes(query) ||
-        security.isin?.toLowerCase().includes(query)
-    );
-  }, [securities,securitySearch]);
-
-  const quantitiesBySecurityId = useMemo(() => {
-  const result = {};
-  const amount = Number(portfolio.amount) || 0;
-
-  if (!selectedTheme || amount <= 0) {
-    return result;
-  }
-
-  
-  const countByClass = {};
-  selectedSecurities.forEach((sec) => {
-    const cls = sec.asset?.assetClass;
-    if (!cls) return;
-    countByClass[cls] = (countByClass[cls] || 0) + 1;
-  });
-
-  
-  selectedSecurities.forEach((sec) => {
-    const cls = sec.asset?.assetClass;
-    if (!cls) return;
-
-    const themeRule = selectedTheme.allocationRuleList.find(
-      (rule) => rule.asset?.assetClass === cls
-    );
-    if (!themeRule) return;
-
-    const classPercent = Number(themeRule.percentage) || 0;
-    const countInClass = countByClass[cls] || 1;
-
-    
-    const effectivePercent = classPercent / countInClass;
-
-    const amountForSecurity = (amount * effectivePercent) / 100;
-    const price = Number(sec.price) || 0;
-
-    const isCommodity = (sec.asset?.assetSubclass || "")
-      .toLowerCase()
-      .includes("commodity");
-
-    const rawQuantity =
-      price > 0 ? amountForSecurity / price : 0;
-
-    
-    const quantity = isCommodity
-      ? Number(rawQuantity.toFixed(2))
-      : Math.floor(rawQuantity);
-
-    result[sec.id] = {
-      effectivePercent,
-      amount: amountForSecurity,
-      quantity,
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      setLoading(true);
+      setLoadError("");
+      try {
+        const [securityResponse, themeResponse] = await Promise.all([
+          getAllSecuritiesInfo(),
+          getAllThemes(),
+        ]);
+        const securityData = securityResponse?.data?.data ?? securityResponse?.data;
+        const themeData = themeResponse?.data ?? themeResponse;
+        const securityList = securityData?.securities;
+        const themeList = Array.isArray(themeData) ? themeData : themeData?.data;
+        if (!Array.isArray(securityList)) {
+          throw new Error(securityData?.message || "Could not load the security list.");
+        }
+        if (!Array.isArray(themeList)) {
+          throw new Error(themeData?.message || "Could not load the theme list.");
+        }
+        if (active) {
+          setSecurities(securityList);
+          setThemes(themeList.filter((theme) => theme.status !== false));
+        }
+      } catch (error) {
+        if (active) {
+          setLoadError(
+            error?.response?.data?.message || error?.message || "Portfolio setup data could not be loaded."
+          );
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
     };
-  });
+    load();
+    return () => {
+      active = false;
+    };
+  }, []);
 
-  return result;
-}, [selectedSecurities, selectedTheme, portfolio.amount]);
-
-
-
-  const handleBasicInfoChange = (field, value) => {
-    setPortfolio((previous) => ({
-      ...previous,
-      [field]: value,
-    }));
-  };
-
-
-  const handleSelectTheme = (theme) => {
-    setSelectedTheme(theme);
-
-    setPortfolio((previous) => ({
-      ...previous,
-      theme: theme.id,
-    }));
-  };
-
-
- 
-  const handleAddSecurity = (security) => {
-    const alreadyAdded = selectedSecurities.some(
-      (item) => item.id === security.id
-    );
-
-    if (alreadyAdded) {
-      return;
-    }
-
-    setSelectedSecurities((previous) => [
-      ...previous,
-      {
-        ...security,
-        allocation: 0,
-      },
-    ]);
-  };
-
-
-  
-
-  const handleRemoveSecurity = (securityId) => {
-    setSelectedSecurities((previous) =>
-      previous.filter(
-        (security) => security.id !== securityId
-      )
-    );
-  };
-
-
-
-
-  const handleAllocationChange = (
-    securityId,
-    value
-  ) => {
-    setSelectedSecurities((previous) =>
-      previous.map((security) =>
-        security.id === securityId
-          ? {
-              ...security,
-              allocation:
-                Number(value) || 0,
-            }
-          : security
-      )
-    );
-  };
-
-
-
-  const totalAllocation = selectedSecurities.reduce(
-    (total, security) =>
-      total + Number(security.allocation || 0),
-    0
+  const selectedTheme = themes.find((theme) => String(theme.id) === String(portfolio.themeId));
+  const themeRules = selectedTheme?.allocationRuleList || [];
+  const rulesByAssetId = new Map(
+    themeRules.map((rule) => [Number(rule.asset?.id), Number(rule.percentage || 0)])
   );
+  const selectedIds = new Set(selectedSecurities.map((security) => String(security.id)));
 
-
- 
-
-  const getCurrentAssetAllocation = (assetClass) => {
-    return selectedSecurities
+  const eligibleSecurities = useMemo(() => {
+    const allowedAssetIds = new Set(
+      (selectedTheme?.allocationRuleList || [])
+        .filter((rule) => Number(rule.percentage || 0) > 0)
+        .map((rule) => Number(rule.asset?.id))
+    );
+    const query = securitySearch.trim().toLowerCase();
+    return securities
       .filter(
         (security) =>
-          security.asset.assetClass === assetClass
+          Number(security.price) > 0 &&
+          allowedAssetIds.has(Number(security.asset?.id)) &&
+          (!query ||
+            [security.name, security.symbol, security.isin, security.gicsSector]
+              .some((value) => String(value || "").toLowerCase().includes(query)))
       )
-      .reduce(
-        (total, security) =>
-          total +
-          Number(security.allocation || 0),
-        0
-      );
-  };
+      .slice(0, 60);
+  }, [securities, selectedTheme, securitySearch]);
 
+  const allocationsByAssetId = selectedSecurities.reduce((map, security) => {
+    const assetId = Number(security.asset?.id);
+    map.set(assetId, (map.get(assetId) || 0) + Number(security.allocation || 0));
+    return map;
+  }, new Map());
 
-
-
-  const getThemeRule = (assetClass) => {
-    if (!selectedTheme) {
-      return 0;
-    }
-
-    return (
-      selectedTheme.allocationRuleList.find(
-        (rule) =>
-          rule.asset.assetClass === assetClass
-      )?.percentage || 0
-    );
-  };
-
-
-  const isThemeSatisfied = (assetClass) => {
-    return (
-      getCurrentAssetAllocation(assetClass) ===
-      getThemeRule(assetClass)
-    );
-  };
-
-
-
-
-  const themeAllocationValid =
-    selectedTheme &&
-    selectedTheme.allocationRuleList.every(
-      (rule) =>
-        getCurrentAssetAllocation(
-          rule.asset.assetClass
-        ) === rule.percentage
-    );
-
-
-
-
-
-  const goNext = () => {
-    if (currentStep < 6) {
-      setCurrentStep(
-        (previous) => previous + 1
-      );
-    }
-  };
-
-
-  const goPrevious = () => {
-    if (currentStep > 1) {
-      setCurrentStep(
-        (previous) => previous - 1
-      );
-    }
-  };
-
-
-
-  const handleSaveDraft = () => {
-    console.log(
-      "Saving portfolio draft:",
-      {
-        ...portfolio,
-        theme: selectedTheme,
-        benchmark: selectedBenchmark,
-        securities: selectedSecurities,
-      }
-    );
-
-    alert("Portfolio saved as draft.");
-  };
-
-
-const validateThemeAllocation = () => {
-  const themeRules = selectedTheme?.allocationRuleList || [];
-
-  const result = themeRules.map((rule) => {
-    const cls = rule.asset?.assetClass;
-    const rulePercent = Number(rule.percentage) || 0;
-    const currentPercent = getCurrentAssetAllocation(cls);
-
-    const ok = currentPercent === rulePercent;
-
-    return {
-      assetClass: cls,
-      rulePercent,
-      currentPercent,
-      ok,
-    };
+  const selectedAllocationTotal = selectedSecurities.reduce(
+    (total, security) => total + Number(security.allocation || 0),
+    0
+  );
+  const amount = Number(portfolio.amount) || 0;
+  const selectedTotal = selectedSecurities.reduce((total, security) => {
+    const allocatedAmount = (amount * Number(security.allocation || 0)) / 100;
+    return total + allocatedAmount;
+  }, 0);
+  const allocationRows = selectedSecurities.map((security) => {
+    const allocation = Number(security.allocation || 0);
+    const price = Number(security.price || 0);
+    const allocatedAmount = (amount * allocation) / 100;
+    const quantity = price > 0 ? Math.floor(allocatedAmount / price) : 0;
+    return { ...security, allocation, allocatedAmount, quantity };
   });
 
-  const isValid = result.every((r) => r.ok);
-  return { isValid, result };
-};
+  const allocationChecks = themeRules.map((rule) => {
+    const assetId = Number(rule.asset?.id);
+    const target = Number(rule.percentage || 0);
+    const actual = allocationsByAssetId.get(assetId) || 0;
+    return { assetId, name: rule.asset?.assetClass || "Asset class", target, actual, valid: Math.abs(actual - target) < 0.01 };
+  });
+  const themeAllocationValid = allocationChecks.length > 0 && allocationChecks.every((row) => row.valid);
+  const quantitiesValid = allocationRows.length > 0 && allocationRows.every((row) => row.quantity > 0);
 
-  const handleCreateAndActivatePortfolio = async () => {
- 
-  if (!selectedTheme) {
-    toast.err("Please select a theme before creating the portfolio.");
-    return;
-  }
+  const updateField = (field, value) => setPortfolio((current) => ({ ...current, [field]: value }));
 
-  
-  const { isValid, result } = validateThemeAllocation();
-
-  if (!isValid) {
-    const wrong = result
-      .filter((r) => !r.ok)
-      .map(
-        (r) =>
-          `${r.assetClass}: expected ${r.rulePercent}%, got ${r.currentPercent}%`
-      )
-      .join(" | ");
-
-    toast.err(`Theme allocation not satisfied — ${wrong}`);
-    return;
-  }
-
-
-  if (selectedSecurities.length === 0) {
-    toast.err("Add at least one security to the portfolio.");
-    return;
-  }
-
-
-  const createPortfolioDTO = {
-    name: portfolio.name,
-    portfolioType: portfolio.portfolioType,     
-    currency: portfolio.currency,
-    benchmark: selectedBenchmark?.id ?? null,   
-    exchange: portfolio.exchange,
-    reBalancingFrequency: portfolio.reBalancingFrequency,
-    amount: Number(portfolio.amount) || 0,
-    userId: localStorage.getItem("userId") ?? 1,           
-    portfolioStatus: "DRAFT",                  
-    themeId: selectedTheme?.id ?? null,
-  };
-
-  
-  const addPortfolioHoldingDTOList = selectedSecurities
-    .map((security) => {
-      const q = quantitiesBySecurityId2[security.id];
-      const quantity = q?.quantity ?? 0;
-
-      if (quantity <= 0) {
-        
-        console.log("Skipped holding (no quantity):", security.name);
-        return null;
-      }
-
-      
-      const quantityInt = Math.round(quantity);
-
-      return {
-        portfolioId: null,                       
-        securityMasterId: security.id,          
-        quantity: quantityInt,                   
-        assetId: security.asset?.id,             
-      };
-    })
-    .filter((h) => h !== null);
-
-  
-  const payload = {
-    createPortfolioDTO,
-    addPortfolioHoldingDTOList,
-  };
-
-  const res = await createAndActivatePortfolio(payload);
-  if(res.success){
-    toast.success("Portfolio Created and Activated.")
-    navigate("/portfolio");
-  }else{
-    toast.error(res.message);
-  }
-};
-
-  const handleCreatePortfolio = () => {
-    const payload = {
-      ...portfolio,
-      themeId: selectedTheme?.id,
-      benchmark: selectedBenchmark?.id,
-      securities: selectedSecurities,
-    };
-
-    if (!selectedTheme) {
-    toast.error("Please select a theme before creating the portfolio.");
-    return;
+  const selectTheme = (themeId) => {
+    if (String(themeId) !== String(portfolio.themeId) && selectedSecurities.length) {
+      setSelectedSecurities([]);
+      toast.info("Selected securities were cleared because they depend on the chosen theme.");
     }
-    const { isValid, result } = validateThemeAllocation();
+    updateField("themeId", themeId);
+  };
 
-    console.log(
-      "Portfolio payload:",
-      payload
+  const addSecurity = (security) => {
+    if (selectedIds.has(String(security.id))) return;
+    const assetId = Number(security.asset?.id);
+    const target = rulesByAssetId.get(assetId) || 0;
+    const alreadyAllocated = allocationsByAssetId.get(assetId) || 0;
+    const remaining = Math.max(0, Math.round((target - alreadyAllocated) * 100) / 100);
+    setSelectedSecurities((current) => [...current, { ...security, allocation: remaining }]);
+    setSecuritySearch("");
+  };
+
+  const updateAllocation = (securityId, value) => {
+    const parsed = value === "" ? "" : Math.max(0, Math.min(100, Number(value) || 0));
+    setSelectedSecurities((current) =>
+      current.map((security) =>
+        String(security.id) === String(securityId) ? { ...security, allocation: parsed } : security
+      )
     );
-
-    if (!isValid) {
-    const wrong = result
-      .filter((r) => !r.ok)
-      .map(
-        (r) =>
-          `${r.assetClass}: expected ${r.rulePercent}%, got ${r.currentPercent}%`
-      )
-      .join(" | ");
-
-    toast.error(`Theme allocation not satisfied — ${wrong}`);
-    return;
-    }
-
-    toast.success("Portfolio created successfully!");
   };
 
+  const removeSecurity = (securityId) =>
+    setSelectedSecurities((current) => current.filter((security) => String(security.id) !== String(securityId)));
 
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!portfolio.name.trim()) return toast.error("Enter a portfolio name.");
+    if (!selectedTheme) return toast.error("Select a theme.");
+    if (amount <= 0) return toast.error("Enter a portfolio amount greater than zero.");
+    if (!portfolio.benchmark) return toast.error("Select a benchmark.");
+    if (!portfolio.reBalancingFrequency) return toast.error("Select a rebalancing frequency.");
+    if (!selectedSecurities.length) return toast.error("Search and add at least one security.");
+    if (!themeAllocationValid) return toast.error("Security allocations must match every theme asset-class target.");
+    if (!quantitiesValid) return toast.error("Each selected security must have enough allocation to buy at least one unit.");
 
-  const steps = [
-    {
-      number: 1,
-      title: "Basic Info",
-    },
-    {
-      number: 2,
-      title: "Select Theme",
-    },
-    {
-      number: 3,
-      title: "Securities & Target",
-    },
-    {
-      number: 4,
-      title: "Benchmark",
-    },
-    {
-      number: 5,
-      title: "Rebalancing",
-    },
-    {
-      number: 6,
-      title: "Review & Launch",
-    },
-  ];
+    const userId = Number(localStorage.getItem("userId"));
+    if (!userId) return toast.error("Your user session is missing. Sign in again.");
+    const createPortfolioDTO = {
+      name: portfolio.name.trim(),
+      portfolioType: portfolio.portfolioType,
+      currency: portfolio.currency,
+      benchmark: portfolio.benchmark,
+      exchange: portfolio.exchange,
+      reBalancingFrequency: portfolio.reBalancingFrequency,
+      amount,
+      userId,
+      portfolioStatus: "DRAFT",
+      themeId: Number(portfolio.themeId),
+    };
+    const addPortfolioHoldingDTOList = allocationRows.map((security) => ({
+      portfolioId: null,
+      securityMasterId: security.id,
+      quantity: security.quantity,
+      assetId: security.asset?.id,
+    }));
 
-  const isCommodity = (security) =>
-  (security?.asset?.assetClass || "")
-    .toLowerCase()
-    .includes("commodities");
-
-  const quantitiesBySecurityId2 = useMemo(() => {
-    const result = {};
-    const amount = Number(portfolio.amount) || 0;
-
-    if (amount <= 0) {
-      return result;
-    }
-
-    selectedSecurities.forEach((sec) => {
-      const allocation = Number(sec.allocation) || 0;
-      const price = Number(sec.price) || 0;
-
-      if (allocation <= 0 || price <= 0) {
-        return;
+    setSaving(true);
+    try {
+      const response = await createAndActivatePortfolio({ createPortfolioDTO, addPortfolioHoldingDTOList });
+      const activationFailed = /validation failed|balance is insufficient/i.test(response?.message || "");
+      if (!response?.success || activationFailed) {
+        throw new Error(response?.message || "The portfolio could not be created.");
       }
-
-      const amountForSecurity = (amount * allocation) / 100;
-
-      const isComm = (sec.asset?.assetClass || "")
-        .toLowerCase()
-        .includes("commodities");
-
-      let quantity;
-
-      // if (isComm) {
-      //   const pricePerGram = price / 10;
-      //   quantity = Number(
-      //     (amountForSecurity / pricePerGram).toFixed(2)
-      //   );
-      // } else {
-      //   quantity = Math.floor(amountForSecurity / price);
-      // }
-      quantity = Math.floor(amountForSecurity / price);
-
-      result[sec.id] = {
-        allocation,
-        amount: amountForSecurity,
-        quantity,
-        isComm,
-      };
-    });
-
-    return result;
-  }, [selectedSecurities, portfolio.amount]);
+      toast.success(response.message || "Portfolio created and activated.");
+      navigate("/portfolio");
+    } catch (error) {
+      toast.error(error?.response?.data?.message || error?.message || "Could not create this portfolio.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-[#f6f8fd]">
-
-
-
-      <SideBarComponent
-        activePage="Portfolios"
-        setActivePage={() => {}}
-      />
-
-
-    
-
-      <div className="ml-[257px]">
-
+    <div className="min-h-screen bg-[#f6f8fd] text-slate-900">
+      <SideBarComponent activePage="Portfolios" />
+      <div className="ml-[257px] max-[760px]:ml-0">
         <TopBarComponent />
-
-
-        <main className="px-5 py-4">
-
-
-       
-
-          <div className="flex items-start justify-between">
-
+        <main className="mx-auto max-w-[1500px] px-4 py-5 sm:px-6">
+          <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
             <div>
-
-              <div className="mb-2 flex items-center gap-2 text-[11px] font-bold tracking-wider text-blue-700">
-
-                <span>
-                  MANDATE SETUP
-                </span>
-
-                <span className="text-slate-300">
-                  •
-                </span>
-
-                <span className="text-slate-500">
-                  Draft Ref: PRT-2026-089A
-                </span>
-
-              </div>
-
-
-              <h1 className="text-2xl font-semibold text-slate-900">
-                Create New Portfolio
-              </h1>
-
-
-              <p className="mt-1 max-w-[700px] text-sm text-slate-500">
-                Follow the 6-step guided workflow
-                to configure mandates, select themes,
-                add securities, validate target
-                allocation, assign benchmarks, and
-                set drift thresholds.
-              </p>
-
-            </div>
-
-
-            <div className="flex gap-2">
-
-              <button
-                onClick={handleSaveDraft}
-                className="flex items-center gap-2 rounded-md bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200"
-              >
-                <WalletCards size={16} />
-                Quick Save
+              <button onClick={() => navigate("/portfolio")} className="mb-2 inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-blue-800">
+                <ArrowLeft size={14} /> Portfolios
               </button>
-
-              
-              <button 
-              type ="button"
-              onClick = {() => navigate("/portfolio")}
-              className="flex items-center gap-2 rounded-md bg-[#edf2fb] px-4 py-2.5 text-sm font-semibold text-slate-600">
-                <X size={16} />
-                Cancel / Exit
-              </button>
-
+              <div className="text-[10px] font-bold uppercase tracking-[.14em] text-blue-800">Mandate setup</div>
+              <h1 className="mt-1 text-2xl font-bold tracking-tight">Create New Portfolio</h1>
+              <p className="mt-1 max-w-2xl text-sm text-slate-500">Configure the mandate, choose a theme, then search and add securities to match its target allocation.</p>
             </div>
-
+            <button type="button" onClick={() => navigate("/portfolio")} className="rounded-md border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
           </div>
 
+          {loadError && <div role="alert" className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800"><AlertTriangle size={17} />{loadError}</div>}
+          {loading ? <div className="rounded-xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">Loading themes and securities…</div> : <form onSubmit={submit} className="space-y-4">
+            <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+              <SectionHeading icon={WalletCards} title="Portfolio details" description="Set the mandate basics and review the target allocation selected by its theme." />
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <Field label="Portfolio name" className="sm:col-span-2">
+                  <input required maxLength={100} value={portfolio.name} onChange={(event) => updateField("name", event.target.value)} placeholder="e.g. Growth Portfolio" className={inputClass} />
+                </Field>
+                <Field label="Portfolio type">
+                  <select value={portfolio.portfolioType} onChange={(event) => updateField("portfolioType", event.target.value)} className={inputClass}>
+                    <option value="WEIGHTAGE">Weightage</option><option value="AMOUNT">Amount</option>
+                  </select>
+                </Field>
+                <Field label="Portfolio amount">
+                  <input required type="number" min="1" step="0.01" value={portfolio.amount} onChange={(event) => updateField("amount", event.target.value)} placeholder="₹ 1,00,00,000" className={inputClass} />
+                </Field>
+                <Field label="Theme">
+                  <select required value={portfolio.themeId} onChange={(event) => selectTheme(event.target.value)} className={inputClass}>
+                    <option value="">Choose a theme</option>
+                    {themes.map((theme) => <option key={theme.id} value={theme.id}>{theme.name}</option>)}
+                  </select>
+                </Field>
+                <Field label="Benchmark">
+                  <select required value={portfolio.benchmark} onChange={(event) => updateField("benchmark", event.target.value)} className={inputClass}>
+                    <option value="NIFTY_50">NIFTY 50</option>
+                  </select>
+                </Field>
+                <Field label="Rebalancing frequency">
+                  <select required value={portfolio.reBalancingFrequency} onChange={(event) => updateField("reBalancingFrequency", event.target.value)} className={inputClass}>
+                    {FREQUENCIES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+                </Field>
+              </div>
 
+              {selectedTheme && <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50/70 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2"><div><div className="text-xs font-bold text-slate-800">{selectedTheme.name} · theme targets</div><div className="mt-0.5 text-[10px] text-slate-500">Selected security weights below must satisfy each class target.</div></div><span className="rounded bg-white px-2 py-1 text-[10px] font-semibold text-blue-800">{formatLabel(selectedTheme.risk)} risk</span></div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  {themeRules.map((rule) => <div key={rule.id ?? rule.asset?.id} className="flex items-center justify-between rounded-md bg-white px-3 py-2 text-xs"><span className="text-slate-600">{formatLabel(rule.asset?.assetClass)}</span><strong className="font-mono text-slate-900">{Number(rule.percentage || 0).toFixed(2)}%</strong></div>)}
+                </div>
+              </div>}
+            </section>
 
-          <div className="mt-5 rounded-xl border border-slate-200 bg-white px-5 py-4">
+            <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+              <SectionHeading icon={Search} title="Find securities" description="Search by name, symbol, ISIN, or sector." />
+              <div className="relative mt-3">
+                <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input value={securitySearch} onChange={(event) => setSecuritySearch(event.target.value)} disabled={!selectedTheme} placeholder={selectedTheme ? "Search name, symbol, ISIN, or sector" : "Choose a theme to enable security search"} className={`${inputClass} pl-9`} />
+                {selectedTheme && securitySearch.trim() && <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-xl">
+                  {eligibleSecurities.length ? <>
+                    {eligibleSecurities.slice(0, 8).map((security) => {
+                      const added = selectedIds.has(String(security.id));
+                      return <div key={security.id} className="flex min-h-12 items-center gap-3 border-b border-slate-100 px-3 py-2 last:border-0 hover:bg-slate-50">
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-xs font-semibold text-slate-800">{security.name}</div>
+                          <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[10px] text-slate-500"><span className="truncate font-mono">{security.symbol || security.isin || "—"}</span><span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5">{formatLabel(security.asset?.assetClass)}</span></div>
+                        </div>
+                        <span className="shrink-0 font-mono text-[11px] text-slate-600">{formatMoney(security.price)}</span>
+                        <button type="button" onClick={() => addSecurity(security)} disabled={added} className={`inline-flex shrink-0 items-center gap-1 rounded px-2 py-1.5 text-[10px] font-semibold ${added ? "bg-emerald-50 text-emerald-700" : "bg-blue-800 text-white hover:bg-blue-900"}`}>{added ? <><CheckCircle2 size={12} /> Added</> : <><Plus size={12} /> Add</>}</button>
+                      </div>;
+                    })}
+                    {eligibleSecurities.length > 8 && <div className="bg-slate-50 px-3 py-2 text-[10px] text-slate-500">Showing 8 matches. Refine your search to see other securities.</div>}
+                  </> : <div className="px-3 py-3 text-xs text-slate-500">No matching priced securities found for this theme.</div>}
+                </div>}
+              </div>
+            </section>
 
-            <div className="flex items-center">
+            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-5">
+                <SectionHeading icon={WalletCards} title="Portfolio securities" description="Enter the target portfolio weight for each selected security." />
+                <div className="flex gap-2 text-[10px]"><Metric label="Selected" value={selectedSecurities.length} /><Metric label="Weight assigned" value={`${selectedAllocationTotal.toFixed(2)}%`} /></div>
+              </div>
+              {selectedSecurities.length ? <div className="overflow-x-auto">
+                <div className="min-w-[780px]">
+                  <div className="grid grid-cols-[minmax(230px,2fr)_minmax(120px,1fr)_minmax(110px,.8fr)_110px_130px_52px] gap-3 bg-[#eff4fc] px-4 py-2 text-[9px] font-bold uppercase tracking-wide text-slate-500 sm:px-5"><span>Security</span><span>Asset class</span><span>Price / unit</span><span>Weight %</span><span>Est. amount · units</span><span /></div>
+                  {allocationRows.map((security) => <div key={security.id} className="grid grid-cols-[minmax(230px,2fr)_minmax(120px,1fr)_minmax(110px,.8fr)_110px_130px_52px] items-center gap-3 border-t border-slate-100 px-4 py-3 sm:px-5">
+                    <div className="min-w-0"><div className="truncate text-xs font-semibold text-slate-900">{security.name}</div><div className="mt-0.5 truncate font-mono text-[10px] text-slate-500">{security.symbol || "—"}{security.isin ? ` · ${security.isin}` : ""}</div></div>
+                    <span className="w-fit rounded bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-800">{formatLabel(security.asset?.assetClass)}</span>
+                    <span className="font-mono text-xs text-slate-700">{formatMoney(security.price)}</span>
+                    <label className="flex items-center gap-1"><input aria-label={`Allocation percentage for ${security.name}`} type="number" min="0" max="100" step="0.01" value={security.allocation} onChange={(event) => updateAllocation(security.id, event.target.value)} className="h-9 w-full rounded-md border border-slate-200 px-2 font-mono text-xs outline-none focus:border-blue-500" /><span className="text-xs text-slate-400">%</span></label>
+                    <div><div className="font-mono text-xs font-semibold text-slate-800">{formatMoney(security.allocatedAmount)}</div><div className={`mt-0.5 text-[10px] ${security.quantity > 0 ? "text-slate-500" : "text-red-600"}`}>{security.quantity.toLocaleString("en-IN")} units estimated</div></div>
+                    <button type="button" aria-label={`Remove ${security.name}`} onClick={() => removeSecurity(security.id)} className="rounded-md p-2 text-slate-400 hover:bg-red-50 hover:text-red-700"><Trash2 size={15} /></button>
+                  </div>)}
+                </div>
+              </div> : <div className="px-5 py-10 text-center"><div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500"><Search size={18} /></div><div className="mt-2 text-sm font-semibold text-slate-800">No securities selected</div><p className="mt-1 text-xs text-slate-500">Use the search above to add securities to this portfolio.</p></div>}
 
-              {steps.map((step, index) => {
+              <div className="grid gap-3 border-t border-slate-100 bg-slate-50/70 p-4 sm:grid-cols-[1fr_auto] sm:items-center sm:px-5">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {allocationChecks.length ? allocationChecks.map((check) => <div key={check.assetId} className={`flex items-center justify-between rounded-md px-3 py-2 text-[10px] ${check.valid ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"}`}><span className="flex items-center gap-1.5">{check.valid ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}{formatLabel(check.name)}</span><span className="font-mono">{check.actual.toFixed(2)}% / {check.target.toFixed(2)}%</span></div>) : <p className="text-xs text-slate-500">Select a theme to review allocation targets.</p>}
+                </div>
+                <div className="text-right"><div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Allocation amount</div><div className="mt-0.5 font-mono text-sm font-bold text-slate-900">{formatMoney(selectedTotal)}</div><div className="mt-0.5 text-[10px] text-slate-500">Unallocated cash after whole-unit rounding: {formatMoney(Math.max(0, amount - allocationRows.reduce((sum, row) => sum + row.quantity * Number(row.price || 0), 0)))}</div></div>
+              </div>
+            </section>
 
-                const completed =
-                  currentStep > step.number;
+            {selectedTheme && <div className={`flex items-start gap-2 rounded-lg border p-3 text-xs ${themeAllocationValid && quantitiesValid ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+              {themeAllocationValid && quantitiesValid ? <ShieldCheck size={15} className="mt-0.5 shrink-0" /> : <AlertTriangle size={15} className="mt-0.5 shrink-0" />}
+              <span>{themeAllocationValid ? quantitiesValid ? "Allocations match the theme and all securities have a purchasable whole-unit quantity." : "At least one allocation is too small to purchase a whole unit; adjust the amount or weights." : "Adjust weights so the total for each asset class matches the selected theme."}</span>
+            </div>}
 
-                const active =
-                  currentStep === step.number;
-
-                return (
-                  <React.Fragment
-                    key={step.number}
-                  >
-
-                    <div className="flex min-w-[80px] flex-col items-center">
-
-                      <div
-                        className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${
-                          completed
-                            ? "bg-emerald-700 text-white"
-                            : active
-                            ? "bg-blue-700 text-white ring-4 ring-blue-100"
-                            : "bg-[#e7edf8] text-slate-500"
-                        }`}
-                      >
-
-                        {completed ? (
-                          <Check size={16} />
-                        ) : (
-                          step.number
-                            .toString()
-                            .padStart(2, "0")
-                        )}
-
-                      </div>
-
-
-                      <div
-                        className={`mt-1 text-[10px] font-semibold ${
-                          active
-                            ? "text-blue-700"
-                            : "text-slate-500"
-                        }`}
-                      >
-                        Step {step.number}
-                      </div>
-
-
-                      <div className="text-[9px] text-slate-500">
-                        {step.title}
-                      </div>
-
-                    </div>
-
-
-                    {index <
-                      steps.length - 1 && (
-                      <div
-                        className={`h-[2px] flex-1 ${
-                          currentStep >
-                          step.number
-                            ? "bg-blue-700"
-                            : "bg-blue-100"
-                        }`}
-                      />
-                    )}
-
-                  </React.Fragment>
-                );
-              })}
-
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="text-xs text-slate-500">{selectedSecurities.length} securities · {formatMoney(amount)} mandate · {formatLabel(portfolio.reBalancingFrequency)} rebalancing</div>
+              <button type="submit" disabled={saving || loading} className="inline-flex items-center gap-2 rounded-md bg-blue-800 px-5 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-50">{saving ? "Creating portfolio…" : "Create & Activate Portfolio"}<CheckCircle2 size={15} /></button>
             </div>
-
-          </div>
-
-
-          {currentStep === 1 && (
-            <div className="mt-5 grid grid-cols-3 gap-4">
-
-              <div className="col-span-2 rounded-xl border border-slate-200 bg-white p-5">
-
-                <div className="mb-5 flex items-center gap-3">
-
-                  <div className="flex h-8 w-8 items-center justify-center rounded-md bg-blue-100 text-blue-700">
-                    <span className="font-bold">
-                      1
-                    </span>
-                  </div>
-
-                  <div>
-                    <h2 className="text-lg font-semibold">
-                      Basic Portfolio Information
-                    </h2>
-
-                    <p className="text-xs text-slate-500">
-                      Configure the core portfolio mandate.
-                    </p>
-                  </div>
-
-                </div>
-
-
-                <div className="grid grid-cols-2 gap-4">
-
-       
-
-                  <div className="col-span-2">
-
-                    <label className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                      Portfolio Name
-                    </label>
-
-                    <input
-                      value={portfolio.name}
-                      onChange={(e) =>
-                        handleBasicInfoChange(
-                          "name",
-                          e.target.value
-                        )
-                      }
-                      placeholder="e.g. Growth Portfolio"
-                      className="mt-1 w-full rounded-md border border-slate-200 bg-[#f7f9fd] px-3 py-3 text-sm outline-none focus:border-blue-500"
-                    />
-
-                  </div>
-
-
-
-
-                  <div>
-
-                    <label className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                      Portfolio Type
-                    </label>
-
-                    <select
-                      value={
-                        portfolio.portfolioType
-                      }
-                      onChange={(e) =>
-                        handleBasicInfoChange(
-                          "portfolioType",
-                          e.target.value
-                        )
-                      }
-                      className="mt-1 w-full rounded-md border border-slate-200 bg-[#f7f9fd] px-3 py-3 text-sm outline-none"
-                    >
-                      <option value="WEIGHTAGE">
-                        Weightage
-                      </option>
-
-                      <option value="AMOUNT">
-                        Amount
-                      </option>
-                    </select>
-
-                  </div>
-
-
-       
-
-                  <div>
-
-                    <label className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                      Portfolio Amount
-                    </label>
-
-                    <input
-                      type="number"
-                      value={portfolio.amount}
-                      onChange={(e) =>
-                        handleBasicInfoChange(
-                          "amount",
-                          e.target.value
-                        )
-                      }
-                      placeholder="₹ 1,00,00,000"
-                      className="mt-1 w-full rounded-md border border-slate-200 bg-[#f7f9fd] px-3 py-3 text-sm outline-none"
-                    />
-
-                  </div>
-
-
-
-                  <div>
-
-                    <label className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                      Currency
-                    </label>
-
-                    <select
-                      value={
-                        portfolio.currency
-                      }
-                      onChange={(e) =>
-                        handleBasicInfoChange(
-                          "currency",
-                          e.target.value
-                        )
-                      }
-                      className="mt-1 w-full rounded-md border border-slate-200 bg-[#f7f9fd] px-3 py-3 text-sm"
-                    >
-                      <option value="INR">
-                        INR (₹)
-                      </option>
-
-                      <option value="USD">
-                        USD ($)
-                      </option>
-
-                      <option value="EUR">
-                        EUR (€)
-                      </option>
-                    </select>
-
-                  </div>
-
-
-                 
-                  <div>
-
-                    <label className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                      Primary Exchange
-                    </label>
-
-                    <select
-                      value={
-                        portfolio.exchange
-                      }
-                      onChange={(e) =>
-                        handleBasicInfoChange(
-                          "exchange",
-                          e.target.value
-                        )
-                      }
-                      className="mt-1 w-full rounded-md border border-slate-200 bg-[#f7f9fd] px-3 py-3 text-sm"
-                    >
-                      <option value="NSE">
-                        NSE
-                      </option>
-
-                      <option value="BSE">
-                        BSE
-                      </option>
-
-                      <option value="NSE_BSE">
-                        NSE / BSE
-                      </option>
-                    </select>
-
-                  </div>
-
-                </div>
-
-              </div>
-
-
-            
-
-              <div className="rounded-xl border border-slate-200 bg-white p-5">
-
-                <div className="flex items-center justify-between">
-
-                  <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                    Portfolio Summary
-                  </div>
-
-                  <span className="text-xs font-semibold text-emerald-600">
-                    Step 01
-                  </span>
-
-                </div>
-
-
-                <div className="mt-5 space-y-4">
-
-                  <SummaryItem
-                    label="Portfolio Name"
-                    value={
-                      portfolio.name ||
-                      "Not configured"
-                    }
-                  />
-
-                  <SummaryItem
-                    label="Portfolio Type"
-                    value={
-                      portfolio.portfolioType
-                    }
-                  />
-
-                  <SummaryItem
-                    label="Currency"
-                    value={
-                      portfolio.currency
-                    }
-                  />
-
-                  <SummaryItem
-                    label="Primary Exchange"
-                    value={
-                      portfolio.exchange
-                    }
-                  />
-
-                  <SummaryItem
-                    label="Portfolio Amount"
-                    value={
-                      portfolio.amount
-                        ? `₹ ${Number(
-                            portfolio.amount
-                          ).toLocaleString()}`
-                        : "Not configured"
-                    }
-                  />
-
-                </div>
-
-              </div>
-
-            </div>
-          )}
-
-
-        
-
-          {currentStep === 2 && (
-            <div className="mt-5 grid grid-cols-[2fr_1fr] gap-4">
-
-              <div className="rounded-xl border border-slate-200 bg-white p-5">
-
-                <div className="mb-5 flex items-center gap-3">
-
-                  <div className="flex h-8 w-8 items-center justify-center rounded-md bg-blue-100 text-blue-700">
-                    <span className="font-bold">
-                      2
-                    </span>
-                  </div>
-
-                  <div>
-                    <h2 className="text-lg font-semibold">
-                      Select Portfolio Theme
-                    </h2>
-
-                    <p className="text-xs text-slate-500">
-                      The selected theme defines the
-                      allowed allocation across asset
-                      classes.
-                    </p>
-                  </div>
-
-                </div>
-
-
-                <div className="grid grid-cols-3 gap-3">
-
-                  {themes.map((theme) => {
-
-                    const selected =
-                      selectedTheme?.id ===
-                      theme.id;
-
-                    return (
-                      <button
-                        key={theme.id}
-                        onClick={() =>
-                          handleSelectTheme(
-                            theme
-                          )
-                        }
-                        className={`relative rounded-xl border p-4 text-left transition ${
-                          selected
-                            ? "border-blue-600 bg-blue-50 ring-2 ring-blue-100"
-                            : "border-slate-200 hover:border-blue-300"
-                        }`}
-                      >
-
-                        {selected && (
-                          <div className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-blue-700 text-white">
-                            <Check size={12} />
-                          </div>
-                        )}
-
-                        <div className="text-sm font-bold text-slate-900">
-                          {theme.name}
-                        </div>
-
-                        <div className="mt-2 flex gap-2">
-
-                          <span className="rounded bg-red-50 px-2 py-1 text-[9px] font-bold text-red-600">
-                            {theme.risk}
-                          </span>
-
-                          <span className="rounded bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-500">
-                            {theme.investmentHorizon}
-                          </span>
-
-                        </div>
-
-
-                        <div className="mt-4 space-y-2">
-
-                          {theme.allocationRuleList.map(
-                            (rule) => (
-                              <div
-                                key={rule.id}
-                                className="flex justify-between text-xs"
-                              >
-                                <span className="text-slate-500">
-                                  {rule.asset.assetClass}
-                                </span>
-
-                                <span className="font-semibold">
-                                  {rule.percentage}%
-                                </span>
-                              </div>
-                            )
-                          )}
-
-                        </div>
-
-                      </button>
-                    );
-                  })}
-
-                </div>
-
-              </div>
-
-
-             
-
-              <div className="rounded-xl border border-slate-200 bg-white p-5">
-
-                <div className="flex items-center justify-between">
-
-                  <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                    Selected Theme
-                  </div>
-
-                  <span className="rounded bg-emerald-100 px-2 py-1 text-[9px] font-bold text-emerald-700">
-                    STEP 02
-                  </span>
-
-                </div>
-
-
-                {selectedTheme ? (
-                  <>
-
-                    <h3 className="mt-4 text-xl font-semibold">
-                      {selectedTheme.name}
-                    </h3>
-
-                    <p className="mt-1 text-xs text-slate-500">
-                      Risk:{" "}
-                      {selectedTheme.risk}
-                      {" • "}
-                      Horizon:{" "}
-                      {
-                        selectedTheme.investmentHorizon
-                      }
-                    </p>
-
-
-                    <div className="mt-5 space-y-4">
-
-                      {selectedTheme.allocationRuleList.map(
-                        (rule) => (
-
-                          <div key={rule.asset.id}>
-
-                            <div className="mb-1 flex justify-between text-xs">
-
-                              <span>
-                                {rule.asset.assetClass}
-                              </span>
-
-                              <span className="font-semibold">
-                                {rule.percentage}%
-                              </span>
-
-                            </div>
-
-                            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-
-                              <div
-                                className="h-full rounded-full bg-blue-700"
-                                style={{
-                                  width: `${rule.percentage}%`,
-                                }}
-                              />
-
-                            </div>
-
-                          </div>
-
-                        )
-                      )}
-
-                    </div>
-
-                  </>
-                ) : (
-
-                  <div className="mt-10 text-center text-sm text-slate-400">
-                    Select a theme to continue.
-                  </div>
-
-                )}
-
-              </div>
-
-            </div>
-          )}
-
-
-      
-
-          {currentStep === 3 && (
-            <div className="mt-5 grid grid-cols-[2fr_1fr] gap-4">
-
-             
-
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-
-                <div className="mb-4 flex items-center justify-between">
-
-                  <div className="flex items-center gap-3">
-
-                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-blue-100 text-blue-700">
-                      3
-                    </div>
-
-                    <div>
-                      <h2 className="text-lg font-semibold">
-                        Securities & Capital Allocation
-                      </h2>
-
-                      <p className="text-xs text-slate-500">
-                        Assign target weights to
-                        individual constituent holdings.
-                      </p>
-                    </div>
-
-                  </div>
-
-
-                  <div className="rounded-md bg-[#edf3fc] px-4 py-2 text-right">
-
-                    <div className="text-[9px] font-bold uppercase text-slate-500">
-                      Pool Size
-                    </div>
-
-                    <div className="font-mono text-sm font-bold">
-                      ₹{" "}
-                      {Number(
-                        portfolio.amount || 0
-                      ).toLocaleString()}
-                    </div>
-
-                  </div>
-
-                </div>
-
-
-       
-
-                <div className="flex gap-2">
-
-                  <div className="flex flex-1 items-center gap-2 rounded-md bg-[#edf3fc] px-3 py-2.5">
-
-                    <Search
-                      size={16}
-                      className="text-slate-500"
-                    />
-
-                    <input
-                      value={securitySearch}
-                      onChange={(e) =>
-                        setSecuritySearch(
-                          e.target.value
-                        )
-                      }
-                      placeholder="Search by Security Name, Symbol or ISIN"
-                      className="w-full bg-transparent text-xs outline-none"
-                    />
-
-                  </div>
-
-                  <button className="flex items-center gap-2 rounded-md bg-blue-800 px-4 text-xs font-semibold text-white">
-
-                    <Plus size={15} />
-
-                    Add Security
-
-                  </button>
-
-                </div>
-
-
-
-                <div className="mt-3 flex gap-2">
-
-                  <span className="rounded-md bg-blue-800 px-3 py-1.5 text-[10px] font-semibold text-white">
-                    All Classes ({securities.length})
-                  </span>
-
-                  <span className="rounded-md bg-[#edf2fb] px-3 py-1.5 text-[10px]">
-                    Stock
-                  </span>
-
-                  <span className="rounded-md bg-[#edf2fb] px-3 py-1.5 text-[10px]">
-                    Mutual Fund
-                  </span>
-
-                  <span className="rounded-md bg-[#edf2fb] px-3 py-1.5 text-[10px]">
-                    ETF
-                  </span>
-
-                  <span className="rounded-md bg-[#edf2fb] px-3 py-1.5 text-[10px]">
-                    Commodity
-                  </span>
-
-                </div>
-
-
-         
-
-                <div className="mt-3 grid grid-cols-2 gap-2">
-
-                  {filteredSecurities.map(
-                    (security) => {
-
-                      const alreadyAdded =
-                        selectedSecurities.some(
-                          (item) =>
-                            item.id ===
-                            security.id
-                        );
-
-                      return (
-                        <div
-                          key={security.id}
-                          className="flex items-center justify-between rounded-md border border-slate-100 bg-[#fafbfe] px-3 py-2"
-                        >
-
-                          <div>
-
-                            <div className="text-xs font-semibold">
-                              {security.name}
-                            </div>
-
-                            <div className="text-[10px] text-slate-400">
-                              {security.symbol} •{" "}
-                              {security.isin}
-                            </div>
-
-                          </div>
-
-
-                          <button
-                            disabled={
-                              alreadyAdded
-                            }
-                            onClick={() =>
-                              handleAddSecurity(
-                                security
-                              )
-                            }
-                            className={`rounded-md px-2.5 py-1.5 text-[10px] font-semibold ${
-                              alreadyAdded
-                                ? "bg-emerald-100 text-emerald-700"
-                                : "bg-blue-100 text-blue-700"
-                            }`}
-                          >
-                            {alreadyAdded
-                              ? "Added"
-                              : "Add"}
-                          </button>
-
-                        </div>
-                      );
-                    }
-                  )}
-
-                </div>
-
-
-    
-
-                {selectedSecurities.length >
-                  0 && (
-
-                  <div className="mt-5 overflow-hidden rounded-lg border border-slate-200">
-
-                    <div className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] bg-[#eff4fc] px-3 py-2 text-[9px] font-bold uppercase text-slate-500">
-
-                      <div>
-                        Security
-                      </div>
-
-                      <div>
-                        Asset Class
-                      </div>
-
-                      <div>
-                        Current Price
-                      </div>
-
-                      <div>
-                        Allocation
-                      </div>
-
-                      <div>
-                        Quantity
-                      </div>
-
-                   
-
-                      <div />
-
-                    </div>
-
-
-                    {selectedSecurities.map(
-                      (security) => (
-
-                        <div
-                          key={security.id}
-                          className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] items-center border-t border-slate-100 px-3 py-3"
-                        >
-
-                          <div>
-
-                            <div className="text-xs font-semibold">
-                              {security.name}
-                            </div>
-
-                            <div className="text-[9px] text-slate-400">
-                              {security.symbol}
-                            </div>
-
-                          </div>
-
-
-                          <div>
-                            <span className="rounded bg-blue-50 px-2 py-1 text-[9px] font-bold text-blue-700">
-                              {security.asset.assetClass}
-                            </span>
-                          </div>
-
-
-                          <div className="font-mono text-xs">
-                            ₹{" "}
-                            {security.price.toLocaleString(
-                              "en-IN"
-                            )}
-                          </div>
-
-
-                          <div>
-
-                            <div className="flex items-center gap-1">
-
-                              <input
-                                type="number"
-                                value={
-                                  security.allocation
-                                }
-                                onChange={(e) =>
-                                  handleAllocationChange(
-                                    security.id,
-                                    e.target.value
-                                  )
-                                }
-                                className="w-16 rounded border border-slate-200 bg-[#f7f9fd] px-2 py-1 text-right text-xs outline-none"
-                              />
-
-                              <span className="text-xs">
-                                %
-                              </span>
-
-                            </div>
-
-                          </div>
-                          
-                          <div className="text-xs font-mono">
-                            {(() => {
-                              const q = quantitiesBySecurityId2[security.id];
-                              if (!q || q.quantity <= 0) return "—";
-                              return q.isComm ? `${q.quantity} g` : q.quantity;
-                            })()}
-                          </div>
-
-                          <button
-                            onClick={() =>
-                              handleRemoveSecurity(
-                                security.id
-                              )
-                            }
-                            className="text-slate-400 hover:text-red-600"
-                          >
-                            <X size={15} />
-                          </button>
-
-                        </div>
-
-                      )
-                    )}
-
-
-                    <div className="flex justify-between bg-[#f1f5fd] px-3 py-3 text-xs font-semibold">
-
-                      <span>
-                        Total Allocation
-                      </span>
-
-                      <span
-                        className={
-                          totalAllocation ===
-                          100
-                            ? "text-emerald-700"
-                            : "text-red-600"
-                        }
-                      >
-                        {totalAllocation.toFixed(
-                          1
-                        )}
-                        %
-                      </span>
-
-                    </div>
-
-                  </div>
-
-                )}
-
-              </div>
-
-
-
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-
-                <div className="flex items-center justify-between">
-
-                  <div className="flex items-center gap-2">
-
-                    <ShieldCheck
-                      size={18}
-                      className="text-emerald-700"
-                    />
-
-                    <span className="font-semibold">
-                      Allocation Validator
-                    </span>
-
-                  </div>
-
-                  <span className="rounded bg-emerald-100 px-2 py-1 text-[9px] font-bold text-emerald-700">
-                    {themeAllocationValid
-                      ? "ACTIVE SLEEVE MATCH"
-                      : "VALIDATION REQUIRED"}
-                  </span>
-
-                </div>
-
-
-                {selectedTheme && (
-
-                  <>
-
-                    <div className="mt-5 rounded-md bg-[#eef4fc] p-3">
-
-                      <div className="flex justify-between">
-
-                        <div>
-
-                          <div className="text-[9px] font-bold uppercase text-slate-500">
-                            Selected Theme
-                          </div>
-
-                          <div className="mt-1 font-semibold">
-                            {selectedTheme.name}
-                          </div>
-
-                        </div>
-
-                        <button className="text-[10px] font-semibold text-blue-700">
-                          Edit Theme
-                        </button>
-
-                      </div>
-
-                    </div>
-
-
-                    <div className="mt-4 space-y-5">
-
-                      {selectedTheme.allocationRuleList.map(
-                        (rule) => {
-
-                          const current =
-                            getCurrentAssetAllocation(
-                              rule.asset.assetClass
-                            );
-
-                          const valid =
-                            isThemeSatisfied(
-                              rule.asset.assetClass
-                            );
-
-                          return (
-                            <div
-                              key={rule.asset.id}
-                            >
-
-                              <div className="flex justify-between text-xs">
-
-                                <span className="font-semibold">
-                                  {rule.asset.assetSubclass}
-                                </span>
-
-                                <span>
-                                  Target:{" "}
-                                  <b>
-                                    {
-                                      rule.percentage
-                                    }
-                                    %
-                                  </b>
-                                  {"  "}
-                                  Current:{" "}
-                                  <b>
-                                    {current}%
-                                  </b>
-                                </span>
-
-                              </div>
-
-
-                              <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-
-                                <div
-                                  className={`h-full rounded-full ${
-                                    valid
-                                      ? "bg-emerald-600"
-                                      : "bg-blue-600"
-                                  }`}
-                                  style={{
-                                    width: `${Math.min(
-                                      current,
-                                      100
-                                    )}%`,
-                                  }}
-                                />
-
-                              </div>
-
-
-                              <div className="mt-1 flex justify-between text-[9px]">
-
-                                <span className="text-slate-400">
-                                  {selectedSecurities.filter(
-                                    (security) =>
-                                      security.asset.id ===
-                                      rule.asset.id
-                                  ).length}{" "}
-                                  Holdings
-                                </span>
-
-                                <span
-                                  className={
-                                    valid
-                                      ? "font-semibold text-emerald-700"
-                                      : "font-semibold text-red-600"
-                                  }
-                                >
-                                  {valid
-                                    ? "100% Satisfied"
-                                    : "Adjustment Required"}
-                                </span>
-
-                              </div>
-
-                            </div>
-                          );
-                        }
-                      )}
-
-                    </div>
-
-
-                    <div
-                      className={`mt-5 rounded-lg p-3 ${
-                        themeAllocationValid
-                          ? "bg-emerald-50"
-                          : "bg-amber-50"
-                      }`}
-                    >
-
-                      <div className="flex gap-2">
-
-                        {themeAllocationValid ? (
-                          <Check
-                            size={17}
-                            className="text-emerald-700"
-                          />
-                        ) : (
-                          <AlertTriangle
-                            size={17}
-                            className="text-amber-600"
-                          />
-                        )}
-
-                        <div>
-
-                          <div className="text-xs font-semibold">
-                            {themeAllocationValid
-                              ? "Theme Allocation Validated"
-                              : "Theme Allocation Requires Adjustment"}
-                          </div>
-
-                          <p className="mt-1 text-[10px] leading-4 text-slate-500">
-                            {themeAllocationValid
-                              ? "All asset classes satisfy the selected theme allocation rules."
-                              : "Current security allocation does not match the selected theme."}
-                          </p>
-
-                        </div>
-
-                      </div>
-
-                    </div>
-
-                  </>
-                )}
-
-              </div>
-
-            </div>
-          )}
-
-
-   
-
-          {currentStep === 4 && (
-            <div className="mt-5 rounded-xl border border-slate-200 bg-white p-5">
-
-              <div className="mb-5 flex items-center gap-3">
-
-                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-blue-100 text-blue-700">
-                  4
-                </div>
-
-                <div>
-                  <h2 className="text-lg font-semibold">
-                    Benchmark Assignment
-                  </h2>
-
-                  <p className="text-xs text-slate-500">
-                    Assign an index benchmark to
-                    evaluate portfolio performance.
-                  </p>
-                </div>
-
-              </div>
-
-
-              <div className="grid grid-cols-2 gap-4">
-
-                {benchmarks.map(
-                  (benchmark) => {
-
-                    const selected =
-                      selectedBenchmark?.id ===
-                      benchmark.id;
-
-                    return (
-                      <button
-                        key={benchmark.id}
-                        onClick={() =>
-                          setSelectedBenchmark(
-                            benchmark
-                          )
-                        }
-                        className={`relative rounded-lg border p-4 text-left ${
-                          selected
-                            ? "border-blue-600 bg-blue-50 ring-2 ring-blue-100"
-                            : "border-slate-200 hover:border-blue-300"
-                        }`}
-                      >
-
-                        {selected && (
-                          <div className="absolute right-4 top-4 flex h-5 w-5 items-center justify-center rounded-full bg-blue-700 text-white">
-                            <Check size={12} />
-                          </div>
-                        )}
-
-                        <div className="text-[10px] font-bold text-blue-700">
-                          {benchmark.category}
-                        </div>
-
-                        <div className="mt-2 text-lg font-semibold">
-                          {benchmark.name}
-                        </div>
-
-                        <p className="mt-1 max-w-[450px] text-xs leading-5 text-slate-500">
-                          {benchmark.description}
-                        </p>
-
-                        <div className="mt-4 flex justify-between text-[10px] text-slate-500">
-
-                          <span>
-                            Beta:{" "}
-                            <b>
-                              {benchmark.beta}
-                            </b>
-                          </span>
-
-                          <span className="font-semibold text-emerald-700">
-                            1Y Ret:{" "}
-                            {benchmark.return1Y}
-                          </span>
-
-                        </div>
-
-                      </button>
-                    );
-                  }
-                )}
-
-              </div>
-
-            </div>
-          )}
-
-
-
-          {currentStep === 5 && (
-            <div className="mt-5 rounded-xl border border-slate-200 bg-white p-5">
-
-              <div className="mb-6 flex items-center gap-3">
-
-                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-blue-100 text-blue-700">
-                  5
-                </div>
-
-                <div>
-
-                  <h2 className="text-lg font-semibold">
-                    Rebalancing & Drift Controls
-                  </h2>
-
-                  <p className="text-xs text-slate-500">
-                    Automate target adherence monitoring
-                    and portfolio rebalancing.
-                  </p>
-
-                </div>
-
-              </div>
-
-
-              <div>
-
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  Execution Frequency Mandate
-                </label>
-
-
-                <div className="mt-2 grid grid-cols-5 rounded-md bg-[#edf2fb] p-1">
-
-                  {[
-                    "DAILY",
-                    "WEEKLY",
-                    "MONTHLY",
-                    "QUARTERLY",
-                    "SEMI_ANNUALLY",
-                  ].map((frequency) => {
-
-                    const selected =
-                      portfolio.reBalancingFrequency ===
-                      frequency;
-
-                    return (
-                      <button
-                        key={frequency}
-                        onClick={() =>
-                          handleBasicInfoChange(
-                            "reBalancingFrequency",
-                            frequency
-                          )
-                        }
-                        className={`rounded px-3 py-2 text-xs font-semibold ${
-                          selected
-                            ? "bg-white text-blue-700 shadow-sm"
-                            : "text-slate-500"
-                        }`}
-                      >
-                        {frequency
-                          .replace(
-                            "_",
-                            " "
-                          )}
-                      </button>
-                    );
-                  })}
-
-                </div>
-
-              </div>
-
-
-              <div className="mt-7 grid grid-cols-2 gap-5">
-
-                <div>
-
-                  <div className="flex justify-between">
-
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                      Maximum Tolerated Drift Threshold
-                    </label>
-
-                    <span className="text-xs font-bold text-blue-700">
-                      ± 5.0%
-                    </span>
-
-                  </div>
-
-                  <input
-                    type="range"
-                    min="1"
-                    max="20"
-                    defaultValue="5"
-                    className="mt-4 w-full"
-                  />
-
-                  <p className="mt-2 text-[10px] text-slate-500">
-                    Triggers a rebalance alert if any
-                    constituent weight deviates by
-                    more than 500 bps.
-                  </p>
-
-                </div>
-
-
-                <div className="rounded-lg bg-[#edf4fc] p-4">
-
-                  <div className="flex gap-3">
-
-                    <CalendarDays
-                      size={22}
-                      className="text-blue-700"
-                    />
-
-                    <div>
-
-                      <div className="text-[10px] font-bold uppercase text-slate-500">
-                        Drift Verification Cadence
-                      </div>
-
-                      <div className="mt-1 text-sm font-semibold">
-                        Next Scheduled Check:
-                      </div>
-
-                      <div className="text-xs text-slate-500">
-                        15 Oct 2026
-                      </div>
-
-                      <div className="mt-1 text-[10px] font-semibold text-emerald-700">
-                        Automatic batch execution enabled
-                      </div>
-
-                    </div>
-
-                  </div>
-
-                </div>
-
-              </div>
-
-            </div>
-          )}
-
-
-
-          {currentStep === 6 && (
-            <div className="mt-5 grid grid-cols-3 gap-4">
-
-              <div className="col-span-2 space-y-4">
-
-
-                <ReviewCard
-                  title="Basic Information"
-                  icon={<Building2 size={17} />}
-                  onEdit={() =>
-                    setCurrentStep(1)
-                  }
-                >
-
-                  <div className="grid grid-cols-2 gap-4">
-
-                    <ReviewItem
-                      label="Portfolio Name"
-                      value={
-                        portfolio.name ||
-                        "Growth Portfolio"
-                      }
-                    />
-
-                    <ReviewItem
-                      label="Portfolio Type"
-                      value={
-                        portfolio.portfolioType
-                      }
-                    />
-
-                    <ReviewItem
-                      label="Currency"
-                      value={
-                        portfolio.currency
-                      }
-                    />
-
-                    <ReviewItem
-                      label="Exchange"
-                      value={
-                        portfolio.exchange
-                      }
-                    />
-
-                    <ReviewItem
-                      label="Amount"
-                      value={
-                        portfolio.amount
-                          ? `₹ ${Number(
-                              portfolio.amount
-                            ).toLocaleString()}`
-                          : "₹ 1,00,00,000"
-                      }
-                    />
-
-                  </div>
-
-                </ReviewCard>
-
-
-         
-
-                <ReviewCard
-                  title="Selected Theme"
-                  icon={<TrendingUp size={17} />}
-                  onEdit={() =>
-                    setCurrentStep(2)
-                  }
-                >
-
-                  <div className="flex items-center justify-between">
-
-                    <div>
-
-                      <div className="text-lg font-semibold">
-                        {selectedTheme?.name ||
-                          "Aggressive Growth"}
-                      </div>
-
-                      <div className="mt-1 text-xs text-slate-500">
-                        Risk:{" "}
-                        {selectedTheme?.risk ||
-                          "HIGH"}
-                      </div>
-
-                    </div>
-
-                    <span className="rounded bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
-                      Validated
-                    </span>
-
-                  </div>
-
-                </ReviewCard>
-
-
- 
-
-                <ReviewCard
-                  title="Benchmark"
-                  icon={<Scale size={17} />}
-                  onEdit={() =>
-                    setCurrentStep(4)
-                  }
-                >
-
-                  <div className="text-lg font-semibold">
-                    {selectedBenchmark?.name ||
-                      "NIFTY 50"}
-                  </div>
-
-                  <div className="mt-1 text-xs text-slate-500">
-                    Selected performance benchmark
-                  </div>
-
-                </ReviewCard>
-
-
-                <ReviewCard
-                  title="Rebalancing"
-                  icon={<CalendarDays size={17} />}
-                  onEdit={() =>
-                    setCurrentStep(5)
-                  }
-                >
-
-                  <div className="flex items-center justify-between">
-
-                    <div>
-
-                      <div className="text-sm font-semibold">
-                        {
-                          portfolio.reBalancingFrequency
-                        }
-                      </div>
-
-                      <div className="mt-1 text-xs text-slate-500">
-                        Drift threshold: ±5.0%
-                      </div>
-
-                    </div>
-
-                    <span className="text-xs font-semibold text-emerald-700">
-                      Monitoring Enabled
-                    </span>
-
-                  </div>
-
-                </ReviewCard>
-
-              </div>
-
-
-
-              <div className="h-fit rounded-xl border border-slate-200 bg-white p-5">
-
-                <div className="flex items-center gap-2">
-
-                  <ShieldCheck
-                    size={20}
-                    className="text-emerald-700"
-                  />
-
-                  <h3 className="font-semibold">
-                    Review & Launch
-                  </h3>
-
-                </div>
-
-
-                <div className="mt-5 space-y-3">
-
-                  <ValidationRow
-                    label="Basic Information"
-                    valid
-                  />
-
-                  <ValidationRow
-                    label="Theme Selection"
-                    valid
-                  />
-
-                  <ValidationRow
-                    label="Security Allocation"
-                    valid={
-                      selectedSecurities.length >
-                      0
-                    }
-                  />
-
-                  <ValidationRow
-                    label="Benchmark"
-                    valid={
-                      selectedBenchmark !==
-                      null
-                    }
-                  />
-
-                  <ValidationRow
-                    label="Rebalancing"
-                    valid
-                  />
-
-                </div>
-
-
-                <button
-                  onClick={
-                    handleCreateAndActivatePortfolio
-                  }
-                  className="mt-6 flex w-full items-center justify-center gap-2 rounded-md bg-blue-800 py-3 text-sm font-semibold text-white hover:bg-blue-900"
-                >
-                  Create & Activate Portfolio
-                  <ArrowRight size={16} />
-                </button>
-
-
-                <button
-                  onClick={handleSaveDraft}
-                  className="mt-2 w-full rounded-md bg-[#eaf0fb] py-3 text-xs font-semibold text-slate-700"
-                >
-                  Save as Draft
-                </button>
-
-              </div>
-
-            </div>
-          )}
-
-
-
-
-          <div className="mt-5 flex items-center justify-between border-t border-slate-200 pt-4">
-
-            <button
-              onClick={goPrevious}
-              disabled={currentStep === 1}
-              className={`flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold ${
-                currentStep === 1
-                  ? "cursor-not-allowed text-slate-300"
-                  : "bg-white text-slate-700 ring-1 ring-slate-200"
-              }`}
-            >
-              <ArrowLeft size={16} />
-              Previous
-            </button>
-
-
-            <div className="text-xs text-slate-400">
-              Step {currentStep} of 6
-            </div>
-
-
-            {currentStep < 6 ? (
-
-              <button
-                onClick={goNext}
-                className="flex items-center gap-2 rounded-md bg-blue-800 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-900"
-              >
-                Continue
-                <ArrowRight size={16} />
-              </button>
-
-            ) : (
-
-              <button
-                onClick={
-                  handleCreatePortfolio
-                }
-                className="flex items-center gap-2 rounded-md bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white"
-              >
-                Create Portfolio
-                <Check size={16} />
-              </button>
-
-            )}
-
-          </div>
-
+          </form>}
         </main>
-
       </div>
-
     </div>
   );
 };
 
+const inputClass = "mt-1.5 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
 
+function Field({ label, children, className = "" }) {
+  return <label className={`block text-[10px] font-bold uppercase tracking-wide text-slate-500 ${className}`}>{label}{children}</label>;
+}
 
+function SectionHeading({ icon: Icon, title, description }) {
+  return <div className="flex items-start gap-2.5"><div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-50 text-blue-800"><Icon size={16} /></div><div><h2 className="text-sm font-bold text-slate-900">{title}</h2><p className="mt-0.5 text-[10px] text-slate-500">{description}</p></div></div>;
+}
 
-const SummaryItem = ({
-  label,
-  value,
-}) => {
-  return (
-    <div className="border-b border-slate-100 pb-3">
-
-      <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
-        {label}
-      </div>
-
-      <div className="mt-1 text-sm font-semibold text-slate-800">
-        {value}
-      </div>
-
-    </div>
-  );
-};
-
-
-
-
-const ReviewCard = ({
-  title,
-  icon,
-  children,
-  onEdit,
-}) => {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5">
-
-      <div className="mb-4 flex items-center justify-between">
-
-        <div className="flex items-center gap-2">
-
-          <div className="text-blue-700">
-            {icon}
-          </div>
-
-          <h3 className="font-semibold">
-            {title}
-          </h3>
-
-        </div>
-
-
-        <button
-          onClick={onEdit}
-          className="flex items-center gap-1 text-xs font-semibold text-blue-700"
-        >
-          <Edit3 size={13} />
-          Edit
-        </button>
-
-      </div>
-
-      {children}
-
-    </div>
-  );
-};
-
-
-
-const ReviewItem = ({
-  label,
-  value,
-}) => {
-  return (
-    <div>
-
-      <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
-        {label}
-      </div>
-
-      <div className="mt-1 text-sm font-semibold text-slate-800">
-        {value}
-      </div>
-
-    </div>
-  );
-};
-
-
-
-
-const ValidationRow = ({
-  label,
-  valid,
-}) => {
-  return (
-    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-
-      <span className="text-xs text-slate-600">
-        {label}
-      </span>
-
-      <span
-        className={`flex items-center gap-1 text-[10px] font-semibold ${
-          valid
-            ? "text-emerald-700"
-            : "text-red-600"
-        }`}
-      >
-
-        {valid ? (
-          <Check size={13} />
-        ) : (
-          <AlertTriangle size={13} />
-        )}
-
-        {valid
-          ? "Validated"
-          : "Required"}
-
-      </span>
-
-    </div>
-  );
-};
-
+function Metric({ label, value }) {
+  return <div className="rounded-md bg-slate-50 px-3 py-2 text-right"><div className="text-[9px] font-bold uppercase tracking-wide text-slate-400">{label}</div><div className="mt-0.5 font-mono text-xs font-semibold text-slate-800">{value}</div></div>;
+}
 
 export default CreatePortfolioPage;
