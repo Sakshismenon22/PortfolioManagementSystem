@@ -26,7 +26,7 @@ const moderatlyConservativeTheme = {
   investmentHorizon: "MEDIUM",
   allocationRuleList: [
     { assetId: 2,  percentage: 40.0 },   // Equities (Blue Chip Companies)
-    { assetId: 6,  percentage: 40.0 },   // Mutal Funds (Balanced Funds)
+    { assetId: 5,  percentage: 40.0 },   // Mutal Funds (Balanced Funds)
     { assetId: 20, percentage: 20.0 }    // Commodies (Gold)
   ],
   userId: 1

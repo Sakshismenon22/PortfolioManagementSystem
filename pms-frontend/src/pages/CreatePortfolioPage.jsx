@@ -1213,7 +1213,15 @@ const validateThemeAllocation = () => {
                                 key={rule.id}
                                 className="flex justify-between text-xs"
                               >
+                                {console.log(rule.id)}
                                 <span className="text-slate-500">
+                                {console.log("asset",rule.asset)
+                                
+
+
+
+
+                                }
                                   {rule.asset.assetClass}
                                 </span>
 
