@@ -1,6 +1,7 @@
 package com.example.pms.service;
 
 import com.example.pms.dto.response.BenchmarkHistoryPointDTO;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -53,6 +54,7 @@ public class Nifty50HistoryService {
     public Nifty50HistoryService() throws Exception {
     }
 
+    @Cacheable(value = "benchmark",key="#from + '_' + #to")
     public List<BenchmarkHistoryPointDTO> getHistory(LocalDate from, LocalDate to) {
         if (from == null || to == null || from.isAfter(to)) {
             throw new IllegalArgumentException("A valid benchmark date range is required.");

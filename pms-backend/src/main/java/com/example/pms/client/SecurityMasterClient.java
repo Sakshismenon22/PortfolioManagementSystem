@@ -5,6 +5,7 @@ import com.example.pms.dto.response.SecurityPriceDTO;
 import com.example.pms.response.Response;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -17,6 +18,7 @@ import java.util.Optional;
 public class SecurityMasterClient {
 
     private final RestClient securityMasterRestClient;
+
 
     public Optional<SecurityPriceDTO> findBySecurityId(Long id) {
         try {
@@ -43,6 +45,7 @@ public class SecurityMasterClient {
         }
     }
 
+    @Cacheable(value="securities" ,key = "'getAllSecurities'")
     public Optional<SecuritiesInfoDTO> getAllSecurityInfo(){
         try {
             Response<SecuritiesInfoDTO> envelope = securityMasterRestClient.get()

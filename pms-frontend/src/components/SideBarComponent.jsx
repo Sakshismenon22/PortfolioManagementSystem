@@ -39,7 +39,6 @@ const SideBarComponent = ({ activePage, setActivePage }) => {
     {
       label: "Rebalancing",
       icon: SlidersHorizontal,
-      badge: "2 Alerts",
       path: "/rebalancing",
     },
     // {
