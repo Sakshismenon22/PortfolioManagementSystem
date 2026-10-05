@@ -4,6 +4,7 @@ import com.example.pms.client.SecurityMasterClient;
 import com.example.pms.dto.response.SecuritiesInfoDTO;
 import com.example.pms.dto.response.SecurityPriceDTO;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -15,11 +16,13 @@ public class SecurityMasterServiceImpl implements SecurityMasterService{
     private final SecurityMasterClient securityMasterClient;
 
     @Override
+    @Cacheable(value = "securityInfo", key = "'securityInfo'")
     public SecuritiesInfoDTO getAllSecuritiesInfo() {
         return securityMasterClient.getAllSecurityInfo().get();
     }
 
     @Override
+    @Cacheable(value = "securityCurrentPrice",key = "#id")
     public Double getCurrentPrice(Long securityId) {
         SecurityPriceDTO securityPriceDTO = securityMasterClient.findBySecurityId(securityId).get();
         Double currentPrice = 0.0d;
