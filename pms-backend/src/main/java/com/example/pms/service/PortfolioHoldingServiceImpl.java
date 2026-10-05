@@ -201,11 +201,10 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
         if (quantity > holding.getQuantityHeld()) throw new IllegalArgumentException("Sell quantity cannot exceed the shares currently held.");
         Portfolio portfolio = portfolioRepository.findById(holding.getPortfolio().getId()).orElseThrow(PortfolioNotFoundException::new);
         requireActivePortfolio(portfolio);
-        double averageCost = holding.getAverageCost() == null ? 0 : holding.getAverageCost();
-        requireTradeWithinTheme(portfolio, holding.getAsset(), averageCost * quantity, false);
-
         double currentPrice = securityMasterService.getCurrentPrice(holding.getSecurityMaster().getId());
         requirePositivePrice(currentPrice);
+        requireTradeWithinTheme(portfolio, holding.getAsset(), currentPrice * quantity, false);
+        double averageCost = holding.getAverageCost() == null ? 0 : holding.getAverageCost();
         int remainingShares = holding.getQuantityHeld() - quantity;
         portfolio.setAmount(safeAmount(portfolio.getAmount()) + currentPrice * quantity);
         holding.setQuantityHeld(remainingShares);
@@ -247,31 +246,35 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
         List<PortfolioHolding> active = portfolioHoldingRepository.findAllByPortfolio(portfolio).stream()
                 .filter(h -> h.getHoldingStatus() == HoldingStatus.BROUGHT && h.getQuantityHeld() != null && h.getQuantityHeld() > 0)
                 .toList();
-        Map<Integer, Double> assetCost = new HashMap<>();
-        double totalCost = 0;
+        Map<Integer, Double> assetMarketValue = new HashMap<>();
+        Map<Integer, Double> priceByHolding = new HashMap<>();
+        double totalMarketValue = 0;
         for (PortfolioHolding holding : active) {
-            double cost = safeAmount(holding.getTotalCost());
-            totalCost += cost;
-            if (holding.getAsset() != null) assetCost.merge(holding.getAsset().getId(), cost, Double::sum);
+            double price = securityMasterService.getCurrentPrice(holding.getSecurityMaster().getId());
+            requirePositivePrice(price);
+            priceByHolding.put(holding.getId(), price);
+            double marketValue = price * holding.getQuantityHeld();
+            totalMarketValue += marketValue;
+            if (holding.getAsset() != null) assetMarketValue.merge(holding.getAsset().getId(), marketValue, Double::sum);
         }
         Map<Integer, Double> selectedTarget = new HashMap<>();
-        Map<Integer, Double> requestedCost = new HashMap<>();
+        Map<Integer, Double> requestedMarketValue = new HashMap<>();
         for (Map.Entry<Integer, PortfolioHolding> entry : holdingById.entrySet()) {
             PortfolioHolding holding = entry.getValue();
             if (holding.getAsset() == null) throw new IllegalArgumentException("The selected holding has no asset class mapping.");
             AllocationRule rule = portfolio.getTheme().getAllocationRuleList().stream()
                     .filter(r -> r.getAsset() != null && r.getAsset().getId().equals(holding.getAsset().getId()))
                     .findFirst().orElseThrow(() -> new IllegalArgumentException("The selected asset class is not included in this theme."));
-            double averageCost = safeAmount(holding.getAverageCost());
             selectedTarget.put(holding.getAsset().getId(), (rule.getPercentage() == null ? 0 : rule.getPercentage()) / 100.0);
-            requestedCost.merge(holding.getAsset().getId(), averageCost * quantityByHolding.get(entry.getKey()), Double::sum);
+            double price = priceByHolding.getOrDefault(holding.getId(), 0.0);
+            requestedMarketValue.merge(holding.getAsset().getId(), price * quantityByHolding.get(entry.getKey()), Double::sum);
         }
 
-        double capital = totalCost + safeAmount(portfolio.getAmount());
-        if (totalCost <= 0 || capital <= 0) throw new IllegalArgumentException("No invested capital is available to rebalance.");
+        double capital = totalMarketValue + safeAmount(portfolio.getAmount());
+        if (totalMarketValue <= 0 || capital <= 0) throw new IllegalArgumentException("No invested capital is available to rebalance.");
         for (Integer assetId : selectedTarget.keySet()) {
-            double targetSale = assetCost.getOrDefault(assetId, 0.0) - selectedTarget.get(assetId) * capital;
-            if (targetSale <= 0 || requestedCost.getOrDefault(assetId, 0.0) > targetSale + 0.01)
+            double targetSale = assetMarketValue.getOrDefault(assetId, 0.0) - selectedTarget.get(assetId) * capital;
+            if (targetSale <= 0 || requestedMarketValue.getOrDefault(assetId, 0.0) > targetSale + 0.01)
                 throw new IllegalArgumentException("Sell quantities exceed the combined rebalance amount for one or more asset classes.");
         }
 
@@ -279,8 +282,7 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
         for (Map.Entry<Integer, PortfolioHolding> entry : holdingById.entrySet()) {
             PortfolioHolding holding = entry.getValue();
             int quantity = quantityByHolding.get(entry.getKey());
-            double currentPrice = securityMasterService.getCurrentPrice(holding.getSecurityMaster().getId());
-            requirePositivePrice(currentPrice);
+            double currentPrice = priceByHolding.get(holding.getId());
             double averageCost = safeAmount(holding.getAverageCost());
             int remaining = holding.getQuantityHeld() - quantity;
             cashProceeds += currentPrice * quantity;
@@ -405,21 +407,25 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
                 .filter(holding -> holding.getHoldingStatus() == HoldingStatus.BROUGHT
                         && holding.getQuantityHeld() != null && holding.getQuantityHeld() > 0)
                 .toList();
-        Map<Integer, Double> currentCostByAsset = new HashMap<>();
+        Map<Integer, Double> currentMarketValueByAsset = new HashMap<>();
+        double currentMarketValue = 0;
         for (PortfolioHolding holding : activeHoldings) {
+            double currentPrice = securityMasterService.getCurrentPrice(holding.getSecurityMaster().getId());
+            requirePositivePrice(currentPrice);
+            double marketValue = currentPrice * holding.getQuantityHeld();
+            currentMarketValue += marketValue;
             if (holding.getAsset() != null) {
-                currentCostByAsset.merge(holding.getAsset().getId(), safeAmount(holding.getTotalCost()), Double::sum);
+                currentMarketValueByAsset.merge(holding.getAsset().getId(), marketValue, Double::sum);
             }
         }
-        double currentInvested = currentCostByAsset.values().stream().mapToDouble(Double::doubleValue).sum();
-        double projectedCapital = currentInvested + safeAmount(portfolio.getAmount());
+        double projectedCapital = currentMarketValue + safeAmount(portfolio.getAmount());
         if (projectedCapital <= 0) throw new IllegalArgumentException("The purchase basket has no invested value.");
 
         for (AllocationRule rule : portfolio.getTheme().getAllocationRuleList()) {
             if (rule.getAsset() == null) continue;
             int assetId = rule.getAsset().getId();
             double target = rule.getPercentage() == null ? 0 : rule.getPercentage();
-            double projectedAssetAmount = currentCostByAsset.getOrDefault(assetId, 0.0)
+            double projectedAssetAmount = currentMarketValueByAsset.getOrDefault(assetId, 0.0)
                     + buyAmountByAsset.getOrDefault(assetId, 0.0);
             double projectedPercentage = Math.round(projectedAssetAmount / projectedCapital * 10000.0) / 100.0;
             double drift = Math.round((projectedPercentage - target) * 100.0) / 100.0;
@@ -483,21 +489,28 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
         var activeHoldings = portfolioHoldingRepository.findAllByPortfolio(portfolio).stream()
                 .filter(holding -> holding.getHoldingStatus() == HoldingStatus.BROUGHT && holding.getQuantityHeld() != null && holding.getQuantityHeld() > 0)
                 .toList();
-        double totalCost = activeHoldings.stream().mapToDouble(holding -> holding.getTotalCost() == null ? 0 : holding.getTotalCost()).sum();
-        double assetCost = activeHoldings.stream()
-                .filter(holding -> holding.getAsset() != null && holding.getAsset().getId().equals(asset.getId()))
-                .mapToDouble(holding -> holding.getTotalCost() == null ? 0 : holding.getTotalCost()).sum();
+        double totalMarketValue = 0;
+        double assetMarketValue = 0;
+        for (PortfolioHolding holding : activeHoldings) {
+            double currentPrice = securityMasterService.getCurrentPrice(holding.getSecurityMaster().getId());
+            requirePositivePrice(currentPrice);
+            double marketValue = currentPrice * holding.getQuantityHeld();
+            totalMarketValue += marketValue;
+            if (holding.getAsset() != null && holding.getAsset().getId().equals(asset.getId())) {
+                assetMarketValue += marketValue;
+            }
+        }
         double target = Math.max(0, Math.min(100, rule.getPercentage() == null ? 0 : rule.getPercentage())) / 100;
         if (target >= 1) throw new IllegalArgumentException("The selected asset class has no capacity for this trade under the theme.");
-        double portfolioCapital = totalCost + safeAmount(portfolio.getAmount());
+        double portfolioCapital = totalMarketValue + safeAmount(portfolio.getAmount());
         double allowedAmount = buy
-                ? target * portfolioCapital - assetCost
-                : assetCost - target * portfolioCapital;
+                ? target * portfolioCapital - assetMarketValue
+                : assetMarketValue - target * portfolioCapital;
         if (allowedAmount <= 0) throw new IllegalArgumentException(buy ? "This asset class is not underweight." : "This asset class is not overweight.");
         if (amount > allowedAmount + 0.01) {
             throw new IllegalArgumentException("Trade exceeds the amount needed to return this asset class to its theme target (" + formatAmount(allowedAmount) + ").");
         }
-        if (!buy && totalCost <= 0) throw new IllegalArgumentException("No invested holdings are available to sell.");
+        if (!buy && totalMarketValue <= 0) throw new IllegalArgumentException("No invested holdings are available to sell.");
     }
 
     private double safeAmount(Double amount) { return amount == null ? 0 : amount; }

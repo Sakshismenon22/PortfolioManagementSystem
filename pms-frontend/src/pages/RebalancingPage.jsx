@@ -952,8 +952,10 @@ export default function RebalancingPage() {
     const allocation = holding && selectedAllocation.find((a) => Number(a.assetId) === Number(holding.assetId));
     if (holding && allocation) selectedSellClasses.set(Number(holding.assetId), allocation);
   });
-  const sellTotalInvested = Number(selected?.validation?.totalInvestedAmount || 0);
-  const sellCapital = sellTotalInvested + availableCash;
+  const sellCapital = Number(
+    selected?.validation?.totalCurrentValue ??
+      Number(selected?.validation?.totalInvestedAmount || 0) + availableCash
+  );
   const sellBudgetByAsset = new Map([...selectedSellClasses.entries()].map(([assetId, allocation]) => [
     assetId,
     Math.max(0, sellCapital * (Number(allocation.currentPercentage || 0) - Number(allocation.targetPercentage || 0)) / 100),
@@ -968,7 +970,7 @@ export default function RebalancingPage() {
       .reduce((sum, other) => {
         const otherHolding = sellableHoldings.find((h) => String(h.holdingId) === String(other.holdingId));
         return otherHolding && Number(otherHolding.assetId) === Number(holding.assetId)
-          ? sum + Number(otherHolding.averageCost || 0) * Number(other.quantity || 0)
+          ? sum + (Number(otherHolding.currentValue || 0) / Math.max(1, Number(otherHolding.quantity || 0))) * Number(other.quantity || 0)
           : sum;
       }, 0) : 0;
     const remainingClassBudget = holding ? Math.max(0, Number(sellBudgetByAsset.get(Number(holding.assetId)) || 0) - otherRowsCost) : 0;
@@ -1652,22 +1654,22 @@ function DetailTile({ label, value }) {
 }
 
 function getMaxSellQuantity(holding, allocation, validation) {
-  const total = Number(validation?.totalInvestedAmount || 0);
+  const total = Number(validation?.totalCurrentValue || validation?.totalInvestedAmount || 0);
   const current = Number(allocation?.currentPercentage || 0);
   const target = Number(allocation?.targetPercentage || 0);
-  const averageCost = Number(holding?.averageCost || 0);
-  if (total <= 0 || averageCost <= 0 || current <= target || target >= 100) return 0;
+  const unitMarketValue = Number(holding?.currentValue || 0) / Math.max(1, Number(holding?.quantity || 0));
+  if (total <= 0 || unitMarketValue <= 0 || current <= target || target >= 100) return 0;
   const currentClassCost = (total * current) / 100;
   const targetClassCost = (total * target) / 100;
-  const allowedCostReduction = (currentClassCost - targetClassCost) / (1 - target / 100);
+  const allowedCostReduction = currentClassCost - targetClassCost;
   return Math.max(
     0,
-    Math.min(Number(holding.quantity || 0), Math.floor((allowedCostReduction + 0.01) / averageCost))
+    Math.min(Number(holding.quantity || 0), Math.floor((allowedCostReduction + 0.01) / unitMarketValue))
   );
 }
 
 function getMaxBuyQuantity(security, allocation, validation, availableCash, portfolioCash = availableCash) {
-  const total = Number(validation?.totalInvestedAmount || 0) + Number(portfolioCash || 0);
+  const total = Number(validation?.totalCurrentValue ?? (Number(validation?.totalInvestedAmount || 0) + Number(portfolioCash || 0)));
   const current = Number(allocation?.currentPercentage || 0);
   const target = Number(allocation?.targetPercentage || 0);
   const price = Number(security?.price || 0);

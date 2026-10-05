@@ -42,6 +42,7 @@ public class PortfolioServiceImpl implements PortfolioService{
     private final AssetRepository assetRepository;
     private final DriftWatchListRepository driftWatchListRepository;
     private final DriftDetectionRepository driftDetectionRepository;
+    private final NotificationRepository notificationRepository;
     private final SecurityMasterService securityMasterService;
     private final SecurityMasterRepository securityMasterRepository;
 
@@ -253,6 +254,7 @@ public class PortfolioServiceImpl implements PortfolioService{
         List<Portfolio> demos = portfolioRepository.findByUserUserId(userId).stream()
                 .filter(portfolio -> DEMO_PORTFOLIO_NAMES.contains(portfolio.getName())).toList();
         for (Portfolio portfolio : demos) {
+            notificationRepository.deleteByPortfolioId(portfolio.getId());
             driftDetectionRepository.deleteByPortfolioId(portfolio.getId());
             driftWatchListRepository.deleteByPortfolioId(portfolio.getId());
             portfolioHoldingRepository.deleteAllByPortfolio(portfolio);
@@ -549,11 +551,9 @@ public class PortfolioServiceImpl implements PortfolioService{
                 .toList();
 
         double totalInvested = holdings.stream()
-                .mapToDouble(h ->
-                        h.getTotalCost() != null
-                                ? h.getTotalCost()
-                                : 0.0
-                )
+                .filter(h -> h.getHoldingStatus() == HoldingStatus.BROUGHT
+                        && h.getQuantityHeld() != null && h.getQuantityHeld() > 0)
+                .mapToDouble(h -> h.getTotalCost() != null ? h.getTotalCost() : 0.0)
                 .sum();
 
         return holdings.stream()
@@ -637,12 +637,16 @@ public class PortfolioServiceImpl implements PortfolioService{
 
 
         double totalInvested = holdings.stream()
+                .filter(h -> h.getHoldingStatus() == HoldingStatus.BROUGHT
+                        && h.getQuantityHeld() != null && h.getQuantityHeld() > 0)
                 .mapToDouble(h ->
                         h.getTotalCost() != null
                                 ? h.getTotalCost()
                                 : 0.0
                 )
                 .sum();
+
+        double totalMarketValue = 0.0;
 
 
         Map<Integer, Double> assetAmountMap =
@@ -652,21 +656,21 @@ public class PortfolioServiceImpl implements PortfolioService{
                 new HashMap<>();
 
         for (PortfolioHolding holding : holdings) {
+            if (holding.getHoldingStatus() != HoldingStatus.BROUGHT
+                    || holding.getQuantityHeld() == null || holding.getQuantityHeld() <= 0) continue;
 
+            double marketValue = getHoldingCurrentValue(holding,
+                    holding.getTotalCost() == null ? 0.0 : holding.getTotalCost());
+            totalMarketValue += marketValue;
             if (holding.getAsset() == null) continue;
             Integer assetId = holding.getAsset().getId();
-
-            Double amount =
-                    holding.getTotalCost() != null
-                            ? holding.getTotalCost()
-                            : 0.0;
 
             assetAmountMap.put(
                     assetId,
                     assetAmountMap.getOrDefault(
                             assetId,
                             0.0
-                    ) + amount
+                    ) + marketValue
             );
 
             assetHoldingCount.put(
@@ -683,6 +687,8 @@ public class PortfolioServiceImpl implements PortfolioService{
                 new ArrayList<>();
 
         boolean portfolioValid = true;
+        double allocationCapital = totalMarketValue
+                + (portfolio.getAmount() == null ? 0.0 : portfolio.getAmount());
 
         for (AllocationRule rule :
                 portfolio.getTheme()
@@ -703,7 +709,6 @@ public class PortfolioServiceImpl implements PortfolioService{
                             0.0
                     );
 
-            double allocationCapital = totalInvested + (portfolio.getAmount() == null ? 0.0 : portfolio.getAmount());
             double current =
                     allocationCapital == 0
                             ? 0.0
@@ -749,7 +754,7 @@ public class PortfolioServiceImpl implements PortfolioService{
                 portfolio.getId(),
                 portfolio.getName(),
                 totalInvested,
-                getCurrentAum(portfolio),
+                allocationCapital,
                 portfolioValid,
                 result
         );
