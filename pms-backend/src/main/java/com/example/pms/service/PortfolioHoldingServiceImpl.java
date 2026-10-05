@@ -11,11 +11,11 @@ import com.example.pms.exception.PortfolioHoldingNotFoundException;
 import com.example.pms.exception.PortfolioNotFoundException;
 import com.example.pms.exception.SecurityNotFoundException;
 import com.example.pms.model.Asset;
-import com.example.pms.model.AllocationRule;
 import com.example.pms.model.Portfolio;
 import com.example.pms.model.PortfolioHolding;
 import com.example.pms.model.SecurityMaster;
 import com.example.pms.model.enums.HoldingStatus;
+import com.example.pms.model.enums.EquityCategory;
 import com.example.pms.model.enums.SecurityType;
 import com.example.pms.repository.AssetRepository;
 import com.example.pms.repository.PortFolioHoldingRepository;
@@ -23,6 +23,7 @@ import com.example.pms.repository.PortfolioRepository;
 import com.example.pms.repository.SecurityMasterRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.repository.Repository;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,7 +57,7 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
                     SecurityMaster securityMaster = securityMasterRepository.findById(addPortfolioHoldingDTO.getSecurityMasterId()).get();
 
                     PortfolioHolding portfolioHolding = new PortfolioHolding(null,
-                            portfolio,securityMaster,addPortfolioHoldingDTO.getQuantity(),null,null,asset,null, LocalDate.now(), HoldingStatus.ADDED);
+                            portfolio,securityMaster,addPortfolioHoldingDTO.getQuantity(),null,null,asset,null, LocalDate.now(), HoldingStatus.ADDED, null);
                     portfolioHoldingRepository.save(portfolioHolding);
                     return "Portfolio Saved";
                 }else{
@@ -115,7 +116,9 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
                         }
                         case COMMODITY -> {
                             SecurityPriceDTO securityPriceDTO = securityMasterClient.findBySecurityId(portfolioHolding.getSecurityMaster().getId()).get();
-                            Double price = securityPriceDTO.getCommoditySpotData().getSpotPrice().doubleValue();
+                            Double price = CommodityPriceUnits.perPortfolioUnit(
+                                    securityPriceDTO.getCommoditySpotData(),
+                                    securityPriceDTO.getSecurityMaster().getSymbol());
                             Double totalCost = price * portfolioHolding.getQuantityHeld();
                             Double avgCost = totalCost/ portfolioHolding.getQuantityHeld();
                             portfolioHolding.setFirstBuyDate(firstBuyDate);
@@ -168,7 +171,9 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
                         }
                         case COMMODITY -> {
                             SecurityPriceDTO securityPriceDTO = securityMasterClient.findBySecurityId(portfolioHolding.getSecurityMaster().getId()).get();
-                            Double price = securityPriceDTO.getCommoditySpotData().getSpotPrice().doubleValue();
+                            Double price = CommodityPriceUnits.perPortfolioUnit(
+                                    securityPriceDTO.getCommoditySpotData(),
+                                    securityPriceDTO.getSecurityMaster().getSymbol());
                             Double totalCost = price * portfolioHolding.getQuantityHeld();
                             return totalCost;
                         }
@@ -189,6 +194,7 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
 
     @Override
     @Transactional
+    @CacheEvict(value = "portfolio", allEntries = true)
     public String sellHoldingsShare(SellHoldingDTO sellHoldingDTO) {
         if (sellHoldingDTO == null || sellHoldingDTO.getId() == null) throw new IllegalArgumentException("Select a holding to sell.");
         int quantity = sellHoldingDTO.getQuantity() == null ? 0 : sellHoldingDTO.getQuantity();
@@ -203,7 +209,6 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
         requireActivePortfolio(portfolio);
         double currentPrice = securityMasterService.getCurrentPrice(holding.getSecurityMaster().getId());
         requirePositivePrice(currentPrice);
-        requireTradeWithinTheme(portfolio, holding.getAsset(), currentPrice * quantity, false);
         double averageCost = holding.getAverageCost() == null ? 0 : holding.getAverageCost();
         int remainingShares = holding.getQuantityHeld() - quantity;
         portfolio.setAmount(safeAmount(portfolio.getAmount()) + currentPrice * quantity);
@@ -219,6 +224,7 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
 
     @Override
     @Transactional
+    @CacheEvict(value = "portfolio", allEntries = true)
     public String sellHoldingsBatch(List<SellHoldingDTO> orders) {
         if (orders == null || orders.isEmpty()) throw new IllegalArgumentException("Add at least one sell order.");
         if (orders.size() > 50) throw new IllegalArgumentException("A sell basket can contain at most 50 orders.");
@@ -243,39 +249,11 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
         }
         requireActivePortfolio(portfolio);
 
-        List<PortfolioHolding> active = portfolioHoldingRepository.findAllByPortfolio(portfolio).stream()
-                .filter(h -> h.getHoldingStatus() == HoldingStatus.BROUGHT && h.getQuantityHeld() != null && h.getQuantityHeld() > 0)
-                .toList();
-        Map<Integer, Double> assetMarketValue = new HashMap<>();
         Map<Integer, Double> priceByHolding = new HashMap<>();
-        double totalMarketValue = 0;
-        for (PortfolioHolding holding : active) {
+        for (PortfolioHolding holding : holdingById.values()) {
             double price = securityMasterService.getCurrentPrice(holding.getSecurityMaster().getId());
             requirePositivePrice(price);
             priceByHolding.put(holding.getId(), price);
-            double marketValue = price * holding.getQuantityHeld();
-            totalMarketValue += marketValue;
-            if (holding.getAsset() != null) assetMarketValue.merge(holding.getAsset().getId(), marketValue, Double::sum);
-        }
-        Map<Integer, Double> selectedTarget = new HashMap<>();
-        Map<Integer, Double> requestedMarketValue = new HashMap<>();
-        for (Map.Entry<Integer, PortfolioHolding> entry : holdingById.entrySet()) {
-            PortfolioHolding holding = entry.getValue();
-            if (holding.getAsset() == null) throw new IllegalArgumentException("The selected holding has no asset class mapping.");
-            AllocationRule rule = portfolio.getTheme().getAllocationRuleList().stream()
-                    .filter(r -> r.getAsset() != null && r.getAsset().getId().equals(holding.getAsset().getId()))
-                    .findFirst().orElseThrow(() -> new IllegalArgumentException("The selected asset class is not included in this theme."));
-            selectedTarget.put(holding.getAsset().getId(), (rule.getPercentage() == null ? 0 : rule.getPercentage()) / 100.0);
-            double price = priceByHolding.getOrDefault(holding.getId(), 0.0);
-            requestedMarketValue.merge(holding.getAsset().getId(), price * quantityByHolding.get(entry.getKey()), Double::sum);
-        }
-
-        double capital = totalMarketValue + safeAmount(portfolio.getAmount());
-        if (totalMarketValue <= 0 || capital <= 0) throw new IllegalArgumentException("No invested capital is available to rebalance.");
-        for (Integer assetId : selectedTarget.keySet()) {
-            double targetSale = assetMarketValue.getOrDefault(assetId, 0.0) - selectedTarget.get(assetId) * capital;
-            if (targetSale <= 0 || requestedMarketValue.getOrDefault(assetId, 0.0) > targetSale + 0.01)
-                throw new IllegalArgumentException("Sell quantities exceed the combined rebalance amount for one or more asset classes.");
         }
 
         double cashProceeds = 0;
@@ -299,6 +277,7 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
 
     @Override
     @Transactional
+    @CacheEvict(value = "portfolio", allEntries = true)
     public String buySecurities(BuyHoldingDTO buyHoldingDTO) {
         if (buyHoldingDTO == null || buyHoldingDTO.getPortfolioId() == null || buyHoldingDTO.getSecurityId() == null) {
             throw new IllegalArgumentException("Select a portfolio and security before buying.");
@@ -310,10 +289,16 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
         SecurityMaster security = securityMasterRepository.findById(buyHoldingDTO.getSecurityId()).orElseThrow(SecurityNotFoundException::new);
         Asset asset = security.getAsset();
         if (asset == null) throw new IllegalArgumentException("The selected security has no asset class mapping.");
+        EquityCategory equityCategory = buyHoldingDTO.getEquityCategory() != null
+                ? buyHoldingDTO.getEquityCategory()
+                : resolveSourceEquityCategory(security);
+        if (equityCategory != null && security.getSecurityType() != SecurityType.EQUITY
+                && security.getSecurityType() != SecurityType.MUTUAL_FUND) {
+            throw new IllegalArgumentException("Equity category can only be assigned to stocks and mutual funds.");
+        }
         double currentPrice = securityMasterService.getCurrentPrice(security.getId());
         requirePositivePrice(currentPrice);
         double buyAmount = currentPrice * quantity;
-        requireTradeWithinTheme(portfolio, asset, buyAmount, true);
         double availableCash = safeAmount(portfolio.getAmount());
         if (buyAmount > availableCash + 0.01) {
             throw new IllegalArgumentException("Insufficient cash. Available " + formatAmount(availableCash) + ", required " + formatAmount(buyAmount) + ".");
@@ -330,7 +315,7 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
                 .orElse(null);
         if (holding == null) {
             holding = new PortfolioHolding(null, portfolio, security, quantity, currentPrice, buyAmount,
-                    asset, LocalDate.now(), LocalDate.now(), HoldingStatus.BROUGHT);
+                    asset, LocalDate.now(), LocalDate.now(), HoldingStatus.BROUGHT, equityCategory);
         } else {
             int oldQuantity = holding.getQuantityHeld();
             double oldCost = holding.getTotalCost() == null
@@ -342,6 +327,11 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
             holding.setTotalCost(newCost);
             holding.setAverageCost(newCost / newQuantity);
             holding.setUpdatedAt(LocalDate.now());
+            if (equityCategory != null) holding.setEquityCategory(equityCategory);
+        }
+        if (equityCategory != null) {
+            security.setEquityCategory(equityCategory);
+            securityMasterRepository.save(security);
         }
         portfolioHoldingRepository.save(holding);
         portfolioRepository.save(portfolio);
@@ -350,6 +340,7 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
 
     @Override
     @Transactional
+    @CacheEvict(value = "portfolio", allEntries = true)
     public String buySecuritiesBatch(List<BuyHoldingDTO> buyHoldingDTOList) {
         if (buyHoldingDTOList == null || buyHoldingDTOList.isEmpty()) {
             throw new IllegalArgumentException("Add at least one security to the purchase basket.");
@@ -365,7 +356,7 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
         Map<Long, Integer> quantityBySecurity = new HashMap<>();
         Map<Long, SecurityMaster> securityById = new HashMap<>();
         Map<Long, Double> priceBySecurity = new HashMap<>();
-        Map<Integer, Double> buyAmountByAsset = new HashMap<>();
+        Map<Long, EquityCategory> categoryBySecurity = new HashMap<>();
         double totalBuyAmount = 0;
 
         for (BuyHoldingDTO order : buyHoldingDTOList) {
@@ -378,15 +369,17 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
 
             SecurityMaster security = securityById.computeIfAbsent(order.getSecurityId(), securityId ->
                     securityMasterRepository.findById(securityId).orElseThrow(SecurityNotFoundException::new));
+            if (order.getEquityCategory() != null) {
+                if (security.getSecurityType() != SecurityType.EQUITY && security.getSecurityType() != SecurityType.MUTUAL_FUND) {
+                    throw new IllegalArgumentException("Equity category can only be assigned to stocks and mutual funds.");
+                }
+                categoryBySecurity.put(security.getId(), order.getEquityCategory());
+            } else if (!categoryBySecurity.containsKey(security.getId())) {
+                EquityCategory sourceCategory = resolveSourceEquityCategory(security);
+                if (sourceCategory != null) categoryBySecurity.put(security.getId(), sourceCategory);
+            }
             Asset asset = security.getAsset();
             if (asset == null) throw new IllegalArgumentException("The selected security has no asset class mapping.");
-            boolean themeIncludesAsset = portfolio.getTheme().getAllocationRuleList().stream()
-                    .anyMatch(rule -> rule.getAsset() != null && rule.getAsset().getId().equals(asset.getId())
-                            && rule.getPercentage() != null && rule.getPercentage() > 0);
-            if (!themeIncludesAsset) {
-                throw new IllegalArgumentException(security.getName() + " is outside the portfolio theme's asset classes.");
-            }
-
             double currentPrice = priceBySecurity.computeIfAbsent(security.getId(), securityId ->
                     securityMasterService.getCurrentPrice(securityId));
             requirePositivePrice(currentPrice);
@@ -394,7 +387,6 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
             quantityBySecurity.put(security.getId(), Math.addExact(previousQuantity, quantity));
             double orderAmount = currentPrice * quantity;
             totalBuyAmount += orderAmount;
-            buyAmountByAsset.merge(asset.getId(), orderAmount, Double::sum);
         }
 
         double availableCash = safeAmount(portfolio.getAmount());
@@ -403,45 +395,13 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
                     + ", basket requires " + formatAmount(totalBuyAmount) + ".");
         }
 
-        List<PortfolioHolding> activeHoldings = portfolioHoldingRepository.findAllByPortfolio(portfolio).stream()
-                .filter(holding -> holding.getHoldingStatus() == HoldingStatus.BROUGHT
-                        && holding.getQuantityHeld() != null && holding.getQuantityHeld() > 0)
-                .toList();
-        Map<Integer, Double> currentMarketValueByAsset = new HashMap<>();
-        double currentMarketValue = 0;
-        for (PortfolioHolding holding : activeHoldings) {
-            double currentPrice = securityMasterService.getCurrentPrice(holding.getSecurityMaster().getId());
-            requirePositivePrice(currentPrice);
-            double marketValue = currentPrice * holding.getQuantityHeld();
-            currentMarketValue += marketValue;
-            if (holding.getAsset() != null) {
-                currentMarketValueByAsset.merge(holding.getAsset().getId(), marketValue, Double::sum);
-            }
-        }
-        double projectedCapital = currentMarketValue + safeAmount(portfolio.getAmount());
-        if (projectedCapital <= 0) throw new IllegalArgumentException("The purchase basket has no invested value.");
-
-        for (AllocationRule rule : portfolio.getTheme().getAllocationRuleList()) {
-            if (rule.getAsset() == null) continue;
-            int assetId = rule.getAsset().getId();
-            double target = rule.getPercentage() == null ? 0 : rule.getPercentage();
-            double projectedAssetAmount = currentMarketValueByAsset.getOrDefault(assetId, 0.0)
-                    + buyAmountByAsset.getOrDefault(assetId, 0.0);
-            double projectedPercentage = Math.round(projectedAssetAmount / projectedCapital * 10000.0) / 100.0;
-            double drift = Math.round((projectedPercentage - target) * 100.0) / 100.0;
-            if (Math.abs(drift) >= 5.0) {
-                throw new IllegalArgumentException(rule.getAsset().getAssetClass() + " would remain outside the theme band after these buys (projected "
-                        + String.format(java.util.Locale.ROOT, "%.2f", projectedPercentage) + "%, target "
-                        + String.format(java.util.Locale.ROOT, "%.2f", target) + "%). Adjust the basket quantities.");
-            }
-        }
-
         for (Map.Entry<Long, Integer> entry : quantityBySecurity.entrySet()) {
             SecurityMaster security = securityById.get(entry.getKey());
             Asset asset = security.getAsset();
             int quantity = entry.getValue();
             double price = priceBySecurity.get(entry.getKey());
             double buyAmount = price * quantity;
+            EquityCategory equityCategory = categoryBySecurity.get(entry.getKey());
             PortfolioHolding holding = portfolioHoldingRepository.findAllByPortfolio(portfolio).stream()
                     .filter(existing -> existing.getHoldingStatus() == HoldingStatus.BROUGHT
                             && existing.getQuantityHeld() != null && existing.getQuantityHeld() > 0
@@ -451,7 +411,7 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
                     .orElse(null);
             if (holding == null) {
                 holding = new PortfolioHolding(null, portfolio, security, quantity, price, buyAmount,
-                        asset, LocalDate.now(), LocalDate.now(), HoldingStatus.BROUGHT);
+                        asset, LocalDate.now(), LocalDate.now(), HoldingStatus.BROUGHT, equityCategory);
             } else {
                 int newQuantity = holding.getQuantityHeld() + quantity;
                 double newCost = safeAmount(holding.getTotalCost()) + buyAmount;
@@ -459,6 +419,11 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
                 holding.setTotalCost(newCost);
                 holding.setAverageCost(newCost / newQuantity);
                 holding.setUpdatedAt(LocalDate.now());
+                if (equityCategory != null) holding.setEquityCategory(equityCategory);
+            }
+            if (equityCategory != null) {
+                security.setEquityCategory(equityCategory);
+                securityMasterRepository.save(security);
             }
             portfolioHoldingRepository.save(holding);
         }
@@ -474,47 +439,45 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
         }
     }
 
+    private EquityCategory resolveSourceEquityCategory(SecurityMaster security) {
+        if (security.getSecurityType() != SecurityType.EQUITY
+                && security.getSecurityType() != SecurityType.MUTUAL_FUND) return null;
+        return securityMasterClient.findBySecurityId(security.getId())
+                .map(quote -> quote.getSecurityMaster() == null ? null : quote.getSecurityMaster().getEquityCategory())
+                .orElse(security.getEquityCategory());
+    }
+
     private void requirePositivePrice(Double price) {
         if (price == null || !Double.isFinite(price) || price <= 0) {
             throw new IllegalArgumentException("A current security price is unavailable; the trade was not placed.");
         }
     }
 
-    private void requireTradeWithinTheme(Portfolio portfolio, Asset asset, double amount, boolean buy) {
-        if (amount <= 0) throw new IllegalArgumentException("Trade amount must be greater than zero.");
-        AllocationRule rule = portfolio.getTheme().getAllocationRuleList().stream()
-                .filter(candidate -> candidate.getAsset() != null && candidate.getAsset().getId().equals(asset.getId()))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("This asset class is not included in the portfolio theme."));
-        var activeHoldings = portfolioHoldingRepository.findAllByPortfolio(portfolio).stream()
-                .filter(holding -> holding.getHoldingStatus() == HoldingStatus.BROUGHT && holding.getQuantityHeld() != null && holding.getQuantityHeld() > 0)
-                .toList();
-        double totalMarketValue = 0;
-        double assetMarketValue = 0;
-        for (PortfolioHolding holding : activeHoldings) {
-            double currentPrice = securityMasterService.getCurrentPrice(holding.getSecurityMaster().getId());
-            requirePositivePrice(currentPrice);
-            double marketValue = currentPrice * holding.getQuantityHeld();
-            totalMarketValue += marketValue;
-            if (holding.getAsset() != null && holding.getAsset().getId().equals(asset.getId())) {
-                assetMarketValue += marketValue;
-            }
-        }
-        double target = Math.max(0, Math.min(100, rule.getPercentage() == null ? 0 : rule.getPercentage())) / 100;
-        if (target >= 1) throw new IllegalArgumentException("The selected asset class has no capacity for this trade under the theme.");
-        double portfolioCapital = totalMarketValue + safeAmount(portfolio.getAmount());
-        double allowedAmount = buy
-                ? target * portfolioCapital - assetMarketValue
-                : assetMarketValue - target * portfolioCapital;
-        if (allowedAmount <= 0) throw new IllegalArgumentException(buy ? "This asset class is not underweight." : "This asset class is not overweight.");
-        if (amount > allowedAmount + 0.01) {
-            throw new IllegalArgumentException("Trade exceeds the amount needed to return this asset class to its theme target (" + formatAmount(allowedAmount) + ").");
-        }
-        if (!buy && totalMarketValue <= 0) throw new IllegalArgumentException("No invested holdings are available to sell.");
-    }
-
     private double safeAmount(Double amount) { return amount == null ? 0 : amount; }
     private String formatAmount(double amount) { return String.format(java.util.Locale.ROOT, "%.2f", amount); }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = "portfolio", allEntries = true)
+    public String updateEquityCategory(Integer holdingId, String value) {
+        PortfolioHolding holding = portfolioHoldingRepository.findById(holdingId)
+                .orElseThrow(PortfolioHoldingNotFoundException::new);
+        SecurityType securityType = holding.getSecurityMaster().getSecurityType();
+        if (securityType != SecurityType.EQUITY && securityType != SecurityType.MUTUAL_FUND) {
+            throw new IllegalArgumentException("Equity category can be set only for stocks and mutual funds.");
+        }
+        if (value == null || value.isBlank()) {
+            holding.setEquityCategory(null);
+        } else {
+            try {
+                holding.setEquityCategory(EquityCategory.valueOf(value.trim().toUpperCase()));
+            } catch (IllegalArgumentException exception) {
+                throw new IllegalArgumentException("Choose Small Cap, Mid Cap, or Large Cap.");
+            }
+        }
+        portfolioHoldingRepository.save(holding);
+        return "Equity category updated.";
+    }
 
 //    @Override
 //    public String buySecurities(BuyHoldingDTO buyHoldingDTO) {

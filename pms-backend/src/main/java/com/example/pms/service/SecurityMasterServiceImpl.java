@@ -16,13 +16,26 @@ public class SecurityMasterServiceImpl implements SecurityMasterService{
     private final SecurityMasterClient securityMasterClient;
 
     @Override
-    @Cacheable(value = "securityInfo", key = "'securityInfo'")
     public SecuritiesInfoDTO getAllSecuritiesInfo() {
-        return securityMasterClient.getAllSecurityInfo().get();
+        SecuritiesInfoDTO info = securityMasterClient.getAllSecurityInfo().get();
+        if (info != null && info.getSecurities() != null) {
+            info.getSecurities().stream()
+                    .filter(security -> security.getAsset() != null
+                            && security.getAsset().getAssetClass() != null
+                            && security.getAsset().getAssetClass().toLowerCase().contains("commodit"))
+                    .forEach(security -> {
+                        try {
+                            security.setPrice(getCurrentPrice(security.getId()));
+                        } catch (RuntimeException ignored) {
+                            // Leave the Security Master list price in place if its quote endpoint is unavailable.
+                        }
+                    });
+        }
+        return info;
     }
 
     @Override
-    @Cacheable(value = "securityCurrentPrice",key = "#id")
+    @Cacheable(value = "securityCurrentPricePerUnitV2", key = "#securityId")
     public Double getCurrentPrice(Long securityId) {
         SecurityPriceDTO securityPriceDTO = securityMasterClient.findBySecurityId(securityId).get();
         Double currentPrice = 0.0d;
@@ -40,7 +53,9 @@ public class SecurityMasterServiceImpl implements SecurityMasterService{
 
             }
             case COMMODITY -> {
-                currentPrice =  securityPriceDTO.getCommoditySpotData().getSpotPrice().doubleValue();
+                currentPrice = CommodityPriceUnits.perPortfolioUnit(
+                        securityPriceDTO.getCommoditySpotData(),
+                        securityPriceDTO.getSecurityMaster().getSymbol());
 
             }
 

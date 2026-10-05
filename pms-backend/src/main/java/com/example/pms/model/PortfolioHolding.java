@@ -1,6 +1,7 @@
 package com.example.pms.model;
 
 import com.example.pms.model.enums.HoldingStatus;
+import com.example.pms.model.enums.EquityCategory;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -40,6 +41,10 @@ public class PortfolioHolding {
 
     @Enumerated(EnumType.STRING)
     private HoldingStatus holdingStatus;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private EquityCategory equityCategory;
 
 
 }

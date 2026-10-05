@@ -26,7 +26,7 @@ public class Theme {
 
     private InvestmentHorizon investmentHorizon;
 
-    @OneToMany
+    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     private List<AllocationRule> allocationRuleList;
 
     private Boolean status;

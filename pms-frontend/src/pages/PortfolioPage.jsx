@@ -20,7 +20,7 @@ import {
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 const DRIFT_LIMIT = 5;
-const FILTERS = ["All", "Active", "Rebalance Required", "Draft", "Closed"];
+const FILTERS = ["All", "New", "Active", "Rebalance Required", "Draft", "Closed"];
 
 const gridTheme = themeQuartz.withParams({
   accentColor: "#1d4ed8",
@@ -165,6 +165,7 @@ const PortfolioPage = () => {
       All: portfolios.length,
       Active: portfolios.filter((i) => i.status === "ACTIVE").length,
       "Rebalance Required": driftPortfolioIds.length,
+      New: portfolios.filter((i) => i.status === "NEW").length,
       Draft: portfolios.filter((i) => ["DRAFT", "CREATED"].includes(i.status)).length,
       Closed: portfolios.filter((i) => ["CANCELED", "CLOSED"].includes(i.status)).length,
     }),
@@ -180,6 +181,8 @@ const PortfolioPage = () => {
             ? p.status === "ACTIVE"
             : filter === "Rebalance Required"
               ? driftPortfolioIds.includes(String(p.id))
+              : filter === "New"
+                ? p.status === "NEW"
               : filter === "Draft"
                 ? ["DRAFT", "CREATED"].includes(p.status)
                 : ["CANCELED", "CLOSED"].includes(p.status)
@@ -605,7 +608,9 @@ function formatLabel(value) {
 
 function formatStatus(status) {
   const s = String(status || "");
-  return s === "CANCELED"
+  return s === "NEW"
+    ? "New"
+    : s === "CANCELED"
     ? "Closed"
     : s === "CREATED"
       ? "Draft"
@@ -613,7 +618,9 @@ function formatStatus(status) {
 }
 
 function statusTone(status) {
-  return status === "ACTIVE"
+  return status === "NEW"
+    ? "text-blue-700"
+    : status === "ACTIVE"
     ? "text-emerald-700"
     : ["DRAFT", "CREATED"].includes(status)
       ? "text-amber-600"

@@ -7,7 +7,7 @@ export const createPortfolio = async(portfolio) =>{
         return response.data;
     }
     catch(error){
-        return error.data;
+        return error.response?.data || { success: false, message: error.message || "Portfolio creation failed." };
     }
 }
 
@@ -167,6 +167,14 @@ export const buyPortfolioSecurities = async (orders) => {
   return response.data;
 };
 
+export const addInitialPortfolioHoldings = async ({ portfolioId, orders }) => {
+  const response = await axios.post(
+    `http://localhost:8082/api/portfolio/add-initial-holdings/${portfolioId}`,
+    orders,
+  );
+  return response.data;
+};
+
 export const sellPortfolioHolding = async ({ holdingId, quantity }) => {
   const response = await axios.post("http://localhost:8082/api/portfolio-holding/sell", {
     id: holdingId,
@@ -177,6 +185,14 @@ export const sellPortfolioHolding = async ({ holdingId, quantity }) => {
 
 export const sellPortfolioHoldings = async (orders) => {
   const response = await axios.post("http://localhost:8082/api/portfolio-holding/sell-batch", orders);
+  return response.data;
+};
+
+export const updatePortfolioHoldingEquityCategory = async ({ holdingId, equityCategory }) => {
+  const response = await axios.patch(
+    `http://localhost:8082/api/portfolio-holding/${holdingId}/equity-category`,
+    { equityCategory },
+  );
   return response.data;
 };
 

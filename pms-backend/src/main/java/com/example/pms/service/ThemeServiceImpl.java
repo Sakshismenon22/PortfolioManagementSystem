@@ -2,6 +2,7 @@ package com.example.pms.service;
 
 import com.example.pms.dto.request.AddThemeDTO;
 import com.example.pms.dto.request.AllocationDTO;
+import com.example.pms.dto.request.UpdateThemeDTO;
 import com.example.pms.exception.ThemeNotFoundException;
 import com.example.pms.model.AllocationRule;
 import com.example.pms.model.Theme;
@@ -10,6 +11,7 @@ import com.example.pms.repository.ThemeRepository;
 import com.example.pms.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,24 +27,33 @@ public class ThemeServiceImpl implements ThemeService{
 
     @Override
     public String addTheme(AddThemeDTO addThemeDTO) {
+        User user = userRepository.findById(addThemeDTO.getUserId())
+                .orElseThrow(() -> new IllegalArgumentException("User not found."));
         List<AllocationRule> allocationRuleList = new ArrayList<>();
         for(AllocationDTO allocationRule:addThemeDTO.getAllocationRuleList()){
             allocationRuleList.add(allocationRuleService.addAllocationRule(allocationRule));
         }
-        User user = userRepository.findById(addThemeDTO.getUserId()).get();
         Theme theme = new Theme(null,addThemeDTO.getName(),addThemeDTO.getRisk(),addThemeDTO.getInvestmentHorizon(),allocationRuleList,true,user);
         themeRepository.save(theme);
         return "Theme Added.";
     }
 
     @Override
-    public String updateTheme(Theme theme) {
-        if(themeRepository.existsById(theme.getId())){
-            themeRepository.save(theme);
-            return "Theme Updated";
-        }else{
-            throw new ThemeNotFoundException();
+    @Transactional
+    public String updateTheme(UpdateThemeDTO request) {
+        Theme theme = themeRepository.findByIdAndCreatedBy_UserId(request.getId(), request.getUserId())
+                .orElseThrow(ThemeNotFoundException::new);
+        theme.setName(request.getName());
+        theme.setRisk(request.getRisk());
+        theme.setInvestmentHorizon(request.getInvestmentHorizon());
+        List<AllocationRule> updatedRules = new ArrayList<>();
+        for (AllocationDTO allocation : request.getAllocationRuleList()) {
+            updatedRules.add(allocationRuleService.addAllocationRule(allocation));
         }
+        theme.getAllocationRuleList().clear();
+        theme.getAllocationRuleList().addAll(updatedRules);
+        themeRepository.save(theme);
+        return "Theme Updated";
     }
 
     @Override
@@ -58,8 +69,11 @@ public class ThemeServiceImpl implements ThemeService{
     }
 
     @Override
-    public List<Theme> getAllThemes() {
-        return themeRepository.findAll();
+    public List<Theme> getAllThemes(Integer userId) {
+        if (userId == null || !userRepository.existsById(userId)) {
+            throw new IllegalArgumentException("A valid userId is required.");
+        }
+        return themeRepository.findByCreatedBy_UserIdAndStatusTrue(userId);
     }
 
     @Override

@@ -155,6 +155,18 @@ export default function SecuritiesPage() {
         ),
       },
       {
+        headerName: "Equity category",
+        field: "equityCategory",
+        flex: 1,
+        minWidth: 135,
+        filter: "agTextColumnFilter",
+        floatingFilter: true,
+        valueFormatter: (params) => params.value
+          ? String(params.value).replaceAll("_", " ")
+          : "—",
+        cellClass: "text-slate-600",
+      },
+      {
         headerName: "Current price",
         field: "price",
         flex: 1,

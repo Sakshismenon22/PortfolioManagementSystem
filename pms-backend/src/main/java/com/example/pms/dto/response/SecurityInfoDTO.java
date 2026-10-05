@@ -18,5 +18,7 @@ public class SecurityInfoDTO {
     private Asset asset;
     private Double price;
 
+    private String equityCategory;
+
 
 }

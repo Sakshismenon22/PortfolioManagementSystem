@@ -24,4 +24,6 @@ public interface PortfolioHoldingService {
     public String buySecurities(BuyHoldingDTO buyHoldingDTO);
 
     public String buySecuritiesBatch(List<BuyHoldingDTO> buyHoldingDTOList);
+
+    public String updateEquityCategory(Integer holdingId, String equityCategory);
 }

@@ -34,4 +34,8 @@ public class PortfolioHoldingDTO {
     private Double allocationPercentage;
 
     private LocalDate firstBuyDate;
+
+    private String equityCategory;
+
+    private String securityType;
 }

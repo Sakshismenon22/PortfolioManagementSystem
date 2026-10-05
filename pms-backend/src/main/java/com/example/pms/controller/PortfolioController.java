@@ -2,6 +2,7 @@ package com.example.pms.controller;
 
 import com.example.pms.dto.request.CreateAndActivatePortfolioDTO;
 import com.example.pms.dto.request.CreatePortfolioDTO;
+import com.example.pms.dto.request.BuyHoldingDTO;
 import com.example.pms.dto.request.GetAllPortfolioDTO;
 import com.example.pms.dto.response.AssetInvestmentDTO;
 import com.example.pms.dto.response.GetAllPortfolioResponseDTO;
@@ -13,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -43,6 +45,22 @@ public class PortfolioController {
     public ResponseEntity<?> createAndActivatePortfolio(@RequestBody CreateAndActivatePortfolioDTO createAndActivatePortfolioDTO){
         System.out.println("Reached.");
         return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(),true,null,portfolioService.createAndActivatePortfolio(createAndActivatePortfolioDTO), LocalDateTime.now()));
+    }
+
+    @PostMapping("/add-initial-holdings/{id}")
+    public ResponseEntity<?> addInitialHoldingsAndActivate(
+            @PathVariable Long id,
+            @RequestBody List<BuyHoldingDTO> holdings
+    ) {
+        return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(), true, null,
+                portfolioService.addInitialHoldingsAndActivate(id, holdings), LocalDateTime.now()));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<?> handleInvalidPortfolioRequest(IllegalArgumentException exception) {
+        String message = exception.getMessage() == null ? "The portfolio request is invalid." : exception.getMessage();
+        return ResponseEntity.badRequest().body(new Response<String>(HttpStatus.BAD_REQUEST.value(), false,
+                null, message, LocalDateTime.now()));
     }
 
     @PostMapping("/demo-portfolios/{userId}")

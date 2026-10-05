@@ -20,7 +20,7 @@ import { useNavigate } from "react-router-dom";
 
 import SideBarComponent from "../components/SideBarComponent";
 import TopBarComponent from "../components/TopBarComponent";
-import { createTheme, getAllThemes } from "../services/themeService";
+import { createTheme, getAllThemes, updateTheme } from "../services/themeService";
 import { getAllAssets } from "../services/portfolioService";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -86,6 +86,7 @@ const CreateThemePage = () => {
 
   const [assets, setAssets] = useState([]);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingThemeId, setEditingThemeId] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const [theme, setTheme] = useState({ name: "", risk: "", investmentHorizon: "" });
@@ -99,7 +100,9 @@ const CreateThemePage = () => {
     setThemeListLoading(true);
     setThemeListError("");
     try {
-      const response = await getAllThemes();
+      const userId = Number(localStorage.getItem("userId"));
+      if (!Number.isInteger(userId) || userId <= 0) throw new Error("Sign in again to load your themes.");
+      const response = await getAllThemes(userId);
       const list = response?.data?.data ?? response?.data;
       if (!Array.isArray(list)) throw new Error("Theme list response was invalid.");
       setThemeList(list);
@@ -362,15 +365,38 @@ const CreateThemePage = () => {
 
   /* ---------------- create ---------------- */
 
-  const handleCreateTheme = async () => {
+  const openCreateTheme = () => {
+    setEditingThemeId(null);
+    setTheme({ name: "", risk: "", investmentHorizon: "" });
+    setAllocations([{ rowKey: uid(), assetId: "", percentage: 0 }]);
+    setCreateOpen(true);
+  };
+
+  const openEditTheme = () => {
+    if (!selectedTheme) return;
+    setEditingThemeId(selectedTheme.id);
+    setTheme({
+      name: selectedTheme.name || "",
+      risk: selectedTheme.risk || "",
+      investmentHorizon: selectedTheme.investmentHorizon || "",
+    });
+    setAllocations((selectedTheme.allocationRuleList || []).map((rule) => ({
+      rowKey: uid(), assetId: String(rule.asset?.id ?? ""), percentage: Number(rule.percentage || 0),
+    })));
+    setCreateOpen(true);
+  };
+
+  const handleSaveTheme = async () => {
     if (!theme.name.trim()) return toast.error("Please enter a theme name.");
     if (!theme.risk) return toast.error("Please select a risk level.");
     if (!theme.investmentHorizon) return toast.error("Please select an investment horizon.");
     if (!isValidAllocation)
       return toast.error("Allocation must contain valid assets and total exactly 100%.");
 
-    const userId = Number(localStorage.getItem("userId")) || 1;
+    const userId = Number(localStorage.getItem("userId"));
+    if (!Number.isInteger(userId) || userId <= 0) return toast.error("Please sign in again before saving a theme.");
     const payload = {
+      ...(editingThemeId ? { id: editingThemeId } : {}),
       name: theme.name,
       risk: theme.risk,
       investmentHorizon: theme.investmentHorizon,
@@ -383,8 +409,13 @@ const CreateThemePage = () => {
 
     try {
       setLoading(true);
-      await createTheme(payload);
-      toast.success("Theme created successfully.");
+      if (editingThemeId) {
+        await updateTheme(payload);
+        toast.success("Theme updated successfully.");
+      } else {
+        await createTheme(payload);
+        toast.success("Theme created successfully.");
+      }
       await loadThemes();
       setTheme({ name: "", risk: "", investmentHorizon: "" });
       setAllocations([{ rowKey: uid(), assetId: "", percentage: 0 }]);
@@ -514,12 +545,21 @@ const CreateThemePage = () => {
               <ShieldCheck size={16} className="text-emerald-700" />
               Define a reusable strategy with risk, horizon and target allocation.
             </div>
+            <div className="flex items-center gap-2">
             <button
-              onClick={() => setCreateOpen(true)}
+              onClick={openEditTheme}
+              disabled={!selectedTheme || selectedTheme.status === false}
+              className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+            >
+              Edit Selected
+            </button>
+            <button
+              onClick={openCreateTheme}
               className="inline-flex items-center gap-2 rounded-md bg-blue-800 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-900"
             >
               <Plus size={15} /> Add Theme
             </button>
+            </div>
           </div>
 
           {/* CREATE DRAWER (overlay — never grows the page) */}
@@ -534,7 +574,7 @@ const CreateThemePage = () => {
                 <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-3">
                   <div>
                     <h2 className="text-sm font-semibold text-slate-900">
-                      Create Investment Theme
+                      {editingThemeId ? "Edit Investment Theme" : "Create Investment Theme"}
                     </h2>
                     <p className="text-[11px] text-slate-500">
                       Allocation must total exactly 100%.
@@ -683,11 +723,11 @@ const CreateThemePage = () => {
                     Cancel
                   </button>
                   <button
-                    onClick={handleCreateTheme}
+                    onClick={handleSaveTheme}
                     disabled={loading}
                     className="inline-flex items-center gap-2 rounded-md bg-emerald-700 px-5 py-2 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
                   >
-                    {loading ? "Creating..." : "Create Theme"}
+                    {loading ? "Saving..." : editingThemeId ? "Save Changes" : "Create Theme"}
                     {!loading && <Check size={15} />}
                   </button>
                 </div>

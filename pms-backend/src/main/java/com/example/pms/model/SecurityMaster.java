@@ -1,6 +1,7 @@
 package com.example.pms.model;
 
 import com.example.pms.model.enums.SecurityType;
+import com.example.pms.model.enums.EquityCategory;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -72,5 +73,9 @@ public class SecurityMaster {
 
     @Column
     private Integer lotSize;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private EquityCategory equityCategory;
 
 }

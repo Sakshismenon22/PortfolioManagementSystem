@@ -2,6 +2,7 @@ package com.example.pms.controller;
 
 
 import com.example.pms.dto.request.AddThemeDTO;
+import com.example.pms.dto.request.UpdateThemeDTO;
 import com.example.pms.model.Theme;
 import com.example.pms.response.Response;
 import com.example.pms.service.ThemeService;
@@ -25,7 +26,7 @@ public class ThemeController {
     }
 
     @PutMapping("/update-theme")
-    public Response<String> updateTheme(@RequestBody Theme theme){
+    public Response<String> updateTheme(@RequestBody UpdateThemeDTO theme){
         return new Response<>(HttpStatus.OK.value(), true, null, themeService.updateTheme(theme), LocalDateTime.now() );
 
     }
@@ -37,7 +38,7 @@ public class ThemeController {
     }
 
     @GetMapping("/get-all-themes")
-    public Response<List<Theme>> getAllThemes(){
-        return new Response<>(HttpStatus.OK.value(), true, themeService.getAllThemes(), "Themes retrieved", LocalDateTime.now());
+    public Response<List<Theme>> getAllThemes(@RequestParam Integer userId){
+        return new Response<>(HttpStatus.OK.value(), true, themeService.getAllThemes(userId), "Themes retrieved", LocalDateTime.now());
     }
 }

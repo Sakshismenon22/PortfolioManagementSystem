@@ -4,6 +4,7 @@ package com.example.pms.service;
 import com.example.pms.dto.request.CreateAndActivatePortfolioDTO;
 import com.example.pms.dto.request.CreatePortfolioByDateDTO;
 import com.example.pms.dto.request.CreatePortfolioDTO;
+import com.example.pms.dto.request.BuyHoldingDTO;
 import com.example.pms.dto.request.GetAllPortfolioDTO;
 import com.example.pms.dto.response.*;
 import com.example.pms.model.Asset;
@@ -23,6 +24,8 @@ public interface PortfolioService {
 
 
     public String createAndActivatePortfolio(CreateAndActivatePortfolioDTO createAndActivatePortfolioDTO);
+
+    String addInitialHoldingsAndActivate(Long portfolioId, List<BuyHoldingDTO> holdings);
 
     String createDemoPortfolios(Integer userId);
 

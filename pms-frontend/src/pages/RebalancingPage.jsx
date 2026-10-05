@@ -930,53 +930,16 @@ export default function RebalancingPage() {
   // ---------------- derived values ----------------
   const selectedAllocation = selected?.validation?.allocations || [];
 
-  const sellableHoldings = tradeHoldings.filter((holding) => {
-    const allocation = selectedAllocation.find((item) => Number(item.assetId) === Number(holding.assetId));
-    return Number(holding.quantity) > 0 && Number(allocation?.driftPercentage) > 0;
-  });
-  const underweightAllocations = selectedAllocation.filter((a) => Number(a.driftPercentage) < 0);
-  const buyableSecurities = tradeSecurities.filter(
-    (security) =>
-      underweightAllocations.some((a) => Number(a.assetId) === Number(security.asset?.id)) &&
-      Number(security.price) > 0
-  );
+  const sellableHoldings = tradeHoldings.filter((holding) => Number(holding.quantity) > 0);
+  const buyableSecurities = tradeSecurities.filter((security) => Number(security.price) > 0);
 
   const availableCash = Number(selected?.info?.amount || 0);
 
-  // When several overweight classes are sold together, calculate their shared
-  // sale budget against the post-sale invested total (rather than treating
-  // each sale as if it were the only trade in the basket).
-  const selectedSellClasses = new Map();
-  sellLines.forEach((line) => {
-    const holding = sellableHoldings.find((h) => String(h.holdingId) === String(line.holdingId));
-    const allocation = holding && selectedAllocation.find((a) => Number(a.assetId) === Number(holding.assetId));
-    if (holding && allocation) selectedSellClasses.set(Number(holding.assetId), allocation);
-  });
-  const sellCapital = Number(
-    selected?.validation?.totalCurrentValue ??
-      Number(selected?.validation?.totalInvestedAmount || 0) + availableCash
-  );
-  const sellBudgetByAsset = new Map([...selectedSellClasses.entries()].map(([assetId, allocation]) => [
-    assetId,
-    Math.max(0, sellCapital * (Number(allocation.currentPercentage || 0) - Number(allocation.targetPercentage || 0)) / 100),
-  ]));
-
-  // per-line resolver for a sell row
+  // Trades stay quantity/cash validated; target bands only inform the recommendation.
   const sellLineView = (line) => {
     const holding = sellableHoldings.find((h) => String(h.holdingId) === String(line.holdingId));
     const allocation = holding && selectedAllocation.find((a) => Number(a.assetId) === Number(holding.assetId));
-    const otherRowsCost = holding ? sellLines
-      .filter((other) => other !== line)
-      .reduce((sum, other) => {
-        const otherHolding = sellableHoldings.find((h) => String(h.holdingId) === String(other.holdingId));
-        return otherHolding && Number(otherHolding.assetId) === Number(holding.assetId)
-          ? sum + (Number(otherHolding.currentValue || 0) / Math.max(1, Number(otherHolding.quantity || 0))) * Number(other.quantity || 0)
-          : sum;
-      }, 0) : 0;
-    const remainingClassBudget = holding ? Math.max(0, Number(sellBudgetByAsset.get(Number(holding.assetId)) || 0) - otherRowsCost) : 0;
-    const maxQuantity = holding && Number(holding.averageCost) > 0
-      ? Math.min(Number(holding.quantity || 0), Math.floor((remainingClassBudget + 0.01) / Number(holding.averageCost)))
-      : 0;
+    const maxQuantity = Number(holding?.quantity || 0);
     const unitPrice =
       holding && Number(holding.quantity) > 0
         ? Number(holding.currentValue || 0) / Number(holding.quantity)
@@ -989,18 +952,18 @@ export default function RebalancingPage() {
   // per-line resolver for a buy row
   const buyLineView = (line) => {
     const security = buyableSecurities.find((s) => String(s.id) === String(line.securityId));
-    const allocation =
-      security && underweightAllocations.find((a) => Number(a.assetId) === Number(security.asset?.id));
-    const otherClassSpend = security ? buyLines.filter((other) => other !== line).reduce((sum, other) => {
+    const allocation = security && selectedAllocation.find((a) => Number(a.assetId) === Number(security.asset?.id));
+    const otherSpend = security ? buyLines.filter((other) => other !== line).reduce((sum, other) => {
       const otherSecurity = buyableSecurities.find((s) => String(s.id) === String(other.securityId));
-      return otherSecurity && Number(otherSecurity.asset?.id) === Number(security.asset?.id)
-        ? sum + Number(otherSecurity.price || 0) * Number(other.quantity || 0)
+      const quantity = Number(other.quantity);
+      return otherSecurity && Number.isInteger(quantity) && quantity > 0
+        ? sum + Number(otherSecurity.price || 0) * quantity
         : sum;
     }, 0) : 0;
-    const maxQuantity = security
-      ? getMaxBuyQuantity(security, allocation, selected?.validation, Math.max(0, availableCash - otherClassSpend), availableCash)
-      : 0;
     const price = Number(security?.price || 0);
+    const maxQuantity = security && price > 0
+      ? Math.max(0, Math.floor((availableCash - otherSpend + 0.01) / price))
+      : 0;
     const qty = Number(line.quantity);
     const validQty = Number.isInteger(qty) && qty > 0 && qty <= maxQuantity;
     return { security, allocation, maxQuantity, price, qty, validQty, cost: validQty ? price * qty : 0 };
@@ -1036,7 +999,7 @@ export default function RebalancingPage() {
         const seenHoldings = new Set();
         for (let i = 0; i < rows.length; i++) {
           const r = rows[i];
-          if (!r.holding) throw new Error(`Line ${i + 1}: select an overweight holding.`);
+          if (!r.holding) throw new Error(`Line ${i + 1}: select a holding to sell.`);
           if (!r.validQty)
             throw new Error(`Line ${i + 1}: quantity must be a whole number from 1 to ${r.maxQuantity}.`);
           if (seenHoldings.has(String(r.holding.holdingId)))
@@ -1053,7 +1016,7 @@ export default function RebalancingPage() {
         const seenSecurity = new Set();
         for (let i = 0; i < rows.length; i++) {
           const r = rows[i];
-          if (!r.security) throw new Error(`Line ${i + 1}: select an underweight security.`);
+          if (!r.security) throw new Error(`Line ${i + 1}: select a security to buy.`);
           if (!r.validQty)
             throw new Error(`Line ${i + 1}: quantity must be a whole number from 1 to ${r.maxQuantity}.`);
           if (seenSecurity.has(String(r.security.id)))
@@ -1307,7 +1270,7 @@ export default function RebalancingPage() {
                   {selected.portfolio.name}
                 </h2>
                 <p className="mt-1 text-xs text-slate-500">
-                  Place one or more ledger buys or sells within the theme’s remaining allocation room.
+                  Drift suggestions are shown for guidance. Record any buy or sell that fits the portfolio cash and holdings.
                 </p>
               </div>
               <button
@@ -1365,8 +1328,7 @@ export default function RebalancingPage() {
               ) : tradeMode === "sell" ? (
                 <form onSubmit={submitTrade} className="space-y-4">
                   <div className="rounded-lg bg-red-50 p-3 text-xs leading-5 text-red-900">
-                    Add one or more overweight holdings. Each line is capped so the sale cannot push its class below
-                    the theme target.
+                    Choose any current holding to sell. Quantity cannot exceed the amount currently held; proceeds return to portfolio cash.
                   </div>
 
                   {sellLines.map((line, index) => {
@@ -1399,7 +1361,7 @@ export default function RebalancingPage() {
                             }
                             className="mt-1.5 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-red-400"
                           >
-                            <option value="">Select an overweight holding</option>
+                            <option value="">Select a holding to sell</option>
                             {sellableHoldings.map((holding) => (
                               <option
                                 key={holding.holdingId}
@@ -1417,8 +1379,8 @@ export default function RebalancingPage() {
                           <>
                             <div className="grid gap-3 sm:grid-cols-3">
                               <DetailTile
-                                label="Shares held"
-                                value={Number(view.holding.quantity).toLocaleString("en-IN")}
+                                label={String(view.holding.symbol || "").toUpperCase() === "GOLD" ? "Grams held" : "Units held"}
+                                value={`${Number(view.holding.quantity).toLocaleString("en-IN")}${String(view.holding.symbol || "").toUpperCase() === "GOLD" ? " g" : ""}`}
                               />
                               <DetailTile
                                 label="Max sell quantity"
@@ -1427,7 +1389,7 @@ export default function RebalancingPage() {
                               <DetailTile label="Available cash" value={money(availableCash)} />
                             </div>
                             <label className="block text-xs font-semibold text-slate-700">
-                              Sell quantity (whole shares)
+                              Sell quantity ({String(view.holding.symbol || "").toUpperCase() === "GOLD" ? "whole grams" : "whole units"})
                               <input
                                 required
                                 type="number"
@@ -1454,12 +1416,12 @@ export default function RebalancingPage() {
                     onClick={addSellLine}
                     className="w-full rounded-md border border-dashed border-slate-300 px-3 py-2.5 text-xs font-semibold text-blue-800 hover:bg-blue-50"
                   >
-                    + Add another overweight holding
+                    + Add another holding
                   </button>
 
                   {!sellableHoldings.length && (
                     <div className="rounded-lg border border-slate-200 p-4 text-sm text-slate-600">
-                      There are no sellable holdings in an overweight asset class.
+                      There are no current holdings available to sell.
                     </div>
                   )}
 
@@ -1490,8 +1452,7 @@ export default function RebalancingPage() {
               ) : (
                 <form onSubmit={submitTrade} className="space-y-4">
                   <div className="rounded-lg bg-emerald-50 p-3 text-xs leading-5 text-emerald-900">
-                    Add one or more underweight securities. Each line is limited by the remaining target allocation
-                    and available cash.
+                    Add one or more securities to buy. Available cash is checked; theme drift remains visible as a recommendation.
                   </div>
 
                   <div className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2.5 text-xs">
@@ -1529,26 +1490,14 @@ export default function RebalancingPage() {
                             }
                             className="mt-1.5 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-400"
                           >
-                            <option value="">Select a security from an underweight class</option>
-                            {underweightAllocations.map((allocation) => (
-                              <optgroup
-                                key={allocation.assetId}
-                                label={`${allocation.assetClass} · ${driftLabel(
-                                  allocation.driftPercentage
-                                )} under target`}
-                              >
-                                {buyableSecurities
-                                  .filter((s) => Number(s.asset?.id) === Number(allocation.assetId))
-                                  .map((security) => (
-                                    <option
-                                      key={security.id}
-                                      value={security.id}
-                                      disabled={usedIds.includes(String(security.id))}
-                                    >
-                                      {security.name} ({security.symbol || security.isin || "—"}) ·{" "}
-                                      {money(security.price)}
-                                    </option>
-                                  ))}
+                            <option value="">Select a security</option>
+                            {[...new Set(buyableSecurities.map((s) => String(s.asset?.assetClass || "Other")))].map((assetClass) => (
+                              <optgroup key={assetClass} label={assetClass}>
+                                {buyableSecurities.filter((s) => String(s.asset?.assetClass || "Other") === assetClass).map((security) => (
+                                  <option key={security.id} value={security.id} disabled={usedIds.includes(String(security.id))}>
+                                    {security.name} ({security.symbol || security.isin || "—"}) · {money(security.price)}
+                                  </option>
+                                ))}
                               </optgroup>
                             ))}
                           </select>
@@ -1562,15 +1511,10 @@ export default function RebalancingPage() {
                                 label="Max buy quantity"
                                 value={view.maxQuantity.toLocaleString("en-IN")}
                               />
-                              <DetailTile
-                                label="Target allocation"
-                                value={`${percent(view.allocation?.targetPercentage)} · current ${percent(
-                                  view.allocation?.currentPercentage
-                                )}`}
-                              />
+                              <DetailTile label="Asset class" value={view.security.asset?.assetClass || "—"} />
                             </div>
                             <label className="block text-xs font-semibold text-slate-700">
-                              Buy quantity (whole shares)
+                              Buy quantity ({String(view.security.symbol || "").toUpperCase() === "GOLD" ? "whole grams" : "whole units"})
                               <input
                                 required
                                 type="number"
@@ -1597,12 +1541,12 @@ export default function RebalancingPage() {
                     onClick={addBuyLine}
                     className="w-full rounded-md border border-dashed border-slate-300 px-3 py-2.5 text-xs font-semibold text-blue-800 hover:bg-blue-50"
                   >
-                    + Add another underweight security
+                    + Add another security
                   </button>
 
                   {!buyableSecurities.length && (
                     <div className="rounded-lg border border-slate-200 p-4 text-sm text-slate-600">
-                      No priced securities are currently available for the underweight asset classes.
+                      No priced securities are currently available to buy.
                     </div>
                   )}
 

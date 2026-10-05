@@ -4,5 +4,6 @@ public enum PortfolioStatus {
     DRAFT,
     CREATED,
     ACTIVE,
-    CANCELED
+    CANCELED,
+    NEW
 }

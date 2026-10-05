@@ -4,6 +4,7 @@ import com.example.pms.dto.request.AddPortfolioHoldingDTO;
 import com.example.pms.dto.request.BuyHoldingDTO;
 import com.example.pms.dto.request.CreatePortfolioDTO;
 import com.example.pms.dto.request.SellHoldingDTO;
+import com.example.pms.dto.request.UpdateEquityCategoryDTO;
 import com.example.pms.response.Response;
 import com.example.pms.service.PortfolioHoldingService;
 import lombok.RequiredArgsConstructor;
@@ -11,6 +12,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -51,6 +54,14 @@ public class PortfolioHoldingController {
     public ResponseEntity<?> buyHoldingsBatch(@RequestBody List<BuyHoldingDTO> buyHoldingDTOList){
         return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(), true, null,
                 portfolioHoldingService.buySecuritiesBatch(buyHoldingDTOList), LocalDateTime.now()));
+    }
+
+    @PatchMapping("/{holdingId}/equity-category")
+    public ResponseEntity<?> updateEquityCategory(
+            @PathVariable Integer holdingId,
+            @RequestBody UpdateEquityCategoryDTO request) {
+        return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(), true, null,
+                portfolioHoldingService.updateEquityCategory(holdingId, request.getEquityCategory()), LocalDateTime.now()));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

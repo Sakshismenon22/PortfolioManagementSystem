@@ -2,10 +2,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft, AlertTriangle, CheckCircle2, Download, Filter, LineChart,
-  Plus, RefreshCw, TrendingUp, WalletCards, Wallet, Trash2,
+  RefreshCw, TrendingUp, WalletCards, Wallet, Check, X,
 } from "lucide-react";
 import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-community";
+import { toast } from "react-toastify";
 
 import SideBarComponent from "../components/SideBarComponent";
 import TopBarComponent from "../components/TopBarComponent";
@@ -15,8 +16,12 @@ import {
   getThemeAllocation,
   validatePortfolioAllocation,
   buyPortfolioSecurities,
+  addInitialPortfolioHoldings,
+  sellPortfolioHolding,
+  updatePortfolioHoldingEquityCategory,
 } from "../services/portfolioService";
 import { getAllSecuritiesInfo } from "../services/securityService";
+import PortfolioBenchmarkView from "./PortfolioBenchmarkView";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -29,7 +34,7 @@ const baseParams = {
   browserColorScheme: "light",
   headerBackgroundColor: "#eef3ff",
   headerTextColor: "#64748b",
-  headerFontSize: 10,
+  headerFontSize: 9,
   headerFontWeight: 700,
   fontSize: 12,
   rowHoverColor: "#f5f8ff",
@@ -39,18 +44,18 @@ const baseParams = {
 
 const holdingsTheme = themeQuartz.withParams({
   ...baseParams,
-  rowHeight: 36,
-  headerHeight: 42,
-  spacing: 4,
-  cellHorizontalPadding: 12,
+  rowHeight: 24,
+  headerHeight: 27,
+  spacing: 2,
+  cellHorizontalPadding: 7,
 });
 
 const miniTheme = themeQuartz.withParams({
   ...baseParams,
-  rowHeight: 34,
-  headerHeight: 42,
-  spacing: 4,
-  cellHorizontalPadding: 12,
+  rowHeight: 24,
+  headerHeight: 27,
+  spacing: 2,
+  cellHorizontalPadding: 7,
 });
 const LEFT_CELL = { display: "flex", alignItems: "center" };
 const RIGHT_CELL = { display: "flex", alignItems: "center", justifyContent: "flex-end" };
@@ -79,13 +84,17 @@ const PortfolioDetailsPage = () => {
   const [holdingsError, setHoldingsError] = useState("");
   const [assetFilter, setAssetFilter] = useState("ALL");
 
-  const [addOpen, setAddOpen] = useState(false);
   const [securities, setSecurities] = useState([]);
   const [buyOrders, setBuyOrders] = useState([newBuyOrder()]);
-  const [addLoading, setAddLoading] = useState(false);
+  const [addLoading, setAddLoading] = useState(true);
   const [addSubmitting, setAddSubmitting] = useState(false);
   const [addError, setAddError] = useState("");
   const [addNotice, setAddNotice] = useState("");
+  const [editingSellId, setEditingSellId] = useState(null);
+  const sellQuantityRef = useRef({});
+  const [sellSubmitting, setSellSubmitting] = useState(false);
+  const [sellError, setSellError] = useState("");
+  const [showBenchmark, setShowBenchmark] = useState(false);
 
   /* ------------------------- load ------------------------- */
 
@@ -133,6 +142,18 @@ const PortfolioDetailsPage = () => {
     };
   }, [id]);
 
+  useEffect(() => {
+    let active = true;
+    getAllSecuritiesInfo().then((response) => {
+      const payload = response?.data?.data ?? response?.data ?? response;
+      const list = payload?.securities ?? payload;
+      if (active && Array.isArray(list)) setSecurities(list);
+    }).catch(() => {
+      if (active) setAddError("Securities could not be loaded. Refresh and try again.");
+    }).finally(() => active && setAddLoading(false));
+    return () => { active = false; };
+  }, []);
+
   /* ------------------------- derived totals ------------------------- */
 
   const cashBalance = Number(portfolio?.amount || 0);
@@ -149,6 +170,9 @@ const PortfolioDetailsPage = () => {
   const pnl = currentValue - invested;
   const returnPercentage = invested ? (pnl / invested) * 100 : 0;
   const portfolioId = portfolio?.portfolioId ?? id;
+  const portfolioIsNew = String(portfolio?.portfolioStatus || "").toUpperCase() === "NEW";
+  const portfolioUsesWeights = String(portfolio?.portfolioType || "").toUpperCase() === "WEIGHTAGE";
+  const allocationBase = Math.max(0, holdingsInvested + cashBalance);
   const themeName = portfolio?.themeName || themeAllocation?.themeName || "—";
 
   const assetClasses = useMemo(
@@ -163,6 +187,7 @@ const PortfolioDetailsPage = () => {
       holdings
         .filter((h) => assetFilter === "ALL" || normalizeAssetClass(h.assetClass) === assetFilter)
         .map((h) => {
+          const securityInfo = securities.find((security) => String(security.id) === String(h.securityId));
           const cost = Number(
             h.totalCost ?? Number(h.averageCost || 0) * Number(h.quantity || 0)
           );
@@ -170,19 +195,26 @@ const PortfolioDetailsPage = () => {
           const qty = Number(h.quantity || 0);
           return {
             rowKey: String(h.holdingId ?? h.securityId),
+            holdingId: h.holdingId,
             securityName: h.securityName || "—",
             symbol: h.symbol || "—",
             assetClass: formatLabel(h.assetClass),
+            equityCategory: h.equityCategory || securityInfo?.equityCategory || "",
+            securityType: h.securityType || "",
             quantity: qty,
             averageCost: Number(h.averageCost || 0),
             currentPrice: h.currentPrice != null ? Number(h.currentPrice) : qty ? value / qty : 0,
             cost,
             value,
+            allocationPct: currentValue > 0 ? (value / currentValue) * 100 : 0,
+            allocationValue: portfolioUsesWeights
+              ? currentValue > 0 ? (value / currentValue) * 100 : 0
+              : value,
             pnl: value - cost,
             returnPct: holdingReturn(h),
           };
         }),
-    [holdings, assetFilter]
+    [holdings, securities, assetFilter, currentValue, portfolioUsesWeights]
   );
 
   const pinnedTotals = useMemo(
@@ -195,13 +227,14 @@ const PortfolioDetailsPage = () => {
         quantity: null,
         averageCost: null,
         currentPrice: null,
+        allocationValue: portfolioUsesWeights ? 100 : currentValue,
         cost: invested,
         value: currentValue,
         pnl,
         returnPct: returnPercentage,
       },
     ],
-    [invested, currentValue, pnl, returnPercentage]
+    [invested, currentValue, pnl, returnPercentage, portfolioUsesWeights]
   );
 
   /* ------------------------- theme composition rows ------------------------- */
@@ -250,109 +283,13 @@ const PortfolioDetailsPage = () => {
       sortable: true,
       resizable: true,
       suppressHeaderMenuButton: true,
-      wrapHeaderText: true,
-      autoHeaderHeight: true,
+      wrapHeaderText: false,
+      autoHeaderHeight: false,
       cellStyle: LEFT_CELL,
     }),
     []
   );
 
-   const holdingsColumnDefs = useMemo(
-    () => [
-      {
-        headerName: "Security",
-        field: "securityName",
-        flex: 1.8,
-        minWidth: 190,
-        filter: "agTextColumnFilter",
-        floatingFilter: true,
-        cellClass: (p) =>
-          p.node.rowPinned ? "font-semibold text-slate-800" : "font-medium text-slate-800",
-      },
-      {
-        headerName: "Symbol",
-        field: "symbol",
-        flex: 0.8,
-        minWidth: 95,
-        filter: "agTextColumnFilter",
-        floatingFilter: true,
-        cellClass: "font-mono text-[11px] text-slate-500",
-      },
-      {
-        headerName: "Asset class",
-        field: "assetClass",
-        flex: 1,
-        minWidth: 120,
-        filter: "agTextColumnFilter",
-        floatingFilter: true,
-        cellClass: "text-slate-600",
-      },
-      numericCol({
-        headerName: "Qty",
-        field: "quantity",
-        flex: 0.7,
-        minWidth: 85,
-        cellClass: "font-mono text-slate-700",
-        valueFormatter: (p) => (p.value == null ? "" : Number(p.value).toLocaleString("en-IN")),
-      }),
-      numericCol({
-        headerName: "Avg. buy",
-        field: "averageCost",
-        flex: 0.9,
-        minWidth: 105,
-        cellClass: "font-mono text-slate-600",
-        valueFormatter: (p) => (p.value == null ? "" : formatMoney(p.value)),
-      }),
-      numericCol({
-        headerName: "Current price",
-        field: "currentPrice",
-        flex: 0.9,
-        minWidth: 110,
-        cellClass: "font-mono text-slate-700",
-        valueFormatter: (p) => (p.value == null ? "" : formatMoney(p.value)),
-      }),
-      numericCol({
-        headerName: "Invested",
-        field: "cost",
-        flex: 1,
-        minWidth: 115,
-        cellStyle: { ...RIGHT_CELL, color: "#1e3a8a" },
-        cellClass: "font-mono font-semibold",
-        valueFormatter: (p) => formatMoney(p.value),
-      }),
-      numericCol({
-        headerName: "Current value",
-        field: "value",
-        flex: 1,
-        minWidth: 120,
-        cellStyle: { ...RIGHT_CELL, color: "#1e3a8a" },
-        cellClass: "font-mono font-semibold",
-        valueFormatter: (p) => formatMoney(p.value),
-      }),
-      numericCol({
-        headerName: "P&L",
-        field: "pnl",
-        flex: 1,
-        minWidth: 110,
-        cellClass: (p) =>
-          `font-mono font-semibold ${Number(p.value) >= 0 ? "text-emerald-700" : "text-red-600"}`,
-        valueFormatter: (p) =>
-          `${Number(p.value) >= 0 ? "+" : "−"}${formatMoney(Math.abs(Number(p.value || 0)))}`,
-      }),
-      numericCol({
-        headerName: "Return %",
-        field: "returnPct",
-        flex: 0.8,
-        minWidth: 100,
-        sort: "desc",
-        cellClass: (p) =>
-          `font-mono font-semibold ${Number(p.value) >= 0 ? "text-emerald-700" : "text-red-600"}`,
-        valueFormatter: (p) =>
-          `${Number(p.value) >= 0 ? "+" : ""}${Number(p.value || 0).toFixed(2)}%`,
-      }),
-    ],
-    []
-  );
      const compositionColumnDefs = useMemo(
     () => [
       {
@@ -435,60 +372,44 @@ const PortfolioDetailsPage = () => {
   );
   
 
-  const exportHoldings = () =>
-    holdingsGridRef.current?.api?.exportDataAsCsv({
-      fileName: `${String(portfolio?.name || "portfolio").replace(/[^a-z0-9-_]+/gi, "-")}-holdings.csv`,
-      skipPinnedBottom: false,
-    });
-
-
-  const openAddSecurity = async () => {
-    setAddOpen(true);
-    setAddError("");
-    setAddNotice("");
-    setBuyOrders([newBuyOrder()]);
-    setAddLoading(true);
-    try {
-      const [securityResponse, validationResponse, infoResponse] = await Promise.all([
-        getAllSecuritiesInfo(),
-        validatePortfolioAllocation(portfolioId),
-        getPortfolioBasicInfo(portfolioId),
-      ]);
-      const payload = securityResponse?.data?.data ?? securityResponse?.data ?? securityResponse;
-      const list = payload?.securities ?? payload;
-      if (!Array.isArray(list)) throw new Error(payload?.message || "Securities could not be loaded.");
-      setSecurities(list);
-      setValidation(validationResponse);
-      setPortfolio((current) => ({ ...current, ...infoResponse }));
-    } catch (loadError) {
-      setAddError(
-        loadError?.response?.data?.message ||
-          loadError?.message ||
-          "Could not load securities for this portfolio."
-      );
-    } finally {
-      setAddLoading(false);
-    }
+  const exportHoldings = () => {
+    const rows = [
+      ["Security", "Symbol", "Asset class", "Equity category", "Quantity", "Average cost", "Current price", "Invested", "Current value", "P&L", "Return %"],
+      ...holdingRows.map((row) => [row.securityName, row.symbol, row.assetClass, row.equityCategory, row.quantity, row.averageCost, row.currentPrice, row.cost, row.value, row.pnl, row.returnPct]),
+    ];
+    const csv = rows.map((row) => row.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(",")).join("\r\n");
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    link.download = `${String(portfolio?.name || "portfolio").replace(/[^a-z0-9-_]+/gi, "-")}-holdings.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
   };
+
 
   const themeAllocations = (validation?.allocations || []).filter(
     (a) => Number(a.targetPercentage) > 0
   );
-  const eligibleSecurities = securities.filter(
-    (s) =>
-      Number(s.price) > 0 &&
-      themeAllocations.some((a) => Number(a.assetId) === Number(s.asset?.id))
-  );
+  const eligibleSecurities = securities.filter((s) => Number(s.price) > 0 && (
+    !portfolioIsNew || themeAllocations.some((a) => Number(a.assetId) === Number(s.asset?.id))
+  ));
   const basketItems = buyOrders.map((order) => {
     const security = eligibleSecurities.find((i) => String(i.id) === String(order.securityId));
-    const quantity = Number(order.quantity);
-    const validQuantity = Number.isInteger(quantity) && quantity > 0;
+    const enteredValue = Number(order.allocationValue);
+    const validEntry = Number.isFinite(enteredValue) && enteredValue > 0 &&
+      (!portfolioUsesWeights || enteredValue <= 100);
+    const requestedAmount = validEntry
+      ? portfolioUsesWeights ? allocationBase * enteredValue / 100 : enteredValue
+      : 0;
+    const price = Number(security?.price || 0);
+    const quantity = price > 0 && requestedAmount > 0 ? Math.floor(requestedAmount / price) : 0;
+    const validQuantity = Boolean(security) && validEntry && Number.isInteger(quantity) && quantity > 0;
     return {
       ...order,
       security,
       quantity,
       validQuantity,
-      amount: security && validQuantity ? Number(security.price) * quantity : 0,
+      requestedAmount,
+      amount: security && validQuantity ? price * quantity : 0,
     };
   });
   const basketTotal = basketItems.reduce((sum, i) => sum + i.amount, 0);
@@ -521,11 +442,11 @@ const PortfolioDetailsPage = () => {
       satisfiedAfterBuy: Math.abs(drift) < 5,
     };
   });
-  const basketSatisfiesTheme =
-    projectedAllocations.length > 0 && projectedAllocations.every((a) => a.satisfiedAfterBuy);
+  const basketSatisfiesTheme = !portfolioIsNew || (
+    projectedAllocations.length > 0 && projectedAllocations.every((a) => a.satisfiedAfterBuy)
+  );
   const basketWithinCash = basketTotal <= cashBalance + 0.01;
-  const basketCanSubmit =
-    basketRowsValid && basketTotal > 0 && basketWithinCash && basketSatisfiesTheme && !addSubmitting;
+  const basketCanSubmit = basketRowsValid && basketTotal > 0 && basketWithinCash && basketSatisfiesTheme && !addSubmitting && editingSellId === null;
 
   const updateBuyOrder = (rowId, field, value) => {
     setBuyOrders((prev) =>
@@ -541,14 +462,16 @@ const PortfolioDetailsPage = () => {
     event.preventDefault();
     setAddError("");
     if (!basketRowsValid) {
-      setAddError("Select a security and enter a positive whole-unit quantity for every row.");
+      setAddError(portfolioUsesWeights
+        ? "Select a security and enter an allocation percentage that buys at least one whole unit."
+        : "Select a security and enter an amount that buys at least one whole unit.");
       return;
     }
     if (!basketWithinCash) {
       setAddError("The total basket cost exceeds the portfolio's available cash.");
       return;
     }
-    if (!basketSatisfiesTheme) {
+    if (portfolioIsNew && !basketSatisfiesTheme) {
       setAddError(
         "Adjust the basket so every asset class is within 5 percentage points of its theme target."
       );
@@ -556,13 +479,15 @@ const PortfolioDetailsPage = () => {
     }
     setAddSubmitting(true);
     try {
-      const result = await buyPortfolioSecurities(
-        basketItems.map((item) => ({
+      const orders = basketItems.map((item) => ({
           portfolioId,
           securityId: item.security.id,
           quantity: item.quantity,
-        }))
-      );
+          equityCategory: item.security.equityCategory || null,
+        }));
+      const result = portfolioIsNew
+        ? await addInitialPortfolioHoldings({ portfolioId, orders })
+        : await buyPortfolioSecurities(orders);
       if (result?.success === false) throw new Error(result.message || "The purchase was rejected.");
       const [freshPortfolio, freshHoldings, freshValidation, freshTheme] = await Promise.all([
         getPortfolioBasicInfo(portfolioId),
@@ -578,7 +503,7 @@ const PortfolioDetailsPage = () => {
         result?.message ||
           `${basketItems.length} security purchase${basketItems.length === 1 ? "" : "s"} recorded.`
       );
-      setAddOpen(false);
+      setBuyOrders([newBuyOrder()]);
     } catch (failure) {
       setAddError(
         failure?.response?.data?.message || failure?.message || "Could not add this security."
@@ -587,6 +512,138 @@ const PortfolioDetailsPage = () => {
       setAddSubmitting(false);
     }
   };
+
+  const beginSell = (row) => {
+    setEditingSellId(row.holdingId);
+    sellQuantityRef.current[row.holdingId] = "";
+    setSellError("");
+  };
+
+  const cancelSell = () => {
+    if (sellSubmitting) return;
+    setEditingSellId(null);
+    if (editingSellId != null) delete sellQuantityRef.current[editingSellId];
+    setSellError("");
+  };
+
+  const confirmSell = async (row) => {
+    const quantity = Number(sellQuantityRef.current[row.holdingId]);
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      setSellError("Enter a positive whole-unit quantity to sell.");
+      return;
+    }
+    if (quantity > row.quantity) {
+      setSellError("Sell quantity cannot exceed the quantity currently held.");
+      return;
+    }
+    if (!row.holdingId) {
+      setSellError("This holding has no sellable holding record.");
+      return;
+    }
+
+    setSellSubmitting(true);
+    setSellError("");
+    try {
+      const result = await sellPortfolioHolding({ holdingId: row.holdingId, quantity });
+      if (result?.success === false) throw new Error(result.message || "The sell order was rejected.");
+      const [freshPortfolio, freshHoldings, freshValidation, freshTheme] = await Promise.all([
+        getPortfolioBasicInfo(portfolioId),
+        getPortfolioHoldings(portfolioId),
+        validatePortfolioAllocation(portfolioId),
+        getThemeAllocation(portfolioId).catch(() => null),
+      ]);
+      setPortfolio(freshPortfolio);
+      setHoldings(Array.isArray(freshHoldings) ? freshHoldings : []);
+      setValidation(freshValidation);
+      setThemeAllocation(freshTheme);
+      setAddNotice(result?.message || `Sold ${quantity} ${row.symbol.toUpperCase() === "GOLD" ? "gram(s)" : "unit(s)"} of ${row.securityName}.`);
+      setEditingSellId(null);
+      delete sellQuantityRef.current[row.holdingId];
+    } catch (failure) {
+      setSellError(failure?.response?.data?.message || failure?.message || "Could not complete the sell order.");
+    } finally {
+      setSellSubmitting(false);
+    }
+  };
+
+  const holdingsColumnDefs = useMemo(() => [
+    { headerName: "Security", field: "securityName", flex: 1.5, minWidth: 110, tooltipField: "securityName", cellClass: "font-medium text-slate-800" },
+    { headerName: "Symbol", field: "symbol", width: 62, tooltipField: "symbol", cellClass: "font-mono text-[9px] text-slate-500" },
+    { headerName: "Asset", field: "assetClass", width: 72, cellClass: "text-[9px] text-slate-600" },
+    {
+      headerName: "Equity category",
+      field: "equityCategory",
+      width: 112,
+      editable: (params) => ["EQUITY", "MUTUAL_FUND"].includes(params.data?.securityType),
+      cellEditor: "agSelectCellEditor",
+      cellEditorParams: { values: ["", "SMALL_CAP", "MID_CAP", "LARGE_CAP"] },
+      valueFormatter: (params) => params.value ? formatLabel(params.value) : "—",
+      cellClass: (params) => ["EQUITY", "MUTUAL_FUND"].includes(params.data?.securityType)
+        ? "text-[9px] text-slate-700"
+        : "text-[9px] text-slate-300",
+    },
+    numericCol({
+      headerName: portfolioUsesWeights ? "Alloc. %" : "Alloc. ₹",
+      field: "allocationValue",
+      width: 94,
+      cellClass: "font-mono text-[9px] text-slate-700",
+      valueFormatter: (params) => params.value == null ? "" : params.context.portfolioUsesWeights
+        ? `${Number(params.value).toFixed(1)}%`
+        : formatCompactMoney(params.value),
+    }),
+    numericCol({
+      headerName: "Quantity",
+      field: "quantity",
+      width: 70,
+      cellRenderer: HoldingQuantityCellRenderer,
+      suppressMouseEventHandling: () => true,
+    }),
+    numericCol({ headerName: "Avg cost", field: "averageCost", width: 84, valueFormatter: (p) => p.value == null ? "" : formatCompactMoney(p.value), cellClass: "font-mono text-[9px] text-slate-600" }),
+    numericCol({ headerName: "Price", field: "currentPrice", width: 78, valueFormatter: (p) => p.value == null ? "" : formatCompactMoney(p.value), cellClass: "font-mono text-[9px] text-slate-700" }),
+    numericCol({ headerName: "Cost", field: "cost", width: 86, cellStyle: { ...RIGHT_CELL, color: "#1e3a8a" }, cellClass: "font-mono text-[9px] font-semibold", valueFormatter: (p) => formatCompactMoney(p.value) }),
+    numericCol({ headerName: "Value", field: "value", width: 88, cellStyle: { ...RIGHT_CELL, color: "#1e3a8a" }, cellClass: "font-mono text-[9px] font-semibold", valueFormatter: (p) => formatCompactMoney(p.value) }),
+    numericCol({ headerName: "P&L", field: "pnl", width: 80, cellClass: (p) => `font-mono text-[9px] font-semibold ${Number(p.value) >= 0 ? "text-emerald-700" : "text-red-600"}`, valueFormatter: (p) => `${Number(p.value) >= 0 ? "+" : "−"}${formatCompactMoney(Math.abs(Number(p.value || 0)))}` }),
+    numericCol({ headerName: "Ret.", field: "returnPct", width: 68, sort: "desc", cellClass: (p) => `font-mono text-[9px] font-semibold ${Number(p.value) >= 0 ? "text-emerald-700" : "text-red-600"}`, valueFormatter: (p) => `${Number(p.value) >= 0 ? "+" : ""}${Number(p.value || 0).toFixed(1)}%` }),
+    { headerName: "Trade", field: "holdingId", width: 70, sortable: false, filter: false, suppressMouseEventHandling: () => true, cellRenderer: HoldingActionsCellRenderer },
+  ], [portfolioUsesWeights]);
+
+  const handleHoldingCellValueChanged = async (event) => {
+    if (event.colDef.field !== "equityCategory" || !event.data?.holdingId) return;
+    try {
+      await updatePortfolioHoldingEquityCategory({
+        holdingId: event.data.holdingId,
+        equityCategory: event.newValue || null,
+      });
+      setHoldings((previous) => previous.map((holding) =>
+        holding.holdingId === event.data.holdingId
+          ? { ...holding, equityCategory: event.newValue || null }
+          : holding
+      ));
+      toast.success("Equity category updated.");
+    } catch (error) {
+      event.node.setDataValue("equityCategory", event.oldValue || "");
+      toast.error(error?.response?.data?.message || "Could not update equity category.");
+    }
+  };
+
+  const holdingsGridContext = {
+    portfolioUsesWeights,
+    portfolioIsNew,
+    editingSellId,
+    setSellQuantity: (holdingId, value) => {
+      sellQuantityRef.current[holdingId] = value;
+      setSellError("");
+    },
+    beginSell,
+    cancelSell,
+    confirmSell,
+    sellSubmitting,
+    addSubmitting,
+  };
+
+  useEffect(() => {
+    holdingsGridRef.current?.api?.refreshCells({ force: true });
+  }, [editingSellId]);
 
   /* ------------------------- guards ------------------------- */
 
@@ -619,7 +676,19 @@ const PortfolioDetailsPage = () => {
       <div className="ml-[257px] flex h-screen min-w-0 flex-col max-[760px]:ml-0">
         <TopBarComponent />
 
-        <main className="mx-auto flex w-full min-h-0 max-w-[1700px] flex-1 flex-col px-4 py-2.5 sm:px-5">
+        {showBenchmark ? (
+          <PortfolioBenchmarkView
+            portfolio={portfolio}
+            holdings={holdings}
+            cashBalance={cashBalance}
+            invested={invested}
+            currentValue={currentValue}
+            pnl={pnl}
+            returnPercentage={returnPercentage}
+            onBack={() => setShowBenchmark(false)}
+          />
+        ) : (
+        <main className="mx-auto flex w-full min-h-0 max-w-[1700px] max-[760px]:ml-0 flex-1 flex-col px-4 py-2.5 sm:px-5">
           {/* HEADER */}
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
@@ -634,7 +703,7 @@ const PortfolioDetailsPage = () => {
                 <h1 className="truncate text-xl font-bold tracking-tight sm:text-2xl">
                   {portfolio.name}
                 </h1>
-                <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+                <span className={`text-[10px] font-bold uppercase tracking-wide ${portfolioIsNew ? "text-amber-700" : "text-emerald-700"}`}>
                   {formatLabel(portfolio.portfolioStatus || "ACTIVE")}
                 </span>
                 <span className="text-[10px] uppercase tracking-wide text-slate-500">
@@ -646,18 +715,18 @@ const PortfolioDetailsPage = () => {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button
-                onClick={openAddSecurity}
-                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-medium shadow-sm hover:bg-slate-50"
+              {!portfolioIsNew && <button
+                onClick={() => setShowBenchmark(true)}
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-blue-800 hover:bg-blue-50"
               >
-                <Plus size={14} /> Add Security
-              </button>
-              <button
+                <LineChart size={14} /> View benchmark
+              </button>}
+              {!portfolioIsNew && <button
                 onClick={() => navigate("/rebalancing", { state: { portfolioId } })}
                 className="inline-flex h-8 items-center gap-1.5 rounded-md bg-red-50 px-3 text-xs font-semibold text-red-700 hover:bg-red-100"
               >
                 <RefreshCw size={14} /> Rebalance
-              </button>
+              </button>}
             </div>
           </div>
 
@@ -683,7 +752,7 @@ const PortfolioDetailsPage = () => {
 
 
           {/* GRID AREA — stacked, both full width */}
-          <div className="mt-2.5 grid min-h-0 flex-1 grid-rows-[minmax(0,0.85fr)_minmax(0,1.4fr)] gap-2.5">
+          <div className="mt-2 grid min-h-0 flex-1 grid-rows-[minmax(0,0.62fr)_minmax(0,1.38fr)] gap-2">
             {/* THEME COMPOSITION + DRIFT */}
             <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
               <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2">
@@ -702,10 +771,10 @@ const PortfolioDetailsPage = () => {
                   </span>
                   <span
                     className={`text-[10px] font-bold uppercase tracking-wide ${
-                      validation?.valid ? "text-emerald-700" : "text-red-600"
+                      portfolioIsNew ? "text-amber-700" : validation?.valid ? "text-emerald-700" : "text-red-600"
                     }`}
                   >
-                    {validation == null ? "No data" : validation.valid ? "Within mandate" : "Breach"}
+                    {portfolioIsNew ? "Awaiting holdings" : validation == null ? "No data" : validation.valid ? "Within mandate" : "Breach"}
                   </span>
                 </div>
               </div>
@@ -767,21 +836,70 @@ const PortfolioDetailsPage = () => {
                   <p className="mt-1 text-xs text-slate-400">{holdingsError}</p>
                 </div>
               ) : (
-                <div className="min-h-0 flex-1">
-                  <AgGridReact
-                    ref={holdingsGridRef}
-                    theme={holdingsTheme}
-                    rowData={holdingRows}
-                    columnDefs={holdingsColumnDefs}
-                    defaultColDef={defaultColDef}
-                    pinnedBottomRowData={holdingRows.length ? pinnedTotals : []}
-                    getRowId={(p) => String(p.data.rowKey)}
-                    suppressCellFocus
-                    animateRows
-                    overlayNoRowsTemplate='<span class="text-xs text-slate-500">No current holdings in this portfolio.</span>'
-                    style={{ height: "100%", width: "100%" }}
-                  />
-                </div>
+                <form onSubmit={submitAddSecurity} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                  <div className="min-h-0 flex-[1.2]">
+                    <AgGridReact
+                      ref={holdingsGridRef}
+                      theme={holdingsTheme}
+                      rowData={holdingRows}
+                      columnDefs={holdingsColumnDefs}
+                      onCellValueChanged={handleHoldingCellValueChanged}
+                      defaultColDef={defaultColDef}
+                      pinnedBottomRowData={holdingRows.length ? pinnedTotals : []}
+                      getRowId={(params) => String(params.data.rowKey)}
+                      context={holdingsGridContext}
+                      suppressCellFocus
+                      animateRows
+                      overlayNoRowsTemplate='<span class="text-xs text-slate-500">No current holdings in this portfolio.</span>'
+                      style={{ height: "100%", width: "100%" }}
+                    />
+                  </div>
+                  <div className="min-h-0 flex-[0.8] overflow-x-auto overflow-y-auto border-t border-slate-100">
+                    <table className="w-full min-w-[650px] table-fixed border-collapse text-left text-[10px]">
+                      <thead className="sticky top-0 z-[1] bg-amber-50 text-[9px] font-bold uppercase tracking-wide text-slate-500">
+                        <tr>{[["Add security", "32%"], [portfolioUsesWeights ? "Alloc. %" : "Buy amount", "14%"], ["Qty", "13%"], ["Price", "14%"], ["Est. cost", "15%"], ["Actions", "22%"]].map(([label, width]) => <th key={label} style={{ width }} className="px-1.5 py-1.5">{label}</th>)}</tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                      {buyOrders.map((order) => {
+                        const item = basketItems.find((candidate) => candidate.rowId === order.rowId);
+                        const used = new Set(buyOrders.filter((candidate) => candidate.rowId !== order.rowId).map((candidate) => String(candidate.securityId)));
+                        const selectable = eligibleSecurities.filter((security) => !used.has(String(security.id)) || String(security.id) === String(order.securityId));
+                        return <tr key={order.rowId} className="bg-amber-50/40">
+                          <td className="px-1.5 py-1">
+                            <select value={order.securityId} onChange={(event) => updateBuyOrder(order.rowId, "securityId", event.target.value)} className="h-7 w-full min-w-0 rounded border border-slate-200 bg-white px-1.5 text-[10px] outline-none focus:border-blue-500">
+                              <option value="">Choose security…</option>
+                              {(portfolioIsNew ? themeAllocations : [{ assetId: "all", assetClass: "All securities" }]).map((allocation) => <optgroup key={allocation.assetId} label={allocation.assetId === "all" ? allocation.assetClass : formatLabel(allocation.assetClass)}>
+                                {selectable.filter((security) => allocation.assetId === "all" || Number(security.asset?.id) === Number(allocation.assetId)).map((security) => <option key={security.id} value={security.id}>{security.name} ({security.symbol || security.isin || "—"})</option>)}
+                              </optgroup>)}
+                            </select>
+                          </td>
+                          <td className="px-1 py-1"><input aria-label={portfolioUsesWeights ? "Allocation percentage" : "Buy amount"} type="number" min="0.01" max={portfolioUsesWeights ? 100 : undefined} step="any" value={order.allocationValue} onChange={(event) => updateBuyOrder(order.rowId, "allocationValue", event.target.value)} placeholder={portfolioUsesWeights ? "%" : "₹"} className="h-7 w-full rounded border border-slate-200 bg-white px-1.5 text-right font-mono text-[10px] outline-none focus:border-blue-500" /></td>
+                          <td className="px-1.5 py-1 text-right font-mono text-[10px] font-semibold text-slate-800">{item?.validQuantity ? `${item.quantity.toLocaleString("en-IN")}${String(item.security?.symbol || "").toUpperCase() === "GOLD" ? "g" : ""}` : "—"}</td>
+                          <td className="px-1.5 py-1 text-right font-mono text-[10px]">{item?.security ? formatCompactMoney(item.security.price) : "—"}</td>
+                          <td className="px-1.5 py-1 text-right font-mono text-[10px] font-semibold">{item?.validQuantity ? formatCompactMoney(item.amount) : "—"}</td>
+                          <td className="whitespace-nowrap px-1 py-1 text-right">
+                            <button type="button" onClick={addBuyOrder} disabled={!eligibleSecurities.length || addSubmitting} className="rounded bg-blue-800 px-1.5 py-1 text-[9px] font-semibold text-white disabled:opacity-40">Add</button>
+                            <button type="button" onClick={() => removeBuyOrder(order.rowId)} disabled={buyOrders.length <= 1 || addSubmitting} className="ml-1 rounded border border-slate-200 px-1.5 py-1 text-[9px] font-semibold text-slate-600 disabled:opacity-40">×</button>
+                          </td>
+                        </tr>;
+                      })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 bg-white px-3 py-2">
+                    <div className="min-w-0 text-[10px]">
+                      <span className="font-medium text-slate-600">Basket {formatCompactMoney(basketTotal)}</span>
+                      <span className={`ml-2 ${basketWithinCash ? "text-slate-500" : "font-semibold text-red-600"}`}>Cash after: {formatCompactMoney(cashBalance - basketTotal)}</span>
+                      {portfolioIsNew && <span className={`ml-2 ${basketSatisfiesTheme ? "text-emerald-700" : "text-amber-700"}`}>{basketSatisfiesTheme ? "Theme allocation satisfied" : "Theme allocation needs adjustment"}</span>}
+                    </div>
+                    <button type="submit" disabled={!basketCanSubmit} className="rounded-md bg-blue-800 px-3 py-2 text-[11px] font-semibold text-white hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-40">
+                      {addSubmitting ? "Saving…" : portfolioIsNew ? "Validate & Activate" : "Record purchases"}
+                    </button>
+                  </div>
+                  {addError && <p role="alert" className="px-3 py-1.5 text-[11px] text-red-700">{addError}</p>}
+                  {sellError && <p role="alert" className="px-3 py-1.5 text-[11px] text-red-700">{sellError}</p>}
+                  {addLoading && <p className="px-3 py-1.5 text-[10px] text-slate-500">Loading securities…</p>}
+                </form>
               )}
 
               <div className="flex shrink-0 items-center justify-between border-t border-slate-100 px-3 py-1.5 text-[10px] text-slate-500">
@@ -796,6 +914,7 @@ const PortfolioDetailsPage = () => {
             </section>
           </div>
         </main>
+        )}
       </div>
 
       {/* TOAST */}
@@ -808,286 +927,6 @@ const PortfolioDetailsPage = () => {
         </div>
       )}
 
-      {/* ADD SECURITY MODAL */}
-      {addOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-3 sm:p-5"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !addSubmitting) setAddOpen(false);
-          }}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="add-security-title"
-            className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
-          >
-            <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
-              <div>
-                <h2 id="add-security-title" className="text-lg font-bold">
-                  Build a purchase basket
-                </h2>
-                <p className="mt-1 max-w-2xl text-xs text-slate-500">
-                  Add several securities at once. The combined quantities are validated against
-                  available cash and every theme allocation before anything is recorded.
-                </p>
-              </div>
-              <button
-                onClick={() => setAddOpen(false)}
-                disabled={addSubmitting}
-                aria-label="Close"
-                className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-40"
-              >
-                ×
-              </button>
-            </div>
-
-            {addLoading ? (
-              <div className="p-10 text-center text-sm text-slate-500">
-                Loading prices and theme capacity…
-              </div>
-            ) : (
-              <form onSubmit={submitAddSecurity} className="flex min-h-0 flex-1 flex-col">
-                <div className="min-h-0 space-y-4 overflow-y-auto p-4 sm:p-5">
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    <div className="flex items-center justify-between rounded-lg bg-blue-50 px-3 py-2.5 text-xs">
-                      <span className="font-semibold text-slate-600">Available cash</span>
-                      <strong className="font-mono text-slate-900">{formatMoney(cashBalance)}</strong>
-                    </div>
-                    <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2.5 text-xs">
-                      <span className="font-semibold text-slate-600">Basket cost</span>
-                      <strong className={`font-mono ${basketWithinCash ? "text-slate-900" : "text-red-700"}`}>
-                        {formatMoney(basketTotal)}
-                      </strong>
-                    </div>
-                    <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2.5 text-xs">
-                      <span className="font-semibold text-slate-600">Cash after purchase</span>
-                      <strong className={`font-mono ${basketWithinCash ? "text-slate-900" : "text-red-700"}`}>
-                        {formatMoney(cashBalance - basketTotal)}
-                      </strong>
-                    </div>
-                  </div>
-
-                  {!eligibleSecurities.length ? (
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
-                      No priced securities are available for the asset classes in this theme.
-                    </div>
-                  ) : (
-                    <>
-                      <div className="space-y-2">
-                        {buyOrders.map((order) => {
-                          const item = basketItems.find((c) => c.rowId === order.rowId);
-                          const usedElsewhere = new Set(
-                            buyOrders
-                              .filter((c) => c.rowId !== order.rowId)
-                              .map((c) => String(c.securityId))
-                              .filter(Boolean)
-                          );
-                          const selectable = eligibleSecurities.filter(
-                            (s) =>
-                              !usedElsewhere.has(String(s.id)) ||
-                              String(s.id) === String(order.securityId)
-                          );
-                          const cashForThisRow =
-                            cashBalance -
-                            basketItems
-                              .filter((c) => c.rowId !== order.rowId)
-                              .reduce((sum, c) => sum + c.amount, 0);
-                          const maxQuantity = item?.security
-                            ? Math.max(0, Math.floor((cashForThisRow + 0.01) / Number(item.security.price)))
-                            : undefined;
-                          return (
-                                                       <div
-                              key={order.rowId}
-                              className="grid gap-2 rounded-lg border border-slate-200 bg-white p-3 md:grid-cols-[minmax(240px,1.8fr)_minmax(130px,.7fr)_minmax(130px,.8fr)_auto] md:items-end"
-                            >
-                              <label className="block text-[11px] font-semibold text-slate-700">
-                                Security
-                                <select
-                                  required
-                                  value={order.securityId}
-                                  onChange={(e) => updateBuyOrder(order.rowId, "securityId", e.target.value)}
-                                  className="mt-1.5 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-xs font-normal outline-none focus:border-blue-400"
-                                >
-                                  <option value="">Choose a theme security</option>
-                                  {themeAllocations.map((allocation) => (
-                                    <optgroup
-                                      key={allocation.assetId}
-                                      label={`${formatLabel(allocation.assetClass)} · target ${Number(allocation.targetPercentage).toFixed(1)}%`}
-                                    >
-                                      {selectable
-                                        .filter((s) => Number(s.asset?.id) === Number(allocation.assetId))
-                                        .map((s) => (
-                                          <option key={s.id} value={s.id}>
-                                            {s.name} ({s.symbol || s.isin || "—"}) · {formatMoney(s.price)}
-                                          </option>
-                                        ))}
-                                    </optgroup>
-                                  ))}
-                                </select>
-                              </label>
-
-                              <label className="block text-[11px] font-semibold text-slate-700">
-                                Quantity
-                                <input
-                                  required
-                                  type="number"
-                                  min="1"
-                                  max={maxQuantity}
-                                  step="1"
-                                  value={order.quantity}
-                                  onChange={(e) => updateBuyOrder(order.rowId, "quantity", e.target.value)}
-                                  placeholder="Whole units"
-                                  className="mt-1.5 h-10 w-full rounded-md border border-slate-200 px-3 font-mono text-xs outline-none focus:border-blue-400"
-                                />
-                              </label>
-
-                              <div className="rounded-md bg-slate-50 px-3 py-2">
-                                <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
-                                  Estimated amount
-                                </div>
-                                <div className="mt-1 truncate font-mono text-xs font-semibold text-slate-800">
-                                  {item?.security ? formatMoney(item.amount) : "—"}
-                                </div>
-                                {item?.security && (
-                                  <div className="text-[9px] text-slate-500">
-                                    {formatLabel(item.security.asset?.assetClass)} ·{" "}
-                                    {formatMoney(item.security.price)} / unit
-                                  </div>
-                                )}
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={() => removeBuyOrder(order.rowId)}
-                                disabled={buyOrders.length <= 1 || addSubmitting}
-                                aria-label="Remove security row"
-                                title="Remove security"
-                                className="flex h-10 items-center justify-center rounded-md border border-slate-200 px-3 text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-30"
-                              >
-                                <Trash2 size={15} />
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={addBuyOrder}
-                        disabled={eligibleSecurities.length <= buyOrders.length || addSubmitting}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-blue-300 px-3 py-2 text-xs font-semibold text-blue-800 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <Plus size={14} /> Add another security
-                      </button>
-                    </>
-                  )}
-
-                  {!!projectedAllocations.length && (
-                    <div className="overflow-hidden rounded-lg border border-slate-200">
-                      <div className="border-b border-slate-100 bg-slate-50 px-3 py-2">
-                        <h3 className="text-xs font-bold text-slate-800">Projected theme allocation</h3>
-                        <p className="mt-0.5 text-[10px] text-slate-500">
-                          Allocation is calculated across all selected securities together.
-                        </p>
-                      </div>
-                      <div className="grid gap-2 p-3 sm:grid-cols-2 xl:grid-cols-4">
-                        {projectedAllocations.map((allocation) => (
-                          <div
-                            key={allocation.assetId}
-                            className={`rounded-md p-3 ${
-                              basketRowsValid && allocation.satisfiedAfterBuy ? "bg-emerald-50" : "bg-slate-50"
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-2 text-[10px] font-semibold text-slate-600">
-                              <span>{formatLabel(allocation.assetClass)}</span>
-                              <span>Target {Number(allocation.targetPercentage).toFixed(1)}%</span>
-                            </div>
-                            <div className="mt-1.5 flex items-baseline justify-between gap-2">
-                              <strong className="font-mono text-sm text-slate-900">
-                                {allocation.projectedPercentage.toFixed(2)}%
-                              </strong>
-                              <span
-                                className={`font-mono text-[10px] ${
-                                  allocation.satisfiedAfterBuy ? "text-emerald-700" : "text-amber-700"
-                                }`}
-                              >
-                                {allocation.projectedDrift > 0 ? "+" : ""}
-                                {allocation.projectedDrift.toFixed(2)}%
-                              </span>
-                            </div>
-                            <div className="mt-2 h-1.5 rounded-full bg-white">
-                              <div
-                                className={`h-full rounded-full ${
-                                  allocation.satisfiedAfterBuy ? "bg-emerald-500" : "bg-amber-500"
-                                }`}
-                                style={{
-                                  width: `${Math.max(0, Math.min(100, allocation.projectedPercentage))}%`,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div
-                    className={`flex items-start gap-2 rounded-lg p-3 text-xs ${
-                      basketRowsValid && basketWithinCash && basketSatisfiesTheme
-                        ? "bg-emerald-50 text-emerald-800"
-                        : "bg-amber-50 text-amber-900"
-                    }`}
-                  >
-                    {basketRowsValid && basketWithinCash && basketSatisfiesTheme ? (
-                      <CheckCircle2 size={15} className="mt-0.5 shrink-0" />
-                    ) : (
-                      <AlertTriangle size={15} className="mt-0.5 shrink-0" />
-                    )}
-                    <span>
-                      {!basketRowsValid
-                        ? "Choose a security and whole-unit quantity in every row."
-                        : !basketWithinCash
-                          ? "Reduce quantities so the basket fits the remaining cash."
-                          : basketSatisfiesTheme
-                            ? "The complete basket satisfies every theme allocation band (±5%)."
-                            : "Adjust quantities across the selected asset classes until each projected allocation is within ±5% of its theme target."}
-                    </span>
-                  </div>
-
-                  {addError && (
-                    <div role="alert" className="rounded-md bg-red-50 px-3 py-2.5 text-xs text-red-700">
-                      {addError}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 px-4 py-3 sm:px-5">
-                  <button
-                    type="button"
-                    onClick={() => setAddOpen(false)}
-                    disabled={addSubmitting}
-                    className="rounded-md border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 disabled:opacity-40"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={!basketCanSubmit || !eligibleSecurities.length}
-                    className="rounded-md bg-blue-800 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {addSubmitting
-                      ? "Validating & recording…"
-                      : `Buy ${basketItems.filter((i) => i.security).length} ${
-                          basketItems.filter((i) => i.security).length === 1 ? "security" : "securities"
-                        }`}
-                  </button>
-                </div>
-              </form>
-            )}
-          </section>
-        </div>
-      )}
     </div>
   );
 };
@@ -1120,6 +959,52 @@ function MetricCard({ title, value, caption, icon: Icon, positive }) {
   );
 }
 
+function HoldingQuantityCellRenderer(params) {
+  const { data, context, value } = params;
+  if (!data) return null;
+  if (data.holdingId != null && String(context.editingSellId) === String(data.holdingId)) {
+    return (
+      <input
+        aria-label={`Sell quantity for ${data.securityName}`}
+        type="number"
+        min="1"
+        max={data.quantity}
+        step="1"
+        autoFocus
+        disabled={context.sellSubmitting || context.addSubmitting}
+        defaultValue={context.sellQuantity ?? ""}
+        onChange={(event) => context.setSellQuantity(data.holdingId, event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") { event.preventDefault(); context.confirmSell(data); }
+          if (event.key === "Escape") { event.preventDefault(); context.cancelSell(); }
+        }}
+        className="h-7 w-20 rounded border border-red-200 bg-white px-2 text-right font-mono text-[11px] outline-none focus:border-red-500"
+      />
+    );
+  }
+  const quantity = value == null ? "" : Number(value).toLocaleString("en-IN");
+  return <span>{quantity}{String(data.symbol || "").toUpperCase() === "GOLD" && quantity ? " g" : ""}</span>;
+}
+
+function HoldingActionsCellRenderer(params) {
+  const { data, context } = params;
+  if (!data?.holdingId || context.portfolioIsNew || Number(data.quantity) <= 0) return null;
+  const editing = String(context.editingSellId) === String(data.holdingId);
+  if (editing) {
+    return (
+      <div className="flex h-full items-center justify-end">
+        <button type="button" onClick={() => context.confirmSell(data)} disabled={context.sellSubmitting || context.addSubmitting} aria-label={`Confirm sell ${data.securityName}`} title="Confirm sell" className="inline-flex h-7 w-7 items-center justify-center rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40"><Check size={14} /></button>
+        <button type="button" onClick={context.cancelSell} disabled={context.sellSubmitting || context.addSubmitting} aria-label="Cancel sell" title="Cancel" className="ml-1 inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:opacity-40"><X size={14} /></button>
+      </div>
+    );
+  }
+  return (
+    <div className="flex h-full items-center justify-end">
+      <button type="button" onClick={() => context.beginSell(data)} disabled={context.editingSellId != null || context.addSubmitting} className="rounded border border-red-200 px-2 py-1 text-[10px] font-semibold text-red-700 hover:bg-red-50 disabled:opacity-40">Sell</button>
+    </div>
+  );
+}
+
 /* ------------------------- data helpers ------------------------- */
 
 const holdingReturn = (holding) => {
@@ -1144,7 +1029,17 @@ const formatMoney = (value) =>
         maximumFractionDigits: 2,
       })}`;
 
+const formatCompactMoney = (value) => {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "—";
+  const abs = Math.abs(amount);
+  if (abs >= 10_000_000) return `₹${(amount / 10_000_000).toFixed(2)}Cr`;
+  if (abs >= 100_000) return `₹${(amount / 100_000).toFixed(2)}L`;
+  if (abs >= 1_000) return `₹${(amount / 1_000).toFixed(1)}K`;
+  return formatMoney(amount);
+};
+
 let nextBuyOrderId = 0;
-const newBuyOrder = () => ({ rowId: `basket-${++nextBuyOrderId}`, securityId: "", quantity: "" });
+const newBuyOrder = () => ({ rowId: `basket-${++nextBuyOrderId}`, securityId: "", allocationValue: "" });
 
 export default PortfolioDetailsPage;
