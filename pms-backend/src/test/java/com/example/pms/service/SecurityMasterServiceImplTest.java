@@ -15,13 +15,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 
 @ExtendWith(MockitoExtension.class)
-public class SecurityMasterServiceImplTest {
+class SecurityMasterServiceImplTest {
 
     @Mock
     private SecurityMasterClient securityMasterClient;
@@ -29,158 +28,213 @@ public class SecurityMasterServiceImplTest {
     @InjectMocks
     private SecurityMasterServiceImpl securityMasterService;
 
-    @Test
-    @DisplayName("TC-SECURITY-001 | Retrieve all security information")
-    void getAllSecuritiesInfo_shouldReturnClientResponse(){
 
-        SecuritiesInfoDTO expected = new SecuritiesInfoDTO();
+    private SecurityMaster security(
+            Long id,
+            SecurityType type) {
 
-        when(securityMasterClient.getAllSecurityInfo()).thenReturn(Optional.of(expected));
+        SecurityMaster security =
+                new SecurityMaster();
 
-        SecuritiesInfoDTO result = securityMasterService.getAllSecuritiesInfo();
+        security.setId(id);
+        security.setSecurityType(type);
 
-        assertSame(expected, result);
-
-        verify(securityMasterClient).getAllSecurityInfo();
-
+        return security;
     }
 
+
     @Test
-    @DisplayName("TC-SECURITY-002 | Get current equity price")
-    void getCurrentPrice_shouldReturnEquityClosePrice(){
+    @DisplayName("TC-SECURITY-001 | Get all securities")
+    void getAllSecuritiesInfo_shouldReturnData() {
 
-        SecurityMaster securityMaster = new SecurityMaster();
+        SecuritiesInfoDTO expected =
+                new SecuritiesInfoDTO();
 
-        securityMaster.setId(1L);
-        securityMaster.setSecurityType(SecurityType.EQUITY);
+        when(securityMasterClient
+                .getAllSecurityInfo())
+                .thenReturn(Optional.of(expected));
 
-        StockData stockData = new StockData();
+        SecuritiesInfoDTO result =
+                securityMasterService
+                        .getAllSecuritiesInfo();
 
-        stockData.setClosePrice(new BigDecimal("125.50"));
-
-        SecurityPriceDTO priceDTO = new SecurityPriceDTO();
-
-        priceDTO.setSecurityMaster(securityMaster);
-
-        priceDTO.setStockData(stockData);
-
-        when(securityMasterClient.findBySecurityId(1L)).thenReturn(Optional.of(priceDTO));
-
-        Double result = securityMasterService.getCurrentPrice(1L);
-
-        assertEquals(125.50, result);
-
+        assertSame(
+                expected,
+                result
+        );
     }
 
+
     @Test
-    @DisplayName("TC-SECURITY-003 | Get current ETF price")
-    void getCurrentPrice_shouldReturnEtfClosePrice(){
+    @DisplayName("TC-SECURITY-002 | Equity price")
+    void getCurrentPrice_shouldReturnEquityPrice() {
 
-        SecurityMaster securityMaster = new SecurityMaster();
+        SecurityMaster security =
+                security(1L, SecurityType.EQUITY);
 
-        securityMaster.setId(2L);
-        securityMaster.setSecurityType(SecurityType.ETF);
+        StockData stock =
+                new StockData();
 
-        StockData stockData = new StockData();
+        stock.setClosePrice(
+                BigDecimal.valueOf(125.50)
+        );
 
-        stockData.setClosePrice(new BigDecimal("250.75"));
+        SecurityPriceDTO quote =
+                new SecurityPriceDTO();
 
-        SecurityPriceDTO priceDTO = new SecurityPriceDTO();
+        quote.setSecurityMaster(security);
+        quote.setStockData(stock);
 
-        priceDTO.setSecurityMaster(securityMaster);
+        when(securityMasterClient
+                .findBySecurityId(1L))
+                .thenReturn(Optional.of(quote));
 
-        priceDTO.setStockData(stockData);
-
-        when(securityMasterClient.findBySecurityId(2L)).thenReturn(Optional.of(priceDTO));
-
-        Double result = securityMasterService.getCurrentPrice(2L);
-
-        assertEquals(250.75, result);
-
+        assertEquals(
+                125.50,
+                securityMasterService
+                        .getCurrentPrice(1L)
+        );
     }
 
+
     @Test
-    @DisplayName("TC-SECURITY-004 | Get current mutual fund NAV")
-    void getCurrentPrice_shouldReturnMutualFundNav(){
+    @DisplayName("TC-SECURITY-003 | ETF price")
+    void getCurrentPrice_shouldReturnEtfPrice() {
 
-        SecurityMaster securityMaster = new SecurityMaster();
+        SecurityMaster security =
+                security(2L, SecurityType.ETF);
 
-        securityMaster.setId(3L);
-        securityMaster.setSecurityType(SecurityType.MUTUAL_FUND);
+        StockData stock =
+                new StockData();
 
-        MutualFundNav nav = new MutualFundNav();
+        stock.setClosePrice(
+                BigDecimal.valueOf(250.75)
+        );
 
-        nav.setNav(new BigDecimal("42.35"));
+        SecurityPriceDTO quote =
+                new SecurityPriceDTO();
 
-        SecurityPriceDTO priceDTO = new SecurityPriceDTO();
+        quote.setSecurityMaster(security);
+        quote.setStockData(stock);
 
-        priceDTO.setSecurityMaster(securityMaster);
+        when(securityMasterClient
+                .findBySecurityId(2L))
+                .thenReturn(Optional.of(quote));
 
-        priceDTO.setMutualFundNav(nav);
-
-        when(securityMasterClient.findBySecurityId(3L)).thenReturn(Optional.of(priceDTO));
-
-        Double result = securityMasterService.getCurrentPrice(3L);
-
-        assertEquals(42.35, result);
-
+        assertEquals(
+                250.75,
+                securityMasterService
+                        .getCurrentPrice(2L)
+        );
     }
 
+
     @Test
-    @DisplayName("TC-SECURITY-005 | Get current bond face value")
-    void getCurrentPrice_shouldReturnBondFaceValue(){
+    @DisplayName("TC-SECURITY-004 | Mutual fund NAV")
+    void getCurrentPrice_shouldReturnMutualFundNav() {
 
-        SecurityMaster securityMaster = new SecurityMaster();
+        SecurityMaster security =
+                security(3L, SecurityType.MUTUAL_FUND);
 
-        securityMaster.setId(4L);
-        securityMaster.setSecurityType(SecurityType.BOND);
+        MutualFundNav nav =
+                new MutualFundNav();
 
-        Bond bond = new Bond();
+        nav.setNav(
+                BigDecimal.valueOf(42.35)
+        );
+
+        SecurityPriceDTO quote =
+                new SecurityPriceDTO();
+
+        quote.setSecurityMaster(security);
+        quote.setMutualFundNav(nav);
+
+        when(securityMasterClient
+                .findBySecurityId(3L))
+                .thenReturn(Optional.of(quote));
+
+        assertEquals(
+                42.35,
+                securityMasterService
+                        .getCurrentPrice(3L)
+        );
+    }
+
+
+    @Test
+    @DisplayName("TC-SECURITY-005 | Bond price")
+    void getCurrentPrice_shouldReturnBondFaceValue() {
+
+        SecurityMaster security =
+                security(4L, SecurityType.BOND);
+
+        Bond bond =
+                new Bond();
 
         bond.setFaceValue(1000.0);
 
-        SecurityPriceDTO priceDTO = new SecurityPriceDTO();
+        SecurityPriceDTO quote =
+                new SecurityPriceDTO();
 
-        priceDTO.setSecurityMaster(securityMaster);
+        quote.setSecurityMaster(security);
+        quote.setBond(bond);
 
-        priceDTO.setBond(bond);
+        when(securityMasterClient
+                .findBySecurityId(4L))
+                .thenReturn(Optional.of(quote));
 
-        when(securityMasterClient.findBySecurityId(4L)).thenReturn(Optional.of(priceDTO));
-
-        Double result = securityMasterService.getCurrentPrice(4L);
-
-        assertEquals(1000.0, result);
-
+        assertEquals(
+                1000.0,
+                securityMasterService
+                        .getCurrentPrice(4L)
+        );
     }
+
 
     @Test
-    @DisplayName("TC-SECURITY-006 | Get current commodity price")
-    void getCurrentPrice_shouldReturnCommoditySpotPrice(){
+    @DisplayName("TC-SECURITY-006 | Commodity price")
+    void getCurrentPrice_shouldReturnCommodityPrice() {
 
-        SecurityMaster securityMaster = new SecurityMaster();
+        SecurityMaster security =
+                security(5L, SecurityType.COMMODITY);
 
-        securityMaster.setId(5L);
-        securityMaster.setSecurityType(SecurityType.COMMODITY);
+        CommoditySpotData commodity =
+                new CommoditySpotData();
 
-        CommoditySpotData commodity = new CommoditySpotData();
+        commodity.setSpotPrice(
+                BigDecimal.valueOf(7250)
+        );
 
-        commodity.setSpotPrice(new BigDecimal("7250.00"));
+        SecurityPriceDTO quote =
+                new SecurityPriceDTO();
 
-        SecurityPriceDTO priceDTO = new SecurityPriceDTO();
+        quote.setSecurityMaster(security);
+        quote.setCommoditySpotData(commodity);
 
-        priceDTO.setSecurityMaster(securityMaster);
+        when(securityMasterClient
+                .findBySecurityId(5L))
+                .thenReturn(Optional.of(quote));
 
-        priceDTO.setCommoditySpotData(commodity);
-
-        when(securityMasterClient.findBySecurityId(5L)).thenReturn(Optional.of(priceDTO));
-
-        Double result = securityMasterService.getCurrentPrice(5L);
-
-        assertEquals(7250.00, result);
-
+        assertEquals(
+                7250.0,
+                securityMasterService
+                        .getCurrentPrice(5L)
+        );
     }
 
 
+    @Test
+    @DisplayName("TC-SECURITY-007 | Missing security quote")
+    void getCurrentPrice_shouldThrow_whenQuoteMissing() {
 
+        when(securityMasterClient
+                .findBySecurityId(999L))
+                .thenReturn(Optional.empty());
 
+        assertThrows(
+                Exception.class,
+                () -> securityMasterService
+                        .getCurrentPrice(999L)
+        );
+    }
 }
