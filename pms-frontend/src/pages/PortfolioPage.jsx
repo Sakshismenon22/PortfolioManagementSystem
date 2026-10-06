@@ -29,9 +29,9 @@ const gridTheme = themeQuartz.withParams({
   browserColorScheme: "light",
   headerBackgroundColor: "#eff4fc",
   headerTextColor: "#64748b",
-  headerFontSize: 10,
+  headerFontSize: 11,
   headerFontWeight: 700,
-  fontSize: 12,
+  fontSize: 13,
   rowHeight: 52,
   headerHeight: 32,
   spacing: 5,
@@ -384,7 +384,7 @@ const PortfolioPage = () => {
     <div className="h-screen overflow-hidden bg-[#f6f8fd]">
       <SideBarComponent activePage="Portfolios" />
 
-      <div className="ml-[257px] flex h-screen min-w-0 flex-col max-[760px]:ml-0">
+      <div className="sidebar-content flex h-screen min-w-0 flex-col">
         {/* <TopBarComponent /> */}
 
         <main className="mx-auto flex w-full min-h-0 max-w-[1600px] flex-1 flex-col px-4 py-3 sm:px-5">

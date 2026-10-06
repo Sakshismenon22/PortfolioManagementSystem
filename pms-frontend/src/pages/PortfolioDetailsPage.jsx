@@ -34,9 +34,9 @@ const baseParams = {
   browserColorScheme: "light",
   headerBackgroundColor: "#eef3ff",
   headerTextColor: "#64748b",
-  headerFontSize: 9,
+  headerFontSize: 11,
   headerFontWeight: 700,
-  fontSize: 12,
+  fontSize: 13,
   rowHoverColor: "#f5f8ff",
   wrapperBorder: false,
   wrapperBorderRadius: 0,
@@ -44,10 +44,10 @@ const baseParams = {
 
 const gridTheme = themeQuartz.withParams({
   ...baseParams,
-  rowHeight: 24,
-  headerHeight: 27,
-  spacing: 2,
-  cellHorizontalPadding: 7,
+  rowHeight: 32,
+  headerHeight: 32,
+  spacing: 4,
+  cellHorizontalPadding: 9,
 });
 
 const LEFT_CELL = { display: "flex", alignItems: "center" };
@@ -297,41 +297,41 @@ const PortfolioDetailsPage = () => {
   );
 
   const holdingsColumnDefs = useMemo(() => [
-    { headerName: "Security", field: "securityName", flex: 1.5, minWidth: 110, tooltipField: "securityName", cellClass: "font-medium text-slate-800" },
-    { headerName: "Symbol", field: "symbol", width: 62, tooltipField: "symbol", cellClass: "font-mono text-[9px] text-slate-500" },
-    { headerName: "Asset", field: "assetClass", width: 72, cellClass: "text-[9px] text-slate-600" },
+    { headerName: "Security", field: "securityName", flex: 1.5, minWidth: 150, tooltipField: "securityName", cellClass: "font-medium text-slate-800" },
+    { headerName: "Symbol", field: "symbol", width: 72, tooltipField: "symbol", cellClass: "font-mono text-[11px] text-slate-500" },
+    { headerName: "Asset", field: "assetClass", width: 82, cellClass: "text-[11px] text-slate-600" },
     {
       headerName: "Equity category",
       field: "equityCategory",
-      width: 112,
+      width: 122,
       editable: (params) => ["EQUITY", "MUTUAL_FUND"].includes(params.data?.securityType),
       cellEditor: "agSelectCellEditor",
       cellEditorParams: { values: ["", "SMALL_CAP", "MID_CAP", "LARGE_CAP"] },
       valueFormatter: (params) => params.value ? formatLabel(params.value) : "—",
       cellClass: (params) => ["EQUITY", "MUTUAL_FUND"].includes(params.data?.securityType)
-        ? "text-[9px] text-slate-700"
-        : "text-[9px] text-slate-300",
+        ? "text-[11px] text-slate-700"
+        : "text-[11px] text-slate-300",
     },
     numericCol({
       headerName: portfolioUsesWeights ? "Alloc. %" : "Alloc. ₹",
       field: "allocationValue",
-      width: 94,
-      cellClass: "font-mono text-[9px] text-slate-700",
-      valueFormatter: (p) => p.value == null ? "" : portfolioUsesWeights ? `${Number(p.value).toFixed(1)}%` : formatCompactMoney(p.value),
+      width: 112,
+      cellClass: "font-mono text-[11px] text-slate-700",
+      valueFormatter: (p) => p.value == null ? "" : portfolioUsesWeights ? `${Number(p.value).toFixed(2)}%` : formatMoney(p.value),
     }),
     numericCol({
       headerName: "Quantity",
       field: "quantity",
-      width: 80,
-      cellClass: "font-mono text-[9px] text-slate-700",
+      width: 88,
+      cellClass: "font-mono text-[11px] text-slate-700",
       valueFormatter: (p) => p.value == null ? "" : `${Number(p.value).toLocaleString("en-IN")}${isGold(p.data?.symbol) ? " g" : ""}`,
     }),
-    numericCol({ headerName: "Avg cost", field: "averageCost", width: 84, valueFormatter: (p) => p.value == null ? "" : formatCompactMoney(p.value), cellClass: "font-mono text-[9px] text-slate-600" }),
-    numericCol({ headerName: "Price", field: "currentPrice", width: 78, valueFormatter: (p) => p.value == null ? "" : formatCompactMoney(p.value), cellClass: "font-mono text-[9px] text-slate-700" }),
-    numericCol({ headerName: "Cost", field: "cost", width: 86, cellStyle: { ...RIGHT_CELL, color: "#1e3a8a" }, cellClass: "font-mono text-[9px] font-semibold", valueFormatter: (p) => formatCompactMoney(p.value) }),
-    numericCol({ headerName: "Value", field: "value", width: 88, cellStyle: { ...RIGHT_CELL, color: "#1e3a8a" }, cellClass: "font-mono text-[9px] font-semibold", valueFormatter: (p) => formatCompactMoney(p.value) }),
-    numericCol({ headerName: "P&L", field: "pnl", width: 80, cellClass: (p) => `font-mono text-[9px] font-semibold ${Number(p.value) >= 0 ? "text-emerald-700" : "text-red-600"}`, valueFormatter: (p) => `${Number(p.value) >= 0 ? "+" : "−"}${formatCompactMoney(Math.abs(Number(p.value || 0)))}` }),
-    numericCol({ headerName: "Ret.", field: "returnPct", width: 68, sort: "desc", cellClass: (p) => `font-mono text-[9px] font-semibold ${Number(p.value) >= 0 ? "text-emerald-700" : "text-red-600"}`, valueFormatter: (p) => `${Number(p.value) >= 0 ? "+" : ""}${Number(p.value || 0).toFixed(1)}%` }),
+    numericCol({ headerName: "Avg cost", field: "averageCost", width: 116, valueFormatter: (p) => p.value == null ? "" : formatMoney(p.value), cellClass: "font-mono text-[11px] text-slate-600" }),
+    numericCol({ headerName: "Price", field: "currentPrice", width: 116, valueFormatter: (p) => p.value == null ? "" : formatMoney(p.value), cellClass: "font-mono text-[11px] text-slate-700" }),
+    numericCol({ headerName: "Cost", field: "cost", width: 136, cellStyle: { ...RIGHT_CELL, color: "#1e3a8a" }, cellClass: "font-mono text-[11px] font-semibold", valueFormatter: (p) => formatMoney(p.value) }),
+    numericCol({ headerName: "Value", field: "value", width: 136, cellStyle: { ...RIGHT_CELL, color: "#1e3a8a" }, cellClass: "font-mono text-[11px] font-semibold", valueFormatter: (p) => formatMoney(p.value) }),
+    numericCol({ headerName: "P&L", field: "pnl", width: 136, cellClass: (p) => `font-mono text-[11px] font-semibold ${Number(p.value) >= 0 ? "text-emerald-700" : "text-red-600"}`, valueFormatter: (p) => `${Number(p.value) >= 0 ? "+" : "−"}${formatMoney(Math.abs(Number(p.value || 0)))}` }),
+    numericCol({ headerName: "Ret.", field: "returnPct", width: 78, sort: "desc", cellClass: (p) => `font-mono text-[11px] font-semibold ${Number(p.value) >= 0 ? "text-emerald-700" : "text-red-600"}`, valueFormatter: (p) => `${Number(p.value) >= 0 ? "+" : ""}${Number(p.value || 0).toFixed(1)}%` }),
   ], [portfolioUsesWeights]);
 
   const rebalanceColumnDefs = useMemo(() => [
@@ -709,7 +709,7 @@ const PortfolioDetailsPage = () => {
     <div className="h-screen overflow-hidden bg-[#f6f8fd] text-slate-900">
       <SideBarComponent activePage="Portfolios" />
 
-      <div className="ml-[257px] flex h-screen min-w-0 flex-col max-[760px]:ml-0">
+      <div className="sidebar-content flex h-screen min-w-0 flex-col">
         {/* <TopBarComponent /> */}
 
         {showBenchmark ? (

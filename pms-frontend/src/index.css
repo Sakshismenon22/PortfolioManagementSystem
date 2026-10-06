@@ -1,1 +1,17 @@
 @import "tailwindcss";
+
+:root {
+  --sidebar-width: 257px;
+}
+
+.sidebar-content {
+  min-width: 0;
+  margin-left: var(--sidebar-width);
+  transition: margin-left 200ms ease-in-out;
+}
+
+@media (max-width: 760px) {
+  .sidebar-content {
+    margin-left: 0;
+  }
+}

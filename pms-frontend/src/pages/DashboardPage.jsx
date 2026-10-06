@@ -122,7 +122,7 @@ const PortfolioBenchmarkChart = ({
   });
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="h-full rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Portfolio Performance vs NIFTY 50</h2>
@@ -228,7 +228,7 @@ const AssetAllocationCard = ({ aum, assetAllocation, loading }) => {
   const chartBackground = segments.length ? "conic-gradient(" + segments.join(", ") + ")" : "conic-gradient(#e2e8f0 0deg 360deg)";
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="h-full rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div>
         <h2 className="text-lg font-semibold text-slate-900">Asset Allocation</h2>
         <p className="text-[11px] text-slate-500">Active portfolio value by asset class</p>
@@ -489,7 +489,7 @@ const DashboardPage = () => {
   return (
     <div className="min-h-screen bg-[#f5f7fc]">
       <SideBarComponent activePage="Dashboard" />
-      <div className="ml-[257px] min-h-screen max-[760px]:ml-0">
+      <div className="sidebar-content min-h-screen">
        {/* <TopBarComponent /> */}
        <main>
         <div className="mx-auto max-w-[1600px] px-4 py-5 sm:px-5">
@@ -567,18 +567,19 @@ const DashboardPage = () => {
             />
           </div>
 
-          <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="mt-5 grid grid-cols-1 items-stretch gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+            <PortfolioBenchmarkChart
+              portfolios={mandates}
+              selectedPortfolioId={selectedPortfolioId}
+              onSelectPortfolio={setSelectedPortfolioId}
+              benchmarkPoints={benchmarkPoints}
+              benchmarkLoading={benchmarkLoading}
+              benchmarkError={benchmarkError}
+            />
 
-            <div className="space-y-5">
-              <PortfolioBenchmarkChart
-                portfolios={mandates}
-                selectedPortfolioId={selectedPortfolioId}
-                onSelectPortfolio={setSelectedPortfolioId}
-                benchmarkPoints={benchmarkPoints}
-                benchmarkLoading={benchmarkLoading}
-                benchmarkError={benchmarkError}
-              />
+            <AssetAllocationCard aum={aum} assetAllocation={assetAllocation} loading={loading} />
 
+            <div className="min-w-0 xl:col-span-2">
               <DriftMonitoringCard
                 rows={driftRows}
                 loading={loading}
@@ -587,13 +588,6 @@ const DashboardPage = () => {
                 onViewAll={() => navigate("/rebalancing")}
                 onOpenPortfolio={(portfolioId) => navigate(`/portfolio/${portfolioId}`)}
               />
-            </div>
-
-     
-            <div className="space-y-5">
-              <AssetAllocationCard aum={aum} assetAllocation={assetAllocation} loading={loading} />
-
-              
             </div>
           </div>
         </div>

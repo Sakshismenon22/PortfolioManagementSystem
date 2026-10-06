@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useLayoutEffect, useState } from "react";
 import {
   ChevronsLeft,
   ChevronsRight,
@@ -10,6 +10,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { clearAuthSession } from "../services/authService";
 
 const EXPANDED_WIDTH = 257;
 const COLLAPSED_WIDTH = 72;
@@ -27,9 +28,8 @@ const SideBarComponent = ({ activePage, setActivePage }) => {
     }
   });
 
-  // Publish the current width so page layouts can follow the sidebar.
-  // In pages, replace `ml-[257px]` with `ml-[var(--sidebar-width)]`.
-  useEffect(() => {
+  // Publish the current width so the shared page offset follows the sidebar.
+  useLayoutEffect(() => {
     const width = collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
     document.documentElement.style.setProperty("--sidebar-width", `${width}px`);
     try {
@@ -44,12 +44,17 @@ const SideBarComponent = ({ activePage, setActivePage }) => {
     { label: "Portfolios", icon: Folder, path: "/portfolio" },
     { label: "Themes", icon: Sparkles, path: "/create-theme" },
     { label: "Securities", icon: WalletCards, path: "/securities" },
-    { label: "Rebalancing", icon: SlidersHorizontal, path: "/rebalancing" },
+    // { label: "Rebalancing", icon: SlidersHorizontal, path: "/rebalancing" },
     // { label: "Notifications", icon: Bell, badge: "3", path: null },
-    { label: "Log out", icon: LogOut },
+    { label: "Log out", icon: LogOut, action: "logout", path: "/login" },
   ];
 
   const handleNavigation = (item) => {
+    if (item.action === "logout") {
+      clearAuthSession();
+      navigate("/login", { replace: true });
+      return;
+    }
     if (!item.path) return;
     setActivePage?.(item.label);
     navigate(item.path);
