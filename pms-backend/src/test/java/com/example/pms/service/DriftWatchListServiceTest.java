@@ -1,13 +1,20 @@
 package com.example.pms.service;
 
-import com.example.pms.dto.response.AllocationValidationDTO;
 import com.example.pms.dto.response.DriftHistoryDTO;
 import com.example.pms.model.Asset;
 import com.example.pms.model.DriftDetection;
+import com.example.pms.model.DriftWatchList;
 import com.example.pms.model.Portfolio;
 import com.example.pms.model.User;
 import com.example.pms.model.enums.PortfolioStatus;
-import com.example.pms.repository.*;
+import com.example.pms.model.enums.ReBalancingFrequency;
+import com.example.pms.exception.PortfolioNotFoundException;
+import com.example.pms.exception.UserNotFoundException;
+import com.example.pms.repository.AssetRepository;
+import com.example.pms.repository.DriftDetectionRepository;
+import com.example.pms.repository.DriftWatchListRepository;
+import com.example.pms.repository.PortfolioRepository;
+import com.example.pms.repository.UserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,7 +27,6 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -33,10 +39,7 @@ class DriftWatchListServiceTest {
     private PortfolioRepository portfolioRepository;
 
     @Mock
-    private PortFolioHoldingRepository portFolioHoldingRepository;
-
-    @Mock
-    private PortfolioService portfolioService;
+    private DriftCalculationService driftCalculationService;
 
     @Mock
     private DriftDetectionRepository driftDetectionRepository;
@@ -46,9 +49,6 @@ class DriftWatchListServiceTest {
 
     @Mock
     private AssetRepository assetRepository;
-
-    @Mock
-    private NotificationRepository notificationRepository;
 
     @InjectMocks
     private DriftWatchListService driftWatchListService;
@@ -177,67 +177,83 @@ class DriftWatchListServiceTest {
 
     @Test
     @DisplayName("TC-DRIFT-003 | Return valid status when allocation validation is valid")
-    void performPortfolioDriftCalculation_shouldReturnValid_whenAllocationIsValid() {
+    void performPortfolioDriftCalculation_shouldDelegateToTransactionalService() {
+        when(driftCalculationService.performPortfolioDriftCalculation(100L, 1))
+                .thenReturn("Portfolio Valid");
 
-        // Arrange
-        User user =
-                new User();
+        String result = driftWatchListService.performPortfolioDriftCalculation(100L, 1);
 
+        assertEquals("Portfolio Valid", result);
+        verify(driftCalculationService).performPortfolioDriftCalculation(100L, 1);
+    }
+
+    @Test
+    @DisplayName("TC-DRIFT-004 | Scheduled calculation advances the next run date")
+    void doDriftCalculation_shouldRunDueActivePortfoliosAndAdvanceSchedule() {
+        User user = new User();
         user.setUserId(1);
-
-        Portfolio portfolio =
-                new Portfolio();
-
+        Portfolio portfolio = new Portfolio();
         portfolio.setId(100L);
-        portfolio.setUser(user);
-        portfolio.setPortfolioStatus(
-                PortfolioStatus.ACTIVE
-        );
+        portfolio.setPortfolioStatus(PortfolioStatus.ACTIVE);
+        DriftWatchList watchList = new DriftWatchList(
+                1, 100L, LocalDate.now(), LocalDate.now().minusMonths(1), ReBalancingFrequency.MONTHLY);
+        when(userRepository.findAll()).thenReturn(List.of(user));
+        when(portfolioRepository.findByUserUserId(1)).thenReturn(List.of(portfolio));
+        when(driftWatchListRepository.findAllByPortfolioId(100L)).thenReturn(watchList);
 
-        AllocationValidationDTO validation =
-                new AllocationValidationDTO(
-                        100L,
-                        "Test Portfolio",
-                        1000.0,
-                        1000.0,
-                        true,
-                        List.of()
-                );
+        driftWatchListService.doDriftCalculation();
 
-        when(portfolioService
-                .validatePortfolioAllocation(100L, 1))
-                .thenReturn(validation);
+        verify(driftCalculationService).performPortfolioDriftCalculation(100L, 1);
+        verify(driftWatchListRepository).save(watchList);
+        assertEquals(LocalDate.now(), watchList.getLastDriftCalculatedAt());
+        assertEquals(LocalDate.now().plusMonths(1), watchList.getNextDriftCalculationDate());
+    }
 
-        when(portfolioRepository.findById(100L))
-                .thenReturn(Optional.of(portfolio));
+    @Test
+    @DisplayName("TC-DRIFT-005 | Scheduled run skips portfolios that are not due or active")
+    void doDriftCalculation_shouldSkipNotDueAndInactivePortfolios() {
+        User user = new User();
+        user.setUserId(1);
+        Portfolio notDue = new Portfolio();
+        notDue.setId(100L);
+        notDue.setPortfolioStatus(PortfolioStatus.ACTIVE);
+        Portfolio inactive = new Portfolio();
+        inactive.setId(200L);
+        inactive.setPortfolioStatus(PortfolioStatus.NEW);
+        when(userRepository.findAll()).thenReturn(List.of(user));
+        when(portfolioRepository.findByUserUserId(1)).thenReturn(List.of(notDue, inactive));
+        when(driftWatchListRepository.findAllByPortfolioId(100L))
+                .thenReturn(new DriftWatchList(1, 100L, LocalDate.now().minusDays(1), null, null));
+        when(driftWatchListRepository.findAllByPortfolioId(200L))
+                .thenReturn(new DriftWatchList(2, 200L, LocalDate.now(), null, null));
 
-        when(driftWatchListRepository
-                .findAllByPortfolioId(100L))
-                .thenReturn(null);
+        driftWatchListService.doDriftCalculation();
 
+        verify(driftCalculationService, never()).performPortfolioDriftCalculation(any(), any());
+        verify(driftWatchListRepository, never()).save(any());
+    }
 
-        // Act
-        String result = driftWatchListService.performPortfolioDriftCalculation(
-                                100L,
-                                1
-                        );
+    @Test
+    @DisplayName("TC-DRIFT-006 | Reject drift history when the user is missing")
+    void getDriftHistory_shouldThrowWhenUserDoesNotExist() {
+        when(userRepository.findById(404)).thenReturn(Optional.empty());
 
+        assertThrows(UserNotFoundException.class, () -> driftWatchListService.getDriftHistory(100L, 404));
+    }
 
-        // Assert
-        assertEquals(
-                "Portfolio Valid",
-                result
-        );
+    @Test
+    @DisplayName("TC-DRIFT-007 | Reject drift history for another user’s portfolio")
+    void getDriftHistory_shouldHidePortfolioOwnedByAnotherUser() {
+        User user = new User();
+        user.setUserId(1);
+        User owner = new User();
+        owner.setUserId(2);
+        Portfolio portfolio = new Portfolio();
+        portfolio.setId(100L);
+        portfolio.setUser(owner);
+        when(userRepository.findById(1)).thenReturn(Optional.of(user));
+        when(portfolioRepository.findById(100L)).thenReturn(Optional.of(portfolio));
 
-
-        // Verify
-        verify(driftWatchListRepository)
-                .save(any());
-
-        verify(driftDetectionRepository, never())
-                .save(any());
-
-        verify(notificationRepository, never())
-                .save(any());
+        assertThrows(PortfolioNotFoundException.class, () -> driftWatchListService.getDriftHistory(100L, 1));
     }
 }
