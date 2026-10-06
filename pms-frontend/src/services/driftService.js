@@ -7,3 +7,9 @@ export const getPortfolioDriftHistory = async (portfolioId) => {
   const response = await axios.get(`${API_URL}/history/${portfolioId}/${userId}`);
   return response.data.data;
 };
+
+export const runPortfolioDriftCheck = async (portfolioId, userId = localStorage.getItem("userId")) => {
+  if (!userId) throw new Error("Sign in before running a drift check.");
+  const response = await axios.get(`${API_URL}/calculate/${portfolioId}/${userId}`);
+  return response.data;
+};

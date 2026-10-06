@@ -21,7 +21,7 @@ import {
 } from "recharts";
 import { useNavigate } from "react-router-dom";
 import { getAllPortfolioDetails, getCountOfActivePortfolios, getCountOfPortfolios } from "../services/portfolioService";
-import TopBarComponent from "../components/TopBarComponent";
+import DashboardNotificationBell from "../components/DashboardNotificationBell";
 import SideBarComponent from "../components/SideBarComponent";
 import { getPortfolioBasicInfo, getPortfolioHoldings, validatePortfolioAllocation } from "../services/portfolioService";
 import { getPortfolioDriftHistory } from "../services/driftService";
@@ -490,11 +490,10 @@ const DashboardPage = () => {
     <div className="min-h-screen bg-[#f5f7fc]">
       <SideBarComponent activePage="Dashboard" />
       <div className="sidebar-content min-h-screen">
-       {/* <TopBarComponent /> */}
        <main>
         <div className="mx-auto max-w-[1600px] px-4 py-5 sm:px-5">
     
-          <div className="flex items-center justify-between">
+          <div className="flex items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-blue-700">
                 <span className="rounded bg-blue-100 px-2 py-1">
@@ -517,8 +516,8 @@ const DashboardPage = () => {
                 drift status across active mandates.
               </p>
             </div>
-
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
+              <DashboardNotificationBell />
              
               <button 
               onClick={() => navigate("/create-portfolio")}

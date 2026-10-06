@@ -9,7 +9,6 @@ import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-communi
 import { toast } from "react-toastify";
 
 import SideBarComponent from "../components/SideBarComponent";
-import TopBarComponent from "../components/TopBarComponent";
 import {
   getPortfolioBasicInfo,
   getPortfolioHoldings,
@@ -21,6 +20,7 @@ import {
   updatePortfolioHoldingEquityCategory,
 } from "../services/portfolioService";
 import { getAllSecuritiesInfo } from "../services/securityService";
+import { runPortfolioDriftCheck } from "../services/driftService";
 import PortfolioBenchmarkView from "./PortfolioBenchmarkView";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -95,6 +95,7 @@ const PortfolioDetailsPage = () => {
   const [tradeError, setTradeError] = useState("");
   const [notice, setNotice] = useState("");
   const [showBenchmark, setShowBenchmark] = useState(false);
+  const [driftCheckRunning, setDriftCheckRunning] = useState(false);
 
   /* ------------------------- load ------------------------- */
 
@@ -673,6 +674,21 @@ const PortfolioDetailsPage = () => {
     setActiveTab(tabKey);
   };
 
+  const runDriftCheck = async () => {
+    if (portfolioIsNew || driftCheckRunning) return;
+    setDriftCheckRunning(true);
+    try {
+      const result = await runPortfolioDriftCheck(portfolioId);
+      const refreshedValidation = await validatePortfolioAllocation(portfolioId);
+      setValidation(refreshedValidation);
+      toast.success(result?.message || "Drift check completed.");
+    } catch (driftError) {
+      toast.error(driftError?.response?.data?.message || driftError?.message || "Drift check failed.");
+    } finally {
+      setDriftCheckRunning(false);
+    }
+  };
+
   /* ------------------------- guards ------------------------- */
 
   if (loading) return <PageMessage>Loading portfolio…</PageMessage>;
@@ -710,8 +726,6 @@ const PortfolioDetailsPage = () => {
       <SideBarComponent activePage="Portfolios" />
 
       <div className="sidebar-content flex h-screen min-w-0 flex-col">
-        {/* <TopBarComponent /> */}
-
         {showBenchmark ? (
           <PortfolioBenchmarkView
             portfolio={portfolio}
@@ -742,6 +756,12 @@ const PortfolioDetailsPage = () => {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
+              {!portfolioIsNew && (
+                <button onClick={runDriftCheck} disabled={driftCheckRunning} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-blue-200 bg-white px-3 text-xs font-semibold text-blue-800 hover:bg-blue-50 disabled:opacity-50">
+                  <RefreshCw size={14} className={driftCheckRunning ? "animate-spin" : ""} />
+                  {driftCheckRunning ? "Checking drift…" : "Run Drift Check"}
+                </button>
+              )}
               {!portfolioIsNew && (
                 <button onClick={() => setShowBenchmark(true)} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-blue-800 hover:bg-blue-50">
                   <LineChart size={14} /> View benchmark
