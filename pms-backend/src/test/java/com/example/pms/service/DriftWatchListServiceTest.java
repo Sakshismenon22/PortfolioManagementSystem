@@ -217,9 +217,7 @@ class DriftWatchListServiceTest {
 
 
         // Act
-        String result =
-                driftWatchListService
-                        .performPortfolioDriftCalculation(
+        String result = driftWatchListService.performPortfolioDriftCalculation(
                                 100L,
                                 1
                         );
