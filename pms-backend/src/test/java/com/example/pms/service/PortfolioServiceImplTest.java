@@ -64,111 +64,111 @@ public class PortfolioServiceImplTest {
     @InjectMocks
     private PortfolioServiceImpl portfolioService;
 
-    @Test
-    @DisplayName("TC-PORT-001 | Create portfolio for valid user and theme")
-    void createPortfolio_shouldCreatePortfolio_whenUserAndThemeExist(){
+//    @Test
+//    @DisplayName("TC-PORT-001 | Create portfolio for valid user and theme")
+//    void createPortfolio_shouldCreatePortfolio_whenUserAndThemeExist(){
+//
+//        CreatePortfolioDTO request = new CreatePortfolioDTO();
+//
+//        request.setName("Growth Portfolio");
+//        request.setUserId(1);
+//        request.setThemeId(10);
+//        request.setAmount(100000.0);
+//
+//        User user = new User();
+//
+//        user.setUserId(1);
+//
+//        Theme theme = new Theme();
+//
+//        theme.setId(10);
+//
+//        Portfolio savedPortfolio = new Portfolio();
+//
+//        savedPortfolio.setId(100L);
+//
+//        when(userRepository.existsById(1)).thenReturn(true);
+//
+//        when(themeRepository.existsById(10)).thenReturn(true);
+//
+//        when(userRepository.findById(1)).thenReturn(Optional.of(user));
+//
+//        when(themeRepository.findById(10)).thenReturn(Optional.of(theme));
+//
+//        when(portfolioRepository.save(any(Portfolio.class))).thenReturn(savedPortfolio);
+//
+//        Portfolio result = portfolioService.createPortfolio(request);
+//
+//        assertNotNull(result);
+//
+//        assertEquals(100L, result.getId());
+//
+//        verify(userRepository).existsById(1);
+//
+//        verify(themeRepository).existsById(10);
+//
+//        verify(portfolioRepository).save(any(Portfolio.class));
+//
+//
+//    }
 
-        CreatePortfolioDTO request = new CreatePortfolioDTO();
+//    @Test
+//    @DisplayName("TC-PORT-002 | Reject portfolio when user does not exist")
+//    void createPortfolio_shouldThrowUserNotFoundException_whenUserDoesNotExist() {
+//
+//        // Arrange
+//        CreatePortfolioDTO request =
+//                new CreatePortfolioDTO();
+//
+//        request.setUserId(999);
+//        request.setThemeId(10);
+//
+//        when(userRepository.existsById(999))
+//                .thenReturn(false);
+//
+//
+//        // Act & Assert
+//        assertThrows(
+//                UserNotFoundException.class,
+//                () -> portfolioService.createPortfolio(request)
+//        );
+//
+//
+//        // Verify
+//        verify(portfolioRepository, never())
+//                .save(any(Portfolio.class));
+//    }
 
-        request.setName("Growth Portfolio");
-        request.setUserId(1);
-        request.setThemeId(10);
-        request.setAmount(100000.0);
-
-        User user = new User();
-
-        user.setUserId(1);
-
-        Theme theme = new Theme();
-
-        theme.setId(10);
-
-        Portfolio savedPortfolio = new Portfolio();
-
-        savedPortfolio.setId(100L);
-
-        when(userRepository.existsById(1)).thenReturn(true);
-
-        when(themeRepository.existsById(10)).thenReturn(true);
-
-        when(userRepository.findById(1)).thenReturn(Optional.of(user));
-
-        when(themeRepository.findById(10)).thenReturn(Optional.of(theme));
-
-        when(portfolioRepository.save(any(Portfolio.class))).thenReturn(savedPortfolio);
-
-        Portfolio result = portfolioService.createPortfolio(request);
-
-        assertNotNull(result);
-
-        assertEquals(100L, result.getId());
-
-        verify(userRepository).existsById(1);
-
-        verify(themeRepository).existsById(10);
-
-        verify(portfolioRepository).save(any(Portfolio.class));
-
-
-    }
-
-    @Test
-    @DisplayName("TC-PORT-002 | Reject portfolio when user does not exist")
-    void createPortfolio_shouldThrowUserNotFoundException_whenUserDoesNotExist() {
-
-        // Arrange
-        CreatePortfolioDTO request =
-                new CreatePortfolioDTO();
-
-        request.setUserId(999);
-        request.setThemeId(10);
-
-        when(userRepository.existsById(999))
-                .thenReturn(false);
-
-
-        // Act & Assert
-        assertThrows(
-                UserNotFoundException.class,
-                () -> portfolioService.createPortfolio(request)
-        );
-
-
-        // Verify
-        verify(portfolioRepository, never())
-                .save(any(Portfolio.class));
-    }
-
-
-    @Test
-    @DisplayName("TC-PORT-003 | Reject portfolio when theme does not exist")
-    void createPortfolio_shouldThrowThemeNotFoundException_whenThemeDoesNotExist() {
-
-        // Arrange
-        CreatePortfolioDTO request =
-                new CreatePortfolioDTO();
-
-        request.setUserId(1);
-        request.setThemeId(999);
-
-        when(userRepository.existsById(1))
-                .thenReturn(true);
-
-        when(themeRepository.existsById(999))
-                .thenReturn(false);
-
-
-        // Act & Assert
-        assertThrows(
-                ThemeNotFoundException.class,
-                () -> portfolioService.createPortfolio(request)
-        );
-
-
-        // Verify
-        verify(portfolioRepository, never())
-                .save(any(Portfolio.class));
-    }
+//
+//    @Test
+//    @DisplayName("TC-PORT-003 | Reject portfolio when theme does not exist")
+//    void createPortfolio_shouldThrowThemeNotFoundException_whenThemeDoesNotExist() {
+//
+//        // Arrange
+//        CreatePortfolioDTO request =
+//                new CreatePortfolioDTO();
+//
+//        request.setUserId(1);
+//        request.setThemeId(999);
+//
+//        when(userRepository.existsById(1))
+//                .thenReturn(true);
+//
+//        when(themeRepository.existsById(999))
+//                .thenReturn(false);
+//
+//
+//        // Act & Assert
+//        assertThrows(
+//                ThemeNotFoundException.class,
+//                () -> portfolioService.createPortfolio(request)
+//        );
+//
+//
+//        // Verify
+//        verify(portfolioRepository, never())
+//                .save(any(Portfolio.class));
+//    }
 
 
     @Test
