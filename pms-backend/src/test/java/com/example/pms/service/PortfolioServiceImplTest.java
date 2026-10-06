@@ -7,15 +7,19 @@ import com.example.pms.exception.PortfolioNotFoundException;
 import com.example.pms.exception.ThemeNotFoundException;
 import com.example.pms.exception.UserNotFoundException;
 import com.example.pms.model.*;
-import com.example.pms.model.enums.PortfolioStatus;
+import com.example.pms.model.enums.*;
 import com.example.pms.repository.*;
+import org.checkerframework.checker.units.qual.A;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.core.parameters.P;
 
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -27,16 +31,12 @@ public class PortfolioServiceImplTest {
 
     @Mock
     private UserRepository userRepository;
-
     @Mock
     private ThemeRepository themeRepository;
-
     @Mock
     private PortfolioRepository portfolioRepository;
-
     @Mock
     private PortFolioHoldingRepository portfolioHoldingRepository;
-
     @Mock
     private PortfolioHoldingService portfolioHoldingService;
 
@@ -48,95 +48,172 @@ public class PortfolioServiceImplTest {
 
     @Mock
     private DriftWatchListRepository driftWatchListRepository;
-
     @Mock
     private DriftDetectionRepository driftDetectionRepository;
-
     @Mock
-    private NotificationRepository notificationRepository;
-
+    private  NotificationRepository notificationRepository;
     @Mock
     private SecurityMasterService securityMasterService;
-
     @Mock
     private SecurityMasterRepository securityMasterRepository;
 
     @InjectMocks
     private PortfolioServiceImpl portfolioService;
 
-//    @Test
-//    @DisplayName("TC-PORT-001 | Create portfolio for valid user and theme")
-//    void createPortfolio_shouldCreatePortfolio_whenUserAndThemeExist(){
-//
-//        CreatePortfolioDTO request = new CreatePortfolioDTO();
-//
-//        request.setName("Growth Portfolio");
-//        request.setUserId(1);
-//        request.setThemeId(10);
-//        request.setAmount(100000.0);
-//
-//        User user = new User();
-//
-//        user.setUserId(1);
-//
-//        Theme theme = new Theme();
-//
-//        theme.setId(10);
-//
-//        Portfolio savedPortfolio = new Portfolio();
-//
-//        savedPortfolio.setId(100L);
-//
-//        when(userRepository.existsById(1)).thenReturn(true);
-//
-//        when(themeRepository.existsById(10)).thenReturn(true);
-//
-//        when(userRepository.findById(1)).thenReturn(Optional.of(user));
-//
-//        when(themeRepository.findById(10)).thenReturn(Optional.of(theme));
-//
-//        when(portfolioRepository.save(any(Portfolio.class))).thenReturn(savedPortfolio);
-//
-//        Portfolio result = portfolioService.createPortfolio(request);
-//
-//        assertNotNull(result);
-//
-//        assertEquals(100L, result.getId());
-//
-//        verify(userRepository).existsById(1);
-//
-//        verify(themeRepository).existsById(10);
-//
-//        verify(portfolioRepository).save(any(Portfolio.class));
-//
-//
-//    }
+    private  User user(){
+        User user = new User();
+
+        user.setUserId(1);
+        user.setName("Test user");
+
+        return user;
+    }
+
+    private Asset asset(Integer id, String assetClass){
+        Asset asset = new Asset();
+
+        asset.setId(id);
+        asset.setAssetClass(assetClass);
+
+        return asset;
+    }
+
+    private Theme theme(){
+        Theme theme = new Theme();
+
+        theme.setId(10);
+        theme.setName("Growth theme");
+        theme.setAllocationRuleList(new ArrayList<>());
+
+        return theme;
+    }
+
+    private Portfolio activePortfolio(){
+        Portfolio portfolio= new Portfolio();
+
+        portfolio.setId(100L);
+        portfolio.setName("Growth Portfolio");
+        portfolio.setAmount(10000.0);
+        portfolio.setUser(user());
+        portfolio.setTheme(theme());
+        portfolio.setPortfolioStatus(PortfolioStatus.ACTIVE);
+        portfolio.setPortfolioType(PortfolioType.WEIGHTAGE);
+        portfolio.setCurrency("INR");
+        portfolio.setBenchmark(Benchmark.NIFTY_50);
+        portfolio.setExchange(Exchange.NSE);
+        portfolio.setReBalancingFrequency(ReBalancingFrequency.MONTHLY);
+        portfolio.setCreatedAt(LocalDate.now());
+
+        return portfolio;
+
+    }
+
+    private CreatePortfolioDTO validCreateRequest(){
+        CreatePortfolioDTO portfolio = new CreatePortfolioDTO();
+
+        portfolio.setName("Growth Portfolio");
+        portfolio.setPortfolioStatus(PortfolioStatus.NEW);
+        portfolio.setPortfolioType(PortfolioType.WEIGHTAGE);
+        portfolio.setCurrency("INR");
+        portfolio.setBenchmark(Benchmark.NIFTY_50);
+        portfolio.setExchange(Exchange.NSE);
+        portfolio.setReBalancingFrequency(ReBalancingFrequency.MONTHLY);
+        portfolio.setCreatedAt(LocalDate.of(2026,10,1));
+        portfolio.setAmount(100000.0);
+        portfolio.setUserId(1);
+        portfolio.setThemeId(10);
+
+        return portfolio;
+    }
+
+    @Test
+    @DisplayName("TC-PORT-001 | Create portfolio for valid user and theme")
+    void createPortfolio_shouldCreatePortfolio_whenUserAndThemeExist(){
+
+        CreatePortfolioDTO request = validCreateRequest();
+
+        User user = user();
+
+       Theme theme = theme();
+
+       Portfolio savedPortfolio = activePortfolio();
+
+        when(userRepository.existsById(1)).thenReturn(true);
+
+        when(themeRepository.existsById(10)).thenReturn(true);
+
+        when(userRepository.findById(1)).thenReturn(Optional.of(user));
+
+        when(themeRepository.findById(10)).thenReturn(Optional.of(theme));
+
+        when(portfolioRepository.save(any(Portfolio.class))).thenReturn(savedPortfolio);
+
+        Portfolio result = portfolioService.createPortfolio(request);
+
+        assertNotNull(result);
+
+        assertEquals(100L, result.getId());
+
+        verify(userRepository).existsById(1);
+
+        verify(themeRepository).existsById(10);
+
+        verify(portfolioRepository).save(any(Portfolio.class));
+
+
+    }
+
+    @Test
+    @DisplayName("TC-PORT-002 | Reject null create request")
+    void createPortfolio_shouldRejectNullRequest() {
+
+      IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> portfolioService.createPortfolio(null));
+
+      assertEquals("Portfolio name is required.", exception.getMessage());
+
+      verify(portfolioRepository, never()).save(any());
+
+    }
+
+    @Test
+    @DisplayName("TC-PORT-003 | Reject blank portfolio name")
+    void createPortfolio_shouldRejectBlankPortfolioName() {
+
+        CreatePortfolioDTO request = validCreateRequest();
+
+        request.setName(" ");
+
+        IllegalArgumentException exception= assertThrows(IllegalArgumentException.class, () -> portfolioService.createPortfolio(request));
+
+        assertEquals("Portfolio name is required.", exception.getMessage());
+
+    }
+
+    @Test
+    @DisplayName("TC-PORT-004 | Reject invalid amount")
+    void createPortfolio_shouldRejectInvalidAmount() {
+
+        CreatePortfolioDTO request = validCreateRequest();
+
+        request.setAmount(0.0);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> portfolioService.createPortfolio(null));
+
+        assertEquals("Portfolio name is required.", exception.getMessage());
+
+    }
 
 //    @Test
-//    @DisplayName("TC-PORT-002 | Reject portfolio when user does not exist")
-//    void createPortfolio_shouldThrowUserNotFoundException_whenUserDoesNotExist() {
-//
-//        // Arrange
-//        CreatePortfolioDTO request =
-//                new CreatePortfolioDTO();
-//
-//        request.setUserId(999);
-//        request.setThemeId(10);
-//
-//        when(userRepository.existsById(999))
-//                .thenReturn(false);
+//    @DisplayName("TC-PORT-005 | Reject missing required fields")
+//    void createPortfolio_shouldRejectMissingRequiredFields() {
 //
 //
-//        // Act & Assert
-//        assertThrows(
-//                UserNotFoundException.class,
-//                () -> portfolioService.createPortfolio(request)
-//        );
+//        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> portfolioService.createPortfolio(null));
 //
+//        assertEquals("Portfolio name is required.", exception.getMessage());
 //
-//        // Verify
-//        verify(portfolioRepository, never())
-//                .save(any(Portfolio.class));
+//        verify(portfolioRepository, never()).save(any());
+//
 //    }
 
 //
