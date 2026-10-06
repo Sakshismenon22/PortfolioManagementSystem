@@ -3,6 +3,7 @@ package com.example.pms.service;
 
 import com.example.pms.dto.request.CreateAndActivatePortfolioDTO;
 import com.example.pms.dto.request.CreatePortfolioByDateDTO;
+import com.example.pms.dto.request.CreateHistoricalPortfolioDTO;
 import com.example.pms.dto.request.CreatePortfolioDTO;
 import com.example.pms.dto.request.BuyHoldingDTO;
 import com.example.pms.dto.request.GetAllPortfolioDTO;
@@ -17,6 +18,8 @@ import java.util.Map;
 public interface PortfolioService {
 
     public Portfolio createPortfolio(CreatePortfolioDTO createPortfolioDTO);
+
+    Portfolio createHistoricalDemoPortfolio(CreateHistoricalPortfolioDTO request);
 
     public String buyPortfolioHoldings(Long id);
 

@@ -103,6 +103,76 @@ public class PortfolioServiceImpl implements PortfolioService{
 
     @Override
     @Transactional
+    @CacheEvict(value = "portfolio", allEntries = true)
+    public Portfolio createHistoricalDemoPortfolio(CreateHistoricalPortfolioDTO request) {
+        if (request == null || request.getPortfolio() == null
+                || request.getPortfolio().getCreatedAt() == null
+                || !request.getPortfolio().getCreatedAt().isBefore(LocalDate.now())) {
+            throw new IllegalArgumentException("A historical sample portfolio needs a creation date before today.");
+        }
+        if (request.getHoldings() == null || request.getHoldings().isEmpty()) {
+            throw new IllegalArgumentException("Add at least one historical holding.");
+        }
+
+        Portfolio portfolio = createPortfolio(request.getPortfolio());
+        Map<Integer, Double> costByAsset = new HashMap<>();
+        double totalCost = 0.0;
+        List<PortfolioHolding> holdings = new ArrayList<>();
+        Set<Long> securityIds = new HashSet<>();
+        LocalDate purchaseDate = portfolio.getCreatedAt();
+
+        for (CreateHistoricalPortfolioDTO.HistoricalHoldingDTO order : request.getHoldings()) {
+            if (order == null || order.getSecurityMasterId() == null || order.getQuantity() == null
+                    || order.getQuantity() <= 0 || order.getPurchasePrice() == null
+                    || !Double.isFinite(order.getPurchasePrice()) || order.getPurchasePrice() <= 0) {
+                throw new IllegalArgumentException("Each historical holding needs a security, positive quantity, and positive purchase price.");
+            }
+            if (!securityIds.add(order.getSecurityMasterId())) {
+                throw new IllegalArgumentException("A security can appear only once in the historical holdings list.");
+            }
+            SecurityMaster security = securityMasterRepository.findById(order.getSecurityMasterId())
+                    .orElseThrow(SecurityNotFoundException::new);
+            Asset asset = security.getAsset();
+            if (asset == null || portfolio.getTheme().getAllocationRuleList().stream().noneMatch(rule ->
+                    rule.getAsset() != null && rule.getAsset().getId().equals(asset.getId())
+                            && rule.getPercentage() != null && rule.getPercentage() > 0)) {
+                throw new IllegalArgumentException(security.getName() + " is outside the selected theme's asset classes.");
+            }
+
+            double cost = order.getPurchasePrice() * order.getQuantity();
+            totalCost += cost;
+            costByAsset.merge(asset.getId(), cost, Double::sum);
+            holdings.add(new PortfolioHolding(null, portfolio, security, order.getQuantity(),
+                    order.getPurchasePrice(), cost, asset, purchaseDate, purchaseDate,
+                    HoldingStatus.BROUGHT, security.getEquityCategory()));
+        }
+
+        double initialAmount = portfolio.getAmount() == null ? 0.0 : portfolio.getAmount();
+        if (totalCost <= 0 || totalCost > initialAmount + 0.01) {
+            throw new IllegalArgumentException("Historical holding costs must fit within the portfolio amount.");
+        }
+        for (AllocationRule rule : portfolio.getTheme().getAllocationRuleList()) {
+            if (rule.getAsset() == null || rule.getPercentage() == null || rule.getPercentage() <= 0) continue;
+            double actualPercent = initialAmount == 0 ? 0
+                    : costByAsset.getOrDefault(rule.getAsset().getId(), 0.0) / initialAmount * 100.0;
+            if (Math.abs(actualPercent - rule.getPercentage()) >= 5.0) {
+                throw new IllegalArgumentException(rule.getAsset().getAssetClass()
+                        + " historical allocation must be within 5 percentage points of its theme target.");
+            }
+        }
+
+        portfolioHoldingRepository.saveAll(holdings);
+        portfolio.setAmount(Math.max(0, initialAmount - totalCost));
+        portfolio.setPortfolioStatus(PortfolioStatus.ACTIVE);
+        portfolioRepository.save(portfolio);
+        if (driftWatchListRepository.findAllByPortfolioId(portfolio.getId()) == null) {
+            driftWatchListRepository.save(DriftSchedule.newWatchList(portfolio, purchaseDate));
+        }
+        return portfolio;
+    }
+
+    @Override
+    @Transactional
     public String buyPortfolioHoldings(Long id) {
         if(portfolioRepository.existsById(id)){
             ValidationDTO validationDTO = isValid(id);
