@@ -4,6 +4,7 @@ import {
   CircleHelp,
   Folder,
   LayoutDashboard,
+  LogOut,
   Settings,
   SlidersHorizontal,
   Sparkles,
@@ -47,6 +48,10 @@ const SideBarComponent = ({ activePage, setActivePage }) => {
     //   badge: "3",
     //   path: null,
     // },
+    {
+      label: "Log out",
+      icon: LogOut
+    }
   ];
 
   const handleNavigation = (item) => {

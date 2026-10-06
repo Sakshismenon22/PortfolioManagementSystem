@@ -194,7 +194,7 @@ export default function SecuritiesPage() {
       <SideBarComponent activePage="Securities" />
 
       <div className="ml-[257px] flex h-screen min-w-0 flex-col max-[760px]:ml-0">
-        <TopBarComponent />
+        {/* <TopBarComponent /> */}
 
         <main className="mx-auto flex w-full min-h-0 max-w-[1600px] flex-1 flex-col px-4 py-3 sm:px-6 lg:px-7">
           {/* Header */}

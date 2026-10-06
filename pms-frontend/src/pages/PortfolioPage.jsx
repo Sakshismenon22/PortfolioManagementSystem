@@ -385,42 +385,12 @@ const PortfolioPage = () => {
       <SideBarComponent activePage="Portfolios" />
 
       <div className="ml-[257px] flex h-screen min-w-0 flex-col max-[760px]:ml-0">
-        <TopBarComponent />
+        {/* <TopBarComponent /> */}
 
         <main className="mx-auto flex w-full min-h-0 max-w-[1600px] flex-1 flex-col px-4 py-3 sm:px-5">
-          {/* KPI STRIP */}
-          <section className="grid shrink-0 grid-cols-2 gap-2 xl:grid-cols-4">
-            <SummaryCard
-              title="Active AUM"
-              value={formatMoney(totalAum)}
-              detail={`${activePortfolios.length} active mandates`}
-              icon={Building2}
-            />
-            <SummaryCard
-              title="Rebalance required"
-              value={driftLoading ? "…" : String(driftPortfolioIds.length)}
-              detail={driftPortfolioIds.length ? "Outside tolerance" : "No drift alerts"}
-              icon={AlertTriangle}
-              tone={driftPortfolioIds.length ? "red" : "green"}
-            />
-            <SummaryCard
-              title="Compliance"
-              value={`${compliance.toFixed(1)}%`}
-              detail="Within ±5% threshold"
-              icon={ShieldCheck}
-              tone="green"
-            />
-            <SummaryCard
-              title="Average return"
-              value={`${averageReturn >= 0 ? "+" : ""}${averageReturn.toFixed(2)}%`}
-              detail="Across active mandates"
-              icon={ArrowUpDown}
-              tone={averageReturn >= 0 ? "green" : "red"}
-            />
-          </section>
-
-          {/* TITLE + ACTIONS */}
-          <section className="mt-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
+          
+           {/* TITLE + ACTIONS */}
+          <section className="mt-3 mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
             <div>
               <div className="text-[10px] font-bold tracking-wider text-blue-700">
                 PORTFOLIO MANAGEMENT SYSTEM · LIVE ALLOCATION
@@ -457,6 +427,39 @@ const PortfolioPage = () => {
               </button>
             </div>
           </section>
+          
+          {/* KPI STRIP */}
+          <section className="grid shrink-0 grid-cols-2 gap-2 xl:grid-cols-4">
+            <SummaryCard
+              title="Active AUM"
+              value={formatMoney(totalAum)}
+              detail={`${activePortfolios.length} active mandates`}
+              icon={Building2}
+            />
+            <SummaryCard
+              title="Rebalance required"
+              value={driftLoading ? "…" : String(driftPortfolioIds.length)}
+              detail={driftPortfolioIds.length ? "Outside tolerance" : "No drift alerts"}
+              icon={AlertTriangle}
+              tone={driftPortfolioIds.length ? "red" : "green"}
+            />
+            <SummaryCard
+              title="Compliance"
+              value={`${compliance.toFixed(1)}%`}
+              detail="Within ±5% threshold"
+              icon={ShieldCheck}
+              tone="green"
+            />
+            <SummaryCard
+              title="Average return"
+              value={`${averageReturn >= 0 ? "+" : ""}${averageReturn.toFixed(2)}%`}
+              detail="Across active mandates"
+              icon={ArrowUpDown}
+              tone={averageReturn >= 0 ? "green" : "red"}
+            />
+          </section>
+
+         
 
           {/* GRID PANEL */}
           <section className="mt-2.5 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">

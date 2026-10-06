@@ -109,6 +109,7 @@ const CreateThemePage = () => {
       setSelectedTheme((prev) =>
         prev ? list.find((t) => t.id === prev.id) ?? list[0] ?? null : list[0] ?? null
       );
+      console.log(list);
     } catch (error) {
       setThemeListError(
         error?.response?.data?.message || error?.message || "Themes could not be loaded."
@@ -164,6 +165,7 @@ const CreateThemePage = () => {
         rowKey: rule.id ?? `${selectedTheme?.id}-${index}`,
         assetClass: rule.asset?.assetClass || "Asset",
         percentage: Number(rule.percentage || 0),
+        assetSubClass: rule.asset?.assetSubclass || "Subclass"
       })),
     [selectedTheme]
   );
@@ -265,11 +267,18 @@ const CreateThemePage = () => {
         cellClass: "font-medium text-slate-700",
       },
       {
+        headerName: "Asset Subclass",
+        field: "assetSubClass",
+        flex: 0.8,
+        minWidth: 90,
+        cellClass: "font-medium text-slate-700",
+      },
+      {
         headerName: "Target",
         field: "percentage",
         flex: 0.8,
         minWidth: 90,
-        type: "rightAligned",
+        // type: "rightAligned",
         cellClass: "font-mono font-semibold text-blue-900",
         cellStyle: { color: "#1e3a8a" },
         valueFormatter: (p) => `${Number(p.value || 0).toFixed(2)}%`,
@@ -435,7 +444,7 @@ const CreateThemePage = () => {
       <SideBarComponent activePage={activePage} setActivePage={setActivePage} />
 
       <div className="ml-[257px] flex h-screen min-w-0 flex-col max-[760px]:ml-0">
-        <TopBarComponent />
+        {/* <TopBarComponent /> */}
 
         <main className="relative flex min-h-0 flex-1 flex-col px-4 py-3 sm:px-5">
           {/* HEADER */}
@@ -546,13 +555,13 @@ const CreateThemePage = () => {
               Define a reusable strategy with risk, horizon and target allocation.
             </div>
             <div className="flex items-center gap-2">
-            <button
+            {/* <button
               onClick={openEditTheme}
               disabled={!selectedTheme || selectedTheme.status === false}
               className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
             >
               Edit Selected
-            </button>
+            </button> */}
             <button
               onClick={openCreateTheme}
               className="inline-flex items-center gap-2 rounded-md bg-blue-800 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-900"

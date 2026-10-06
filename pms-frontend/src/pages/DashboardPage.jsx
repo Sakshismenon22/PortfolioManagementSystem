@@ -490,7 +490,7 @@ const DashboardPage = () => {
     <div className="min-h-screen bg-[#f5f7fc]">
       <SideBarComponent activePage="Dashboard" />
       <div className="ml-[257px] min-h-screen max-[760px]:ml-0">
-       <TopBarComponent />
+       {/* <TopBarComponent /> */}
        <main>
         <div className="mx-auto max-w-[1600px] px-4 py-5 sm:px-5">
     
