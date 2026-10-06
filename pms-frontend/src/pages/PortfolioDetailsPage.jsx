@@ -747,11 +747,11 @@ const PortfolioDetailsPage = () => {
                   <LineChart size={14} /> View benchmark
                 </button>
               )}
-              {!portfolioIsNew && (
+              {/* {!portfolioIsNew && (
                 <button onClick={() => navigate("/rebalancing", { state: { portfolioId } })} className="inline-flex h-8 items-center gap-1.5 rounded-md bg-red-50 px-3 text-xs font-semibold text-red-700 hover:bg-red-100">
                   <RefreshCw size={14} /> Rebalance
                 </button>
-              )}
+              )} */}
             </div>
           </div>
 
