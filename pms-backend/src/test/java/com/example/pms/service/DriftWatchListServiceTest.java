@@ -54,21 +54,42 @@ class DriftWatchListServiceTest {
     private DriftWatchListService driftWatchListService;
 
 
-    @Test
-    @DisplayName("TC-DRIFT-001 | Return drift history for portfolio owner")
-    void getDriftHistory_shouldReturnHistory_whenUserOwnsPortfolio() {
-
-        // Arrange
-        User user =
-                new User();
-
+    private User user() {
+        User user = new User();
         user.setUserId(1);
+        return user;
+    }
 
-        Portfolio portfolio =
-                new Portfolio();
+
+    private Portfolio portfolio() {
+        Portfolio portfolio = new Portfolio();
 
         portfolio.setId(100L);
-        portfolio.setUser(user);
+        portfolio.setUser(user());
+        portfolio.setName("Growth Portfolio");
+        portfolio.setPortfolioStatus(
+                PortfolioStatus.ACTIVE
+        );
+        portfolio.setReBalancingFrequency(
+                ReBalancingFrequency.MONTHLY
+        );
+
+        return portfolio;
+    }
+
+
+    @Test
+    @DisplayName("TC-DRIFT-001 | Return drift history")
+    void getDriftHistory_shouldReturnHistory() {
+
+        Portfolio portfolio =
+                portfolio();
+
+        Asset asset =
+                new Asset();
+
+        asset.setId(10);
+        asset.setAssetClass("Equity");
 
         DriftDetection detection =
                 new DriftDetection(
@@ -83,14 +104,8 @@ class DriftWatchListServiceTest {
                         6.5
                 );
 
-        Asset asset =
-                new Asset();
-
-        asset.setId(10);
-        asset.setAssetClass("equity");
-
         when(userRepository.findById(1))
-                .thenReturn(Optional.of(user));
+                .thenReturn(Optional.of(user()));
 
         when(portfolioRepository.findById(100L))
                 .thenReturn(Optional.of(portfolio));
@@ -102,20 +117,11 @@ class DriftWatchListServiceTest {
         when(assetRepository.findAllById(List.of(10)))
                 .thenReturn(List.of(asset));
 
-
-        // Act
         List<DriftHistoryDTO> result =
-                driftWatchListService.getDriftHistory(
-                        100L,
-                        1
-                );
+                driftWatchListService
+                        .getDriftHistory(100L, 1);
 
-
-        // Assert
-        assertEquals(
-                1,
-                result.size()
-        );
+        assertEquals(1, result.size());
 
         assertEquals(
                 10,
@@ -123,7 +129,7 @@ class DriftWatchListServiceTest {
         );
 
         assertEquals(
-                "equity",
+                "Equity",
                 result.get(0).getAssetClass()
         );
 
@@ -135,23 +141,14 @@ class DriftWatchListServiceTest {
 
 
     @Test
-    @DisplayName("TC-DRIFT-002 | Return empty drift history when no detections exist")
-    void getDriftHistory_shouldReturnEmptyList_whenNoDetectionsExist() {
-
-        // Arrange
-        User user =
-                new User();
-
-        user.setUserId(1);
+    @DisplayName("TC-DRIFT-002 | Empty history")
+    void getDriftHistory_shouldReturnEmpty() {
 
         Portfolio portfolio =
-                new Portfolio();
-
-        portfolio.setId(100L);
-        portfolio.setUser(user);
+                portfolio();
 
         when(userRepository.findById(1))
-                .thenReturn(Optional.of(user));
+                .thenReturn(Optional.of(user()));
 
         when(portfolioRepository.findById(100L))
                 .thenReturn(Optional.of(portfolio));
@@ -160,18 +157,44 @@ class DriftWatchListServiceTest {
                 .findByPortfolioIdOrderByDetectedAtDescIdDesc(100L))
                 .thenReturn(List.of());
 
+        assertTrue(
+                driftWatchListService
+                        .getDriftHistory(100L, 1)
+                        .isEmpty()
+        );
+    }
 
-        // Act
-        List<DriftHistoryDTO> result =
-                driftWatchListService.getDriftHistory(
-                        100L,
-                        1
-                );
+
+    @Test
+    @DisplayName("TC-DRIFT-003 | Missing user")
+    void getDriftHistory_shouldThrow_whenUserMissing() {
+
+        when(userRepository.findById(999))
+                .thenReturn(Optional.empty());
+
+        assertThrows(
+                UserNotFoundException.class,
+                () -> driftWatchListService
+                        .getDriftHistory(100L, 999)
+        );
+    }
 
 
-        // Assert
-        assertNotNull(result);
-        assertTrue(result.isEmpty());
+    @Test
+    @DisplayName("TC-DRIFT-004 | Missing portfolio")
+    void getDriftHistory_shouldThrow_whenPortfolioMissing() {
+
+        when(userRepository.findById(1))
+                .thenReturn(Optional.of(user()));
+
+        when(portfolioRepository.findById(999L))
+                .thenReturn(Optional.empty());
+
+        assertThrows(
+                PortfolioNotFoundException.class,
+                () -> driftWatchListService
+                        .getDriftHistory(999L, 1)
+        );
     }
 
 
