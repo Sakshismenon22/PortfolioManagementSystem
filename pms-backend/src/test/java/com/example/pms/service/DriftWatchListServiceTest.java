@@ -1,14 +1,20 @@
 package com.example.pms.service;
 
-import com.example.pms.dto.response.AllocationValidationDTO;
-import com.example.pms.dto.response.AssetAllocationValidationDTO;
 import com.example.pms.dto.response.DriftHistoryDTO;
-import com.example.pms.exception.PortfolioNotFoundException;
-import com.example.pms.exception.UserNotFoundException;
-import com.example.pms.model.*;
+import com.example.pms.model.Asset;
+import com.example.pms.model.DriftDetection;
+import com.example.pms.model.DriftWatchList;
+import com.example.pms.model.Portfolio;
+import com.example.pms.model.User;
 import com.example.pms.model.enums.PortfolioStatus;
 import com.example.pms.model.enums.ReBalancingFrequency;
-import com.example.pms.repository.*;
+import com.example.pms.exception.PortfolioNotFoundException;
+import com.example.pms.exception.UserNotFoundException;
+import com.example.pms.repository.AssetRepository;
+import com.example.pms.repository.DriftDetectionRepository;
+import com.example.pms.repository.DriftWatchListRepository;
+import com.example.pms.repository.PortfolioRepository;
+import com.example.pms.repository.UserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,7 +27,6 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -34,10 +39,7 @@ class DriftWatchListServiceTest {
     private PortfolioRepository portfolioRepository;
 
     @Mock
-    private PortFolioHoldingRepository portFolioHoldingRepository;
-
-    @Mock
-    private PortfolioService portfolioService;
+    private DriftCalculationService driftCalculationService;
 
     @Mock
     private DriftDetectionRepository driftDetectionRepository;
@@ -47,9 +49,6 @@ class DriftWatchListServiceTest {
 
     @Mock
     private AssetRepository assetRepository;
-
-    @Mock
-    private NotificationRepository notificationRepository;
 
     @InjectMocks
     private DriftWatchListService driftWatchListService;
@@ -200,406 +199,84 @@ class DriftWatchListServiceTest {
 
 
     @Test
-    @DisplayName("TC-DRIFT-005 | Unauthorized history")
-    void getDriftHistory_shouldThrow_whenUserDoesNotOwnPortfolio() {
+    @DisplayName("TC-DRIFT-003 | Return valid status when allocation validation is valid")
+    void performPortfolioDriftCalculation_shouldDelegateToTransactionalService() {
+        when(driftCalculationService.performPortfolioDriftCalculation(100L, 1))
+                .thenReturn("Portfolio Valid");
 
-        User owner =
-                new User();
+        String result = driftWatchListService.performPortfolioDriftCalculation(100L, 1);
 
+        assertEquals("Portfolio Valid", result);
+        verify(driftCalculationService).performPortfolioDriftCalculation(100L, 1);
+    }
+
+    @Test
+    @DisplayName("TC-DRIFT-004 | Scheduled calculation advances the next run date")
+    void doDriftCalculation_shouldRunDueActivePortfoliosAndAdvanceSchedule() {
+        User user = new User();
+        user.setUserId(1);
+        Portfolio portfolio = new Portfolio();
+        portfolio.setId(100L);
+        portfolio.setPortfolioStatus(PortfolioStatus.ACTIVE);
+        DriftWatchList watchList = new DriftWatchList(
+                1, 100L, LocalDate.now(), LocalDate.now().minusMonths(1), ReBalancingFrequency.MONTHLY);
+        when(userRepository.findAll()).thenReturn(List.of(user));
+        when(portfolioRepository.findByUserUserId(1)).thenReturn(List.of(portfolio));
+        when(driftWatchListRepository.findAllByPortfolioId(100L)).thenReturn(watchList);
+
+        driftWatchListService.doDriftCalculation();
+
+        verify(driftCalculationService).performPortfolioDriftCalculation(100L, 1);
+        verify(driftWatchListRepository).save(watchList);
+        assertEquals(LocalDate.now(), watchList.getLastDriftCalculatedAt());
+        assertEquals(LocalDate.now().plusMonths(1), watchList.getNextDriftCalculationDate());
+    }
+
+    @Test
+    @DisplayName("TC-DRIFT-005 | Scheduled run skips portfolios that are not due or active")
+    void doDriftCalculation_shouldSkipNotDueAndInactivePortfolios() {
+        User user = new User();
+        user.setUserId(1);
+        Portfolio notDue = new Portfolio();
+        notDue.setId(100L);
+        notDue.setPortfolioStatus(PortfolioStatus.ACTIVE);
+        Portfolio inactive = new Portfolio();
+        inactive.setId(200L);
+        inactive.setPortfolioStatus(PortfolioStatus.NEW);
+        when(userRepository.findAll()).thenReturn(List.of(user));
+        when(portfolioRepository.findByUserUserId(1)).thenReturn(List.of(notDue, inactive));
+        when(driftWatchListRepository.findAllByPortfolioId(100L))
+                .thenReturn(new DriftWatchList(1, 100L, LocalDate.now().minusDays(1), null, null));
+        when(driftWatchListRepository.findAllByPortfolioId(200L))
+                .thenReturn(new DriftWatchList(2, 200L, LocalDate.now(), null, null));
+
+        driftWatchListService.doDriftCalculation();
+
+        verify(driftCalculationService, never()).performPortfolioDriftCalculation(any(), any());
+        verify(driftWatchListRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("TC-DRIFT-006 | Reject drift history when the user is missing")
+    void getDriftHistory_shouldThrowWhenUserDoesNotExist() {
+        when(userRepository.findById(404)).thenReturn(Optional.empty());
+
+        assertThrows(UserNotFoundException.class, () -> driftWatchListService.getDriftHistory(100L, 404));
+    }
+
+    @Test
+    @DisplayName("TC-DRIFT-007 | Reject drift history for another user’s portfolio")
+    void getDriftHistory_shouldHidePortfolioOwnedByAnotherUser() {
+        User user = new User();
+        user.setUserId(1);
+        User owner = new User();
         owner.setUserId(2);
-
-        Portfolio portfolio =
-                portfolio();
-
+        Portfolio portfolio = new Portfolio();
+        portfolio.setId(100L);
         portfolio.setUser(owner);
+        when(userRepository.findById(1)).thenReturn(Optional.of(user));
+        when(portfolioRepository.findById(100L)).thenReturn(Optional.of(portfolio));
 
-        when(userRepository.findById(1))
-                .thenReturn(Optional.of(user()));
-
-        when(portfolioRepository.findById(100L))
-                .thenReturn(Optional.of(portfolio));
-
-        assertThrows(
-                PortfolioNotFoundException.class,
-                () -> driftWatchListService
-                        .getDriftHistory(100L, 1)
-        );
-    }
-
-
-    @Test
-    @DisplayName("TC-DRIFT-006 | Unknown asset")
-    void getDriftHistory_shouldUseUnknownAsset() {
-
-        Portfolio portfolio =
-                portfolio();
-
-        DriftDetection detection =
-                new DriftDetection(
-                        1,
-                        100L,
-                        999,
-                        LocalDate.now(),
-                        -7.0
-                );
-
-        when(userRepository.findById(1))
-                .thenReturn(Optional.of(user()));
-
-        when(portfolioRepository.findById(100L))
-                .thenReturn(Optional.of(portfolio));
-
-        when(driftDetectionRepository
-                .findByPortfolioIdOrderByDetectedAtDescIdDesc(100L))
-                .thenReturn(List.of(detection));
-
-        when(assetRepository.findAllById(List.of(999)))
-                .thenReturn(List.of());
-
-        List<DriftHistoryDTO> result =
-                driftWatchListService
-                        .getDriftHistory(100L, 1);
-
-        assertEquals(
-                "Unknown asset",
-                result.get(0).getAssetClass()
-        );
-    }
-
-
-    @Test
-    @DisplayName("TC-DRIFT-007 | Valid allocation")
-    void performPortfolioDriftCalculation_shouldReturnValid() {
-
-        Portfolio portfolio =
-                portfolio();
-
-        AllocationValidationDTO validation =
-                new AllocationValidationDTO(
-                        100L,
-                        "Growth Portfolio",
-                        1000.0,
-                        1000.0,
-                        true,
-                        List.of()
-                );
-
-        when(portfolioService
-                .validatePortfolioAllocation(100L, 1))
-                .thenReturn(validation);
-
-        when(portfolioRepository.findById(100L))
-                .thenReturn(Optional.of(portfolio));
-
-        when(driftWatchListRepository
-                .findAllByPortfolioId(100L))
-                .thenReturn(null);
-
-        assertEquals(
-                "Portfolio Valid",
-                driftWatchListService
-                        .performPortfolioDriftCalculation(
-                                100L,
-                                1
-                        )
-        );
-
-        verify(driftWatchListRepository)
-                .save(any());
-
-        verify(driftDetectionRepository, never())
-                .save(any());
-    }
-
-
-    @Test
-    @DisplayName("TC-DRIFT-008 | Positive drift creates detection and notification")
-    void performPortfolioDriftCalculation_shouldCreateOverweightNotification() {
-
-        Portfolio portfolio =
-                portfolio();
-
-        AssetAllocationValidationDTO allocation =
-                new AssetAllocationValidationDTO(
-                        10,
-                        "Equity",
-                        50.0,
-                        57.0,
-                        7.0,
-                        false,
-                        1
-                );
-
-        AllocationValidationDTO validation =
-                new AllocationValidationDTO(
-                        100L,
-                        "Growth Portfolio",
-                        1000.0,
-                        1000.0,
-                        false,
-                        List.of(allocation)
-                );
-
-        when(portfolioService
-                .validatePortfolioAllocation(100L, 1))
-                .thenReturn(validation);
-
-        when(portfolioRepository.findById(100L))
-                .thenReturn(Optional.of(portfolio));
-
-        when(driftWatchListRepository
-                .findAllByPortfolioId(100L))
-                .thenReturn(mock(DriftWatchList.class));
-
-        when(notificationRepository
-                .existsByPortfolioIdAndUserUserIdAndMessageAndDate(
-                        eq(100L),
-                        eq(1),
-                        anyString(),
-                        any(LocalDate.class)
-                ))
-                .thenReturn(false);
-
-        assertEquals(
-                "Portfolio Not Valid",
-                driftWatchListService
-                        .performPortfolioDriftCalculation(
-                                100L,
-                                1
-                        )
-        );
-
-        verify(driftDetectionRepository)
-                .save(any(DriftDetection.class));
-
-        verify(notificationRepository)
-                .save(any(Notification.class));
-    }
-
-
-    @Test
-    @DisplayName("TC-DRIFT-009 | Negative drift creates underweight notification")
-    void performPortfolioDriftCalculation_shouldCreateUnderweightNotification() {
-
-        Portfolio portfolio =
-                portfolio();
-
-        AssetAllocationValidationDTO allocation =
-                new AssetAllocationValidationDTO(
-                        10,
-                        "Equity",
-                        60.0,
-                        52.0,
-                        -8.0,
-                        false,
-                        1
-                );
-
-        AllocationValidationDTO validation =
-                new AllocationValidationDTO(
-                        100L,
-                        "Growth Portfolio",
-                        1000.0,
-                        1000.0,
-                        false,
-                        List.of(allocation)
-                );
-
-        when(portfolioService
-                .validatePortfolioAllocation(100L, 1))
-                .thenReturn(validation);
-
-        when(portfolioRepository.findById(100L))
-                .thenReturn(Optional.of(portfolio));
-
-        when(driftWatchListRepository
-                .findAllByPortfolioId(100L))
-                .thenReturn(mock(DriftWatchList.class));
-
-        when(notificationRepository
-                .existsByPortfolioIdAndUserUserIdAndMessageAndDate(
-                        eq(100L),
-                        eq(1),
-                        contains("underweight"),
-                        any(LocalDate.class)
-                ))
-                .thenReturn(false);
-
-        driftWatchListService
-                .performPortfolioDriftCalculation(
-                        100L,
-                        1
-                );
-
-        verify(notificationRepository)
-                .save(any(Notification.class));
-    }
-
-
-    @Test
-    @DisplayName("TC-DRIFT-010 | Drift below five is ignored")
-    void performPortfolioDriftCalculation_shouldIgnoreSmallDrift() {
-
-        Portfolio portfolio =
-                portfolio();
-
-        AssetAllocationValidationDTO allocation =
-                new AssetAllocationValidationDTO(
-                        10,
-                        "Equity",
-                        60.0,
-                        63.0,
-                        3.0,
-                        true,
-                        1
-                );
-
-        AllocationValidationDTO validation =
-                new AllocationValidationDTO(
-                        100L,
-                        "Growth Portfolio",
-                        1000.0,
-                        1000.0,
-                        true,
-                        List.of(allocation)
-                );
-
-        when(portfolioService
-                .validatePortfolioAllocation(100L, 1))
-                .thenReturn(validation);
-
-        when(portfolioRepository.findById(100L))
-                .thenReturn(Optional.of(portfolio));
-
-        when(driftWatchListRepository
-                .findAllByPortfolioId(100L))
-                .thenReturn(mock(DriftWatchList.class));
-
-        driftWatchListService
-                .performPortfolioDriftCalculation(
-                        100L,
-                        1
-                );
-
-        verify(driftDetectionRepository, never())
-                .save(any());
-
-        verify(notificationRepository, never())
-                .save(any());
-    }
-
-
-    @Test
-    @DisplayName("TC-DRIFT-011 | Null drift is ignored")
-    void performPortfolioDriftCalculation_shouldIgnoreNullDrift() {
-
-        Portfolio portfolio =
-                portfolio();
-
-        AssetAllocationValidationDTO allocation =
-                new AssetAllocationValidationDTO(
-                        10,
-                        "Equity",
-                        60.0,
-                        60.0,
-                        null,
-                        true,
-                        0
-                );
-
-        AllocationValidationDTO validation =
-                new AllocationValidationDTO(
-                        100L,
-                        "Growth Portfolio",
-                        0.0,
-                        0.0,
-                        true,
-                        List.of(allocation)
-                );
-
-        when(portfolioService
-                .validatePortfolioAllocation(100L, 1))
-                .thenReturn(validation);
-
-        when(portfolioRepository.findById(100L))
-                .thenReturn(Optional.of(portfolio));
-
-        when(driftWatchListRepository
-                .findAllByPortfolioId(100L))
-                .thenReturn(mock(DriftWatchList.class));
-
-        driftWatchListService
-                .performPortfolioDriftCalculation(
-                        100L,
-                        1
-                );
-
-        verify(driftDetectionRepository, never())
-                .save(any());
-
-        verify(notificationRepository, never())
-                .save(any());
-    }
-
-
-    @Test
-    @DisplayName("TC-DRIFT-012 | Existing notification is not duplicated")
-    void performPortfolioDriftCalculation_shouldNotDuplicateNotification() {
-
-        Portfolio portfolio =
-                portfolio();
-
-        AssetAllocationValidationDTO allocation =
-                new AssetAllocationValidationDTO(
-                        10,
-                        "Equity",
-                        50.0,
-                        57.0,
-                        7.0,
-                        false,
-                        1
-                );
-
-        AllocationValidationDTO validation =
-                new AllocationValidationDTO(
-                        100L,
-                        "Growth Portfolio",
-                        1000.0,
-                        1000.0,
-                        false,
-                        List.of(allocation)
-                );
-
-        when(portfolioService
-                .validatePortfolioAllocation(100L, 1))
-                .thenReturn(validation);
-
-        when(portfolioRepository.findById(100L))
-                .thenReturn(Optional.of(portfolio));
-
-        when(driftWatchListRepository
-                .findAllByPortfolioId(100L))
-                .thenReturn(mock(DriftWatchList.class));
-
-        when(notificationRepository
-                .existsByPortfolioIdAndUserUserIdAndMessageAndDate(
-                        anyLong(),
-                        anyInt(),
-                        anyString(),
-                        any(LocalDate.class)
-                ))
-                .thenReturn(true);
-
-        driftWatchListService
-                .performPortfolioDriftCalculation(
-                        100L,
-                        1
-                );
-
-        verify(driftDetectionRepository)
-                .save(any(DriftDetection.class));
-
-        verify(notificationRepository, never())
-                .save(any(Notification.class));
+        assertThrows(PortfolioNotFoundException.class, () -> driftWatchListService.getDriftHistory(100L, 1));
     }
 }

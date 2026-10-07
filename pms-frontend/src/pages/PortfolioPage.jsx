@@ -8,7 +8,6 @@ import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-community";
 
 import SideBarComponent from "../components/SideBarComponent";
-import TopBarComponent from "../components/TopBarComponent";
 import {
   getAllPortfolioDetails,
   getPortfolioBasicInfo,
@@ -16,6 +15,7 @@ import {
   createDemoPortfolios,
   deleteDemoPortfolios,
 } from "../services/portfolioService";
+import { runPortfolioDriftCheck } from "../services/driftService";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -29,9 +29,9 @@ const gridTheme = themeQuartz.withParams({
   browserColorScheme: "light",
   headerBackgroundColor: "#eff4fc",
   headerTextColor: "#64748b",
-  headerFontSize: 10,
+  headerFontSize: 11,
   headerFontWeight: 700,
-  fontSize: 12,
+  fontSize: 13,
   rowHeight: 52,
   headerHeight: 32,
   spacing: 5,
@@ -53,6 +53,7 @@ const PortfolioPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [driftLoading, setDriftLoading] = useState(false);
+  const [driftCheckRunning, setDriftCheckRunning] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [demoBusy, setDemoBusy] = useState(false);
   const [demoMessage, setDemoMessage] = useState("");
@@ -155,6 +156,23 @@ const PortfolioPage = () => {
       );
     } finally {
       setDemoBusy(false);
+    }
+  };
+
+  const runChecksForActivePortfolios = async () => {
+    const active = portfolios.filter((item) => item.status === "ACTIVE");
+    if (!active.length || driftCheckRunning) return;
+    setDriftCheckRunning(true);
+    setDemoMessage("");
+    try {
+      const results = await Promise.allSettled(active.map((item) => runPortfolioDriftCheck(item.id, userId)));
+      const failed = results.filter((result) => result.status === "rejected");
+      setDemoMessage(failed.length
+        ? `Drift checks completed for ${results.length - failed.length} of ${active.length} active portfolios; ${failed.length} failed.`
+        : `Drift check completed for ${active.length} active portfolio${active.length === 1 ? "" : "s"}.`);
+      setRefreshVersion((value) => value + 1);
+    } finally {
+      setDriftCheckRunning(false);
     }
   };
 
@@ -384,9 +402,7 @@ const PortfolioPage = () => {
     <div className="h-screen overflow-hidden bg-[#f6f8fd]">
       <SideBarComponent activePage="Portfolios" />
 
-      <div className="ml-[257px] flex h-screen min-w-0 flex-col max-[760px]:ml-0">
-        {/* <TopBarComponent /> */}
-
+      <div className="sidebar-content flex h-screen min-w-0 flex-col">
         <main className="mx-auto flex w-full min-h-0 max-w-[1600px] flex-1 flex-col px-4 py-3 sm:px-5">
           
            {/* TITLE + ACTIONS */}
@@ -398,6 +414,14 @@ const PortfolioPage = () => {
               <h1 className="text-xl font-semibold text-slate-900">Fund Portfolios</h1>
             </div>
             <div className="flex flex-wrap justify-end gap-2">
+              <button
+                onClick={runChecksForActivePortfolios}
+                disabled={driftCheckRunning || driftLoading || !portfolios.some((item) => item.status === "ACTIVE")}
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-blue-200 bg-white px-3 text-xs font-semibold text-blue-800 hover:bg-blue-50 disabled:opacity-50"
+              >
+                <RefreshCw size={13} className={driftCheckRunning ? "animate-spin" : ""} />
+                {driftCheckRunning ? "Checking drift…" : "Run Drift Check"}
+              </button>
               <button
                 onClick={exportPortfolios}
                 disabled={!rowData.length}

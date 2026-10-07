@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { getNotifications, getUnreadNotificationCount, markNotificationRead } from "../services/notificationService";
+import { clearAuthSession } from "../services/authService";
 
 const TopBarComponent = () => {
 
@@ -81,14 +82,10 @@ const TopBarComponent = () => {
     }
   };
 
-  const handleLogout = () =>{
-    localStorage.removeItem("userId");
-    localStorage.removeItem("name");
-    localStorage.removeItem("role");
-    localStorage.removeItem("email");
-
-    navigate("/login", {replace : true});
-  }
+  const handleLogout = () => {
+    clearAuthSession();
+    navigate("/login", { replace: true });
+  };
   return (
     <header className="sticky top-0 z-20 flex h-[70px] items-center justify-between border-b border-slate-200 bg-white px-5">
 

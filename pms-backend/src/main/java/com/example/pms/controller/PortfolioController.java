@@ -1,6 +1,7 @@
 package com.example.pms.controller;
 
 import com.example.pms.dto.request.CreateAndActivatePortfolioDTO;
+import com.example.pms.dto.request.CreateHistoricalPortfolioDTO;
 import com.example.pms.dto.request.CreatePortfolioDTO;
 import com.example.pms.dto.request.BuyHoldingDTO;
 import com.example.pms.dto.request.GetAllPortfolioDTO;
@@ -29,6 +30,13 @@ public class PortfolioController {
     @PostMapping("/create-portfolio")
     public ResponseEntity<?> createPortfolio(@RequestBody CreatePortfolioDTO createPortfolioDTO){
         return ResponseEntity.ok(new Response<Portfolio>(HttpStatus.OK.value(),true,portfolioService.createPortfolio(createPortfolioDTO),"Created.", LocalDateTime.now()));
+    }
+
+    @PostMapping("/demo-historical")
+    public ResponseEntity<?> createHistoricalDemoPortfolio(@RequestBody CreateHistoricalPortfolioDTO request) {
+        return ResponseEntity.ok(new Response<Portfolio>(HttpStatus.OK.value(), true,
+                portfolioService.createHistoricalDemoPortfolio(request),
+                "Historical demo portfolio created.", LocalDateTime.now()));
     }
 
     @GetMapping("/validate-portfolio/{id}")

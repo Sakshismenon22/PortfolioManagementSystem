@@ -55,9 +55,9 @@ const compactTheme = themeQuartz.withParams({
   browserColorScheme: "light",
   headerBackgroundColor: "#eef3ff",
   headerTextColor: "#64748b",
-  headerFontSize: 10,
+  headerFontSize: 11,
   headerFontWeight: 700,
-  fontSize: 12,
+  fontSize: 13,
   rowHeight: 38,
   headerHeight: 32,
   spacing: 5,
@@ -230,7 +230,7 @@ const CreateThemePage = () => {
           (p.data?.allocationRuleList || [])
             .map((r) => `${r.asset?.assetClass || "Asset"} ${Number(r.percentage || 0)}%`)
             .join(", ") || "—",
-        cellClass: "text-[11px] text-slate-600",
+        cellClass: "text-[12px] text-slate-600",
       },
       {
         headerName: "Status",
@@ -443,7 +443,7 @@ const CreateThemePage = () => {
     <div className="h-screen overflow-hidden bg-[#f6f8fd]">
       <SideBarComponent activePage={activePage} setActivePage={setActivePage} />
 
-      <div className="ml-[257px] flex h-screen min-w-0 flex-col max-[760px]:ml-0">
+      <div className="sidebar-content flex h-screen min-w-0 flex-col">
         {/* <TopBarComponent /> */}
 
         <main className="relative flex min-h-0 flex-1 flex-col px-4 py-3 sm:px-5">

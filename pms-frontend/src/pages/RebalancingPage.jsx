@@ -1049,7 +1049,7 @@ export default function RebalancingPage() {
   return (
     <div className="min-h-screen bg-[#f5f7fc] font-sans text-slate-900">
       <SideBarComponent activePage="Rebalancing" />
-      <div className="ml-[257px] min-h-screen">
+      <div className="sidebar-content min-h-screen">
         {/* <TopBarComponent /> */}
         <main className="mx-auto max-w-[1600px] px-5 py-5">
           <div className="mb-4 flex flex-wrap items-end justify-between gap-4">

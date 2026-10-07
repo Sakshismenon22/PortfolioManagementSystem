@@ -29,9 +29,9 @@ const compactTheme = themeQuartz.withParams({
   browserColorScheme: "light",
   headerBackgroundColor: "#eef3ff",
   headerTextColor: "#64748b",
-  headerFontSize: 10,
+  headerFontSize: 11,
   headerFontWeight: 700,
-  fontSize: 12,
+  fontSize: 13,
   rowHeight: 40,
   headerHeight: 34,
   spacing: 5,
@@ -127,7 +127,7 @@ export default function SecuritiesPage() {
         minWidth: 140,
         filter: "agTextColumnFilter",
         floatingFilter: true,
-        cellClass: "font-mono text-[11px] text-slate-500",
+        cellClass: "font-mono text-[12px] text-slate-500",
         valueFormatter: (p) => p.value || "—",
       },
       {
@@ -193,7 +193,7 @@ export default function SecuritiesPage() {
     <div className="h-screen overflow-hidden bg-[#f6f8fd] text-slate-900">
       <SideBarComponent activePage="Securities" />
 
-      <div className="ml-[257px] flex h-screen min-w-0 flex-col max-[760px]:ml-0">
+      <div className="sidebar-content flex h-screen min-w-0 flex-col">
         {/* <TopBarComponent /> */}
 
         <main className="mx-auto flex w-full min-h-0 max-w-[1600px] flex-1 flex-col px-4 py-3 sm:px-6 lg:px-7">
