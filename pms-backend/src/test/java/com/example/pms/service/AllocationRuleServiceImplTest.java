@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-public class AllocationRuleServiceImplTest {
+class AllocationRuleServiceImplTest {
 
     @Mock
     private AssetRepository assetRepository;
@@ -31,103 +31,123 @@ public class AllocationRuleServiceImplTest {
     @InjectMocks
     private AllocationRuleServiceImpl allocationRuleService;
 
+
     @Test
-    @DisplayName("TC-ALLOC-001 | Add allocation rule for existing asset")
-    void addAllocationRule_shouldCreateRule_whenAssetExists(){
+    @DisplayName("TC-ALLOC-001 | Add allocation rule")
+    void addAllocationRule_shouldCreateRule_whenAssetExists() {
 
-        Integer assetId = 1;
+        Asset asset =
+                new Asset();
 
-        AllocationDTO allocationDTO = new AllocationDTO(assetId, 60.0);
-
-        Asset asset = new Asset();
-
-        asset.setId(assetId);
-
+        asset.setId(1);
         asset.setAssetClass("Equity");
 
-        AllocationRule savedRule = new AllocationRule(10, asset, 60.0);
+        AllocationDTO request =
+                new AllocationDTO(
+                        1,
+                        60.0
+                );
 
-        when(assetRepository.existsById(assetId)).thenReturn(true);
+        AllocationRule saved =
+                new AllocationRule(
+                        10,
+                        asset,
+                        60.0
+                );
 
-        when(assetRepository.findById(assetId)).thenReturn(Optional.of(asset));
+        when(assetRepository.existsById(1))
+                .thenReturn(true);
 
-        when(allocationRuleRepository.save(any(AllocationRule.class))).thenReturn(savedRule);
+        when(assetRepository.findById(1))
+                .thenReturn(Optional.of(asset));
 
-        AllocationRule result = allocationRuleService.addAllocationRule(allocationDTO);
+        when(allocationRuleRepository
+                .save(any(AllocationRule.class)))
+                .thenReturn(saved);
+
+        AllocationRule result =
+                allocationRuleService
+                        .addAllocationRule(request);
 
         assertNotNull(result);
-
         assertEquals(10, result.getId());
-
         assertEquals(asset, result.getAsset());
+        assertEquals(60.0, result.getPercentage());
 
-        assertEquals(60.0 , result.getPercentage());
-
-        verify(assetRepository).existsById(assetId);
-
-        verify(assetRepository).findById(assetId);
-
-        verify(allocationRuleRepository).save(any(AllocationRule.class));
-
+        verify(allocationRuleRepository)
+                .save(any(AllocationRule.class));
     }
 
+
     @Test
-    @DisplayName("TC-ALLOC-002 | Reject allocation rule when asset does not existing asset")
-    void addAllocationRule_shouldThrowException_whenAssetDoesNotExist(){
+    @DisplayName("TC-ALLOC-002 | Reject missing asset")
+    void addAllocationRule_shouldThrow_whenAssetMissing() {
 
-        Integer assetId = 999;
+        AllocationDTO request =
+                new AllocationDTO(
+                        999,
+                        60.0
+                );
 
-        AllocationDTO allocationDTO = new AllocationDTO(assetId, 60.0);
+        when(assetRepository.existsById(999))
+                .thenReturn(false);
 
-        when(assetRepository.existsById(assetId)).thenReturn(false);
+        assertThrows(
+                AssetNotFoundException.class,
+                () -> allocationRuleService
+                        .addAllocationRule(request)
+        );
 
-        assertThrows(AssetNotFoundException.class, () -> allocationRuleService.addAllocationRule(allocationDTO));
-
-        verify(assetRepository).existsById(assetId);
-
-        verify(assetRepository, never()).findById(assetId);
-
-        verify(allocationRuleRepository, never()).save(any(AllocationRule.class));
-
+        verify(allocationRuleRepository, never())
+                .save(any());
     }
 
+
     @Test
-    @DisplayName("TC-ALLOC-003 | Update an existing allocation rule")
-    void updateAllocationRule_shouldUpdateRule_whenRuleExists(){
+    @DisplayName("TC-ALLOC-003 | Update allocation rule")
+    void updateAllocationRule_shouldUpdate_whenExists() {
 
-        AllocationRule allocationRule = new AllocationRule();
+        AllocationRule rule =
+                new AllocationRule();
 
-        allocationRule.setId(10);
+        rule.setId(10);
+        rule.setPercentage(70.0);
 
-        allocationRule.setPercentage(70.0);
+        when(allocationRuleRepository
+                .existsById(10))
+                .thenReturn(true);
 
-       when(allocationRuleRepository.existsById(10)).thenReturn(true);
+        assertEquals(
+                "Allocation Rule Updated.",
+                allocationRuleService
+                        .updateAllocationRule(rule)
+        );
 
-       String result = allocationRuleService.updateAllocationRule(allocationRule);
-
-        assertEquals("Allocation Rule Updated.", result);
-
-        verify(allocationRuleRepository).existsById(10);
-
-        verify(allocationRuleRepository).save(allocationRule);
-
+        verify(allocationRuleRepository)
+                .save(rule);
     }
 
+
     @Test
-    @DisplayName("TC-ALLOC-004 | Reject update for a missing allocation rule")
-    void updateAllocationRule_shouldThrowException_whenRuleDoesNotExist(){
+    @DisplayName("TC-ALLOC-004 | Reject missing allocation rule")
+    void updateAllocationRule_shouldThrow_whenMissing() {
 
-        AllocationRule allocationRule = new AllocationRule();
+        AllocationRule rule =
+                new AllocationRule();
 
-        allocationRule.setId(999);
+        rule.setId(999);
 
-        when(allocationRuleRepository.existsById(999)).thenReturn(false);
+        when(allocationRuleRepository
+                .existsById(999))
+                .thenReturn(false);
 
-        assertThrows(AllocationRuleNotFoundException.class , () -> allocationRuleService.updateAllocationRule(allocationRule));
+        assertThrows(
+                AllocationRuleNotFoundException.class,
+                () -> allocationRuleService
+                        .updateAllocationRule(rule)
+        );
 
-        verify(allocationRuleRepository).existsById(999);
-
-        verify(allocationRuleRepository, never()).save(any(AllocationRule.class));
-
+        verify(allocationRuleRepository, never())
+                .save(any());
     }
 }

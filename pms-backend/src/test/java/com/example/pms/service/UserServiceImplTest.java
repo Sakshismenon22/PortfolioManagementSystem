@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-public class UserServiceImplTest {
+class UserServiceImplTest {
 
     @Mock
     private UserRepository userRepository;
@@ -28,67 +28,84 @@ public class UserServiceImplTest {
     private PasswordEncoder passwordEncoder;
 
     @InjectMocks
-    private UserServiceImpl userServiceImpl;
+    private UserServiceImpl userService;
+
 
     @Test
-    @DisplayName("TC-USER-001 | Register user with a new email.")
-    void register_shouldRegisterUserSuccessfully(){
+    @DisplayName("TC-USER-001 | Register user")
+    void register_shouldRegisterSuccessfully() {
 
-        //Arrange
-        User user =  new User();
+        User user =
+                new User();
 
         user.setName("ABC");
         user.setEmail("abc@gmail.com");
         user.setPassword("password@123");
 
-        when(userRepository.existsByEmail("abc@gmail.com")).thenReturn(false);
+        when(userRepository
+                .existsByEmail("abc@gmail.com"))
+                .thenReturn(false);
 
-        when(passwordEncoder.encode("password@123")).thenReturn("encodedPassword");
+        when(passwordEncoder
+                .encode("password@123"))
+                .thenReturn("encodedPassword");
 
-        //Act
-        String result = userServiceImpl.register(user);
+        String result =
+                userService.register(user);
 
-        //Assert
-        assertEquals("User registered successfully.", result);
+        assertEquals(
+                "User registered successfully.",
+                result
+        );
 
-        assertEquals("encodedPassword", user.getPassword());
+        assertEquals(
+                "encodedPassword",
+                user.getPassword()
+        );
 
-        assertEquals("FUND_MANAGER", user.getRole());
+        assertEquals(
+                "FUND_MANAGER",
+                user.getRole()
+        );
 
-        //Verify
-        verify(userRepository).existsByEmail("abc@gmail.com");
-
-        verify(passwordEncoder).encode("password@123");
-
-        verify(userRepository).save(user);
-
+        verify(userRepository)
+                .save(user);
     }
 
-    @Test
-    @DisplayName("TC-USER-002 | Reject registration when email already exists")
-    void register_shouldThrowException_whenEmailAlreadyExists(){
 
-        User user = new User();
+    @Test
+    @DisplayName("TC-USER-002 | Duplicate email")
+    void register_shouldRejectDuplicateEmail() {
+
+        User user =
+                new User();
 
         user.setEmail("abc@gmail.com");
         user.setPassword("password@123");
 
-        when(userRepository.existsByEmail("abc@gmail.com")).thenReturn(true);
+        when(userRepository
+                .existsByEmail("abc@gmail.com"))
+                .thenReturn(true);
 
-        assertThrows(UserAlreadyExistsException.class, () -> userServiceImpl.register(user));
+        assertThrows(
+                UserAlreadyExistsException.class,
+                () -> userService.register(user)
+        );
 
-        verify(userRepository).existsByEmail("abc@gmail.com");
+        verify(passwordEncoder, never())
+                .encode(anyString());
 
-        verify(passwordEncoder, never()).encode(anyString());
-
-        verify(userRepository, never()).save(any(User.class));
+        verify(userRepository, never())
+                .save(any());
     }
 
-    @Test
-    @DisplayName("TC-USER_003 | Login with valid credentials")
-    void login_shouldReturnLoginResponse_whenCredentialsAreValid(){
 
-        User user = new User();
+    @Test
+    @DisplayName("TC-USER-003 | Successful login")
+    void login_shouldReturnResponse() {
+
+        User user =
+                new User();
 
         user.setUserId(1);
         user.setName("ABC");
@@ -96,63 +113,91 @@ public class UserServiceImplTest {
         user.setPassword("encodedPassword");
         user.setRole("FUND_MANAGER");
 
-        LoginRequest loginRequest = new LoginRequest("abc@gmail.com", "password@123");
+        LoginRequest request =
+                new LoginRequest(
+                        "abc@gmail.com",
+                        "password@123"
+                );
 
-        when(userRepository.findByEmail("abc@gmail.com")).thenReturn(Optional.of(user));
+        when(userRepository
+                .findByEmail("abc@gmail.com"))
+                .thenReturn(Optional.of(user));
 
-        when(passwordEncoder.matches("password@123", "encodedPassword")).thenReturn(true);
+        when(passwordEncoder
+                .matches(
+                        "password@123",
+                        "encodedPassword"
+                ))
+                .thenReturn(true);
 
-        //Act
+        LoginResponse result =
+                userService.login(request);
 
-        LoginResponse loginResponse = userServiceImpl.login(loginRequest);
+        assertNotNull(result);
 
-        //Assert
-        assertNotNull(loginResponse);
+        assertEquals(
+                1,
+                result.getUserId()
+        );
 
-        assertEquals(1, loginResponse.getUserId());
+        assertEquals(
+                "ABC",
+                result.getName()
+        );
 
-        assertEquals("ABC", loginResponse.getName());
+        assertEquals(
+                "abc@gmail.com",
+                result.getEmail()
+        );
 
-        assertEquals("abc@gmail.com", loginResponse.getEmail());
+        assertEquals(
+                "FUND_MANAGER",
+                result.getRole()
+        );
 
-        assertEquals("FUND_MANAGER", loginResponse.getRole());
-
-        assertEquals("Login successful", loginResponse.getMessage());
-
-        //Verify
-        verify(userRepository).findByEmail("abc@gmail.com");
-
-        verify(passwordEncoder).matches("password@123", "encodedPassword");
-
+        assertEquals(
+                "Login successful",
+                result.getMessage()
+        );
     }
 
+
     @Test
-    @DisplayName("TC-USER_004 | Reject login when email does not exist")
-    void login_shouldThrowException_whenEmailDoesNotExist(){
+    @DisplayName("TC-USER-004 | Unknown email")
+    void login_shouldRejectUnknownEmail() {
 
-        LoginRequest loginRequest = new LoginRequest("abc@gmail.com", "password@123");
+        LoginRequest request =
+                new LoginRequest(
+                        "unknown@gmail.com",
+                        "password"
+                );
 
-        when(userRepository.findByEmail("abc@gmail.com")).thenReturn(Optional.empty());
+        when(userRepository
+                .findByEmail("unknown@gmail.com"))
+                .thenReturn(Optional.empty());
 
-       //Act
+        RuntimeException exception =
+                assertThrows(
+                        RuntimeException.class,
+                        () -> userService.login(request)
+                );
 
-        RuntimeException exception = assertThrows(RuntimeException.class, () -> userServiceImpl.login(loginRequest));
+        assertEquals(
+                "Invalid email or password",
+                exception.getMessage()
+        );
 
-        //Assert
-        assertEquals("Invalid email or password", exception.getMessage());
-
-        //Verify
-        verify(userRepository).findByEmail("abc@gmail.com");
-
-        verify(passwordEncoder, never()).matches(anyString(), anyString());
-
+        verify(passwordEncoder, never())
+                .matches(anyString(), anyString());
     }
 
-    @Test
-    @DisplayName("TC-USER_005 | Reject login when password is incorrect")
-    void login_shouldThrowException_whenPasswordIsIncorrect(){
 
-        User user = new User();
+    @Test
+    @DisplayName("TC-USER-005 | Wrong password")
+    void login_shouldRejectWrongPassword() {
+
+        User user =
+                new User();
 
         user.setUserId(1);
         user.setName("ABC");
@@ -160,25 +205,32 @@ public class UserServiceImplTest {
         user.setPassword("encodedPassword");
         user.setRole("FUND_MANAGER");
 
-        LoginRequest loginRequest = new LoginRequest("abc@gmail.com", "wrongPassword");
+        LoginRequest request =
+                new LoginRequest(
+                        "abc@gmail.com",
+                        "wrongPassword"
+                );
 
-        when(userRepository.findByEmail("abc@gmail.com")).thenReturn(Optional.of(user));
+        when(userRepository
+                .findByEmail("abc@gmail.com"))
+                .thenReturn(Optional.of(user));
 
-        when(passwordEncoder.matches("wrongPassword", "encodedPassword")).thenReturn(false);
+        when(passwordEncoder
+                .matches(
+                        "wrongPassword",
+                        "encodedPassword"
+                ))
+                .thenReturn(false);
 
-        //Act
+        RuntimeException exception =
+                assertThrows(
+                        RuntimeException.class,
+                        () -> userService.login(request)
+                );
 
-        RuntimeException exception = assertThrows(RuntimeException.class, () -> userServiceImpl.login(loginRequest));
-
-        //Assert
-        assertEquals("Invalid email or password", exception.getMessage());
-
-        //Verify
-        verify(userRepository).findByEmail("abc@gmail.com");
-
-        verify(passwordEncoder).matches("wrongPassword", "encodedPassword");
-
+        assertEquals(
+                "Invalid email or password",
+                exception.getMessage()
+        );
     }
-
-
 }
