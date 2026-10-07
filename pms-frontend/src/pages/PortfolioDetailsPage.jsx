@@ -304,7 +304,7 @@ const PortfolioDetailsPage = () => {
     {
       headerName: "Equity category",
       field: "equityCategory",
-      width: 122,
+      width: 70,
       editable: (params) => ["EQUITY", "MUTUAL_FUND"].includes(params.data?.securityType),
       cellEditor: "agSelectCellEditor",
       cellEditorParams: { values: ["", "SMALL_CAP", "MID_CAP", "LARGE_CAP"] },
@@ -316,7 +316,7 @@ const PortfolioDetailsPage = () => {
     numericCol({
       headerName: portfolioUsesWeights ? "Alloc. %" : "Alloc. ₹",
       field: "allocationValue",
-      width: 112,
+      width: 60,
       cellClass: "font-mono text-[11px] text-slate-700",
       valueFormatter: (p) => p.value == null ? "" : portfolioUsesWeights ? `${Number(p.value).toFixed(2)}%` : formatMoney(p.value),
     }),
@@ -381,9 +381,12 @@ const PortfolioDetailsPage = () => {
   /* ------------------------- buy / sell basket ------------------------- */
 
   const themeAllocations = allocations.filter((a) => Number(a.targetPercentage) > 0);
-  const eligibleSecurities = securities.filter((s) => Number(s.price) > 0 && (
-    !portfolioIsNew || themeAllocations.some((a) => Number(a.assetId) === Number(s.asset?.id))
-  ));
+  const eligibleSecurities = securities.filter((s) => {
+    const matchesTheme = !portfolioIsNew || themeAllocations.some((a) => securityMatchesAllocation(s, a));
+    const isFixedIncome = normalizeAssetClass(s?.asset?.assetClass || s?.assetClass || s?.securityType || "") === "FIXED_INCOME";
+    const hasPrice = Number.isFinite(Number(s?.price)) && Number(s?.price) > 0;
+    return matchesTheme && (hasPrice || isFixedIncome);
+  });
   const sellableHoldings = holdings.filter((h) => h.holdingId != null && Number(h.quantity) > 0);
 
   const basketItems = orders.map((order) => {
@@ -413,8 +416,14 @@ const PortfolioDetailsPage = () => {
       ? portfolioUsesWeights ? allocationBase * enteredValue / 100 : enteredValue
       : 0;
     const price = Number(security?.price || 0);
-    const quantity = price > 0 && requestedAmount > 0 ? Math.floor(requestedAmount / price) : 0;
-    const valid = Boolean(security) && validEntry && quantity > 0;
+    const isFixedIncomeSecurity = normalizeAssetClass(security?.asset?.assetClass || security?.assetClass || security?.securityType || "") === "FIXED_INCOME";
+    const quantity = price > 0 && requestedAmount > 0
+      ? Math.floor(requestedAmount / price)
+      : isFixedIncomeSecurity && requestedAmount > 0
+        ? 1
+        : 0;
+    const valid = Boolean(security) && validEntry && ((price > 0 && quantity > 0) || isFixedIncomeSecurity);
+    const resolvedAmount = price > 0 ? price * quantity : requestedAmount;
     return {
       ...order,
       holding: null,
@@ -424,7 +433,7 @@ const PortfolioDetailsPage = () => {
       quantity,
       price,
       valid,
-      amount: valid ? price * quantity : 0,
+      amount: valid ? resolvedAmount : 0,
     };
   });
 
@@ -444,7 +453,7 @@ const PortfolioDetailsPage = () => {
       if (!i.valid) return sum;
       const matches = i.side === "SELL"
         ? holdingMatchesAllocation(i.holding, allocation)
-        : Number(i.security?.asset?.id) === Number(allocation.assetId);
+        : securityMatchesAllocation(i.security, allocation);
       return sum + (matches ? (i.side === "SELL" ? -i.amount : i.amount) : 0);
     }, 0);
     const projected = currentValue > 0
@@ -600,13 +609,13 @@ const PortfolioDetailsPage = () => {
             weight: currentAssetValue > 0 ? holdingValue(h) / currentAssetValue : 1 / existing.length,
           }))
         : eligibleSecurities
-            .filter((s) => Number(s.asset?.id) === Number(allocation.assetId))
+            .filter((s) => securityMatchesAllocation(s, allocation))
             .slice(0, 3)
             .map((s, _, arr) => ({
               securityId: s.id,
               name: s.name,
               symbol: s.symbol || s.isin,
-              price: Number(s.price),
+              price: Number(s.price) || 0,
               weight: 1 / arr.length,
             }));
       if (!candidates.length) {
@@ -923,7 +932,7 @@ const PortfolioDetailsPage = () => {
                         const isSell = order.side === "SELL";
                         const usedSecurities = new Set(orders.filter((o) => o.rowId !== order.rowId && o.side === "BUY").map((o) => String(o.securityId)));
                         const usedHoldings = new Set(orders.filter((o) => o.rowId !== order.rowId && o.side === "SELL").map((o) => String(o.holdingId)));
-                        const selectableSecurities = eligibleSecurities.filter((s) => !usedSecurities.has(String(s.id)) || String(s.id) === String(order.securityId));
+                        const selectableSecurities = portfolioIsNew ? eligibleSecurities : securities;
                         const selectableHoldings = sellableHoldings.filter((h) => !usedHoldings.has(String(h.holdingId)) || String(h.holdingId) === String(order.holdingId));
                         const held = Number(item?.holding?.quantity || 0);
                         return (
@@ -968,7 +977,7 @@ const PortfolioDetailsPage = () => {
                                   {(portfolioIsNew ? themeAllocations : [{ assetId: "all", assetClass: "All securities" }]).map((allocation) => (
                                     <optgroup key={allocation.assetId} label={allocation.assetId === "all" ? allocation.assetClass : formatLabel(allocation.assetClass)}>
                                       {selectableSecurities
-                                        .filter((s) => allocation.assetId === "all" || Number(s.asset?.id) === Number(allocation.assetId))
+                                        .filter((s) => allocation.assetId === "all" || securityMatchesAllocation(s, allocation))
                                         .map((s) => (
                                           <option key={s.id} value={s.id}>{s.name} ({s.symbol || s.isin || "—"})</option>
                                         ))}
@@ -1251,10 +1260,27 @@ const holdingPrice = (holding) => {
   return qty ? holdingValue(holding) / qty : 0;
 };
 
+const securityMatchesAllocation = (security, allocation) => {
+  if (!security || !allocation) return false;
+
+  const securityAssetId = Number(security?.asset?.id ?? security?.assetId ?? security?.asset?.assetId ?? 0);
+  const allocationAssetId = Number(allocation.assetId ?? allocation.asset_id ?? 0);
+  console.log("MATCH_DEBUG", {
+    securityId: security?.id,
+    securityName: security?.name,
+    securityAssetId,
+    allocationAssetId,
+    allocationClass: allocation?.assetClass,
+    securityAssetClass: security?.asset?.assetClass ?? security?.assetClass ?? security?.securityType,
+    rawSecurity: security,
+    rawAllocation: allocation,
+  });
+  return securityAssetId > 0 && allocationAssetId > 0 && securityAssetId === allocationAssetId;
+};
+
 const holdingMatchesAllocation = (holding, allocation) =>
   Boolean(holding) && (
-    Number(holding.assetId) === Number(allocation.assetId) ||
-    normalizeAssetClass(holding.assetClass) === normalizeAssetClass(allocation.assetClass)
+    Number(holding.assetId ?? holding.asset?.id ?? 0) === Number(allocation.assetId ?? allocation.asset_id ?? 0)
   );
 
 const holdingReturn = (holding) => {
@@ -1263,9 +1289,39 @@ const holdingReturn = (holding) => {
   const value = Number(holding.currentValue ?? cost);
   return cost > 0 ? ((value - cost) / cost) * 100 : 0;
 };
+const ASSET_CLASS_ALIASES = {
+  BOND: "FIXED_INCOME",
+  BONDS: "FIXED_INCOME",
+  DEBT: "FIXED_INCOME",
+  FIXED_INCOME: "FIXED_INCOME",
+  FIXEDINCOME: "FIXED_INCOME",
+  GOVERNMENT_BOND: "FIXED_INCOME",
+  CORPORATE_BOND: "FIXED_INCOME",
+  G_SEC: "FIXED_INCOME",
+  GSEC: "FIXED_INCOME",
+  NCD: "FIXED_INCOME",
+  DEBENTURE: "FIXED_INCOME",
+  TREASURY_BILL: "FIXED_INCOME",
+  T_BILL: "FIXED_INCOME",
+  STOCK: "EQUITY",
+  STOCKS: "EQUITY",
+  SHARE: "EQUITY",
+  EQUITY: "EQUITY",
+  COMMODITY: "COMMODITIES",
+  COMMODITIES: "COMMODITIES",
+  GOLD: "COMMODITIES",
+};
 
-const normalizeAssetClass = (assetClass) =>
-  String(assetClass || "OTHER").trim().toUpperCase().replaceAll(" ", "_");
+const normalizeAssetClass = (assetClass) => {
+  console.log(assetClass);  
+  const key = String(assetClass || "OTHER")
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_");
+  
+  console.log("Asset Class: "+assetClass+" Normalized: "+key+" Mapped: "+ASSET_CLASS_ALIASES[key]);
+  return ASSET_CLASS_ALIASES[key] || key;
+};
 
 const formatLabel = (value) => String(value ?? "—").replaceAll("_", " ");
 

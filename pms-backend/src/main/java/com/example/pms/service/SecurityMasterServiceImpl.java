@@ -63,7 +63,7 @@ public class SecurityMasterServiceImpl implements SecurityMasterService{
                 if (securityPriceDTO.getBond() == null || securityPriceDTO.getBond().getFaceValue() == null) {
                     throw new IllegalStateException("Security Master returned no bond face value.");
                 }
-                yield securityPriceDTO.getBond().getFaceValue();
+                yield securityPriceDTO.getBond().getCleanPrice();
             }
             case COMMODITY -> {
                 yield CommodityPriceUnits.perPortfolioUnit(

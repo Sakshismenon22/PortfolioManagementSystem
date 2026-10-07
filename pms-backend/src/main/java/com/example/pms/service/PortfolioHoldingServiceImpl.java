@@ -165,7 +165,7 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
                         }
                         case BOND -> {
                             SecurityPriceDTO securityPriceDTO = securityMasterClient.findBySecurityId(portfolioHolding.getSecurityMaster().getId()).get();
-                            Double price = securityPriceDTO.getBond().getCleanPrice().doubleValue() + 9.91;
+                            Double price = securityPriceDTO.getBond().getCleanPrice().doubleValue();
                             Double totalCost = price * portfolioHolding.getQuantityHeld();
                             return totalCost;
                         }
@@ -304,8 +304,6 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
             throw new IllegalArgumentException("Insufficient cash. Available " + formatAmount(availableCash) + ", required " + formatAmount(buyAmount) + ".");
         }
         portfolio.setAmount(Math.max(0, availableCash - buyAmount));
-        // Add-on buys belong to the existing active position. This keeps one
-        // current holding row and updates its weighted average acquisition cost.
         PortfolioHolding holding = portfolioHoldingRepository.findAllByPortfolio(portfolio).stream()
                 .filter(existing -> existing.getHoldingStatus() == HoldingStatus.BROUGHT
                         && existing.getQuantityHeld() != null && existing.getQuantityHeld() > 0

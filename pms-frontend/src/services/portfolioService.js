@@ -131,6 +131,7 @@ export const getThemeAllocation = async (portfolioId) => {
   const response = await axios.get(
     `${API_URL}/theme-allocation/${portfolioId}/${userId}`,
   );
+  console.log("Printing theme Allocation: "+response.data.data);
 
   return response.data.data;
 };
