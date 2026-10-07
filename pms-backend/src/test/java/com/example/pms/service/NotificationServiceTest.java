@@ -190,6 +190,35 @@ public class NotificationServiceTest {
 
     }
 
+    @Test
+    @DisplayName("Notification - getForUser missing user")
+    void getForUser_shouldThrow_whenUserMissing() {
+
+        when(userRepository.findById(999))
+                .thenReturn(Optional.empty());
+
+        assertThrows(
+                UserNotFoundException.class,
+                () -> notificationService.getForUser(999)
+        );
+    }
+
+
+
+
+    @Test
+    @DisplayName("Notification - unread count missing user")
+    void getUnreadCount_shouldThrow_whenUserMissing() {
+
+        when(userRepository.findById(999))
+                .thenReturn(Optional.empty());
+
+        assertThrows(
+                UserNotFoundException.class,
+                () -> notificationService.getUnreadCount(999)
+        );
+    }
+
 
 
 }
