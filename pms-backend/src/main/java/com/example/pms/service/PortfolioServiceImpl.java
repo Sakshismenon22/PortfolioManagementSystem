@@ -525,7 +525,8 @@ public class PortfolioServiceImpl implements PortfolioService{
                         returnPercentString,
                         portfolio.getBenchmark(),
                         portfolio.getPortfolioStatus(),
-                        "View"
+                        "View",
+                        portfolio.getAmount()
                 );
                 portfolioDetailsDTOList.add(portfolioDetailsDTO);
             }

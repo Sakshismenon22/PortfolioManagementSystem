@@ -1,128 +1,266 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
-  AlertTriangle, ArrowUpDown, Building2, Download, Filter, Plus,
-  RefreshCw, Scale, ShieldCheck, WalletCards, Trash2,
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  ChevronRight,
+  ChevronsUpDown,
+  Download,
+  LoaderCircle,
+  Plus,
+  RefreshCw,
+  Scale,
+  Trash2,
+  TrendingDown,
+  TrendingUp,
+  WalletCards,
+  X,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { AgGridReact } from "ag-grid-react";
-import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-community";
 
 import SideBarComponent from "../components/SideBarComponent";
+
 import {
-  getAllPortfolioDetails,
-  getPortfolioBasicInfo,
-  validatePortfolioAllocation,
+  buyPortfolioSecurities,
   createDemoPortfolios,
   deleteDemoPortfolios,
+  getAllPortfolioDetails,
+  getPortfolioBasicInfo,
+  getPortfolioHoldings,
+  sellPortfolioHoldings,
+  validatePortfolioAllocation,
 } from "../services/portfolioService";
+
 import { runPortfolioDriftCheck } from "../services/driftService";
 
-ModuleRegistry.registerModules([AllCommunityModule]);
-
 const DRIFT_LIMIT = 5;
-const FILTERS = ["All", "New", "Active", "Rebalance Required", "Draft", "Closed"];
 
-const gridTheme = themeQuartz.withParams({
-  accentColor: "#1d4ed8",
-  backgroundColor: "#ffffff",
-  borderColor: "#e9eef7",
-  browserColorScheme: "light",
-  headerBackgroundColor: "#eff4fc",
-  headerTextColor: "#64748b",
-  headerFontSize: 11,
-  headerFontWeight: 700,
-  fontSize: 13,
-  rowHeight: 52,
-  headerHeight: 32,
-  spacing: 5,
-  rowHoverColor: "#f5f8ff",
-  wrapperBorder: false,
-  wrapperBorderRadius: 0,
-  cellHorizontalPadding: 14,
-});
+const FILTERS = [
+  "All",
+  "New",
+  "Active",
+  "Draft",
+  "Rebalance Required",
+  "Closed",
+];
 
 const PortfolioPage = () => {
-  const gridRef = useRef(null);
   const navigate = useNavigate();
   const userId = localStorage.getItem("userId");
 
   const [filter, setFilter] = useState("All");
   const [search, setSearch] = useState("");
+
   const [portfolios, setPortfolios] = useState([]);
-  const [driftPortfolioIds, setDriftPortfolioIds] = useState([]);
+  const [driftPortfolioIds, setDriftPortfolioIds] =
+    useState([]);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [driftLoading, setDriftLoading] = useState(false);
-  const [driftCheckRunning, setDriftCheckRunning] = useState(false);
-  const [refreshVersion, setRefreshVersion] = useState(0);
+
+  const [driftLoading, setDriftLoading] =
+    useState(false);
+
+  const [driftCheckRunning, setDriftCheckRunning] =
+    useState(false);
+
+  const [refreshVersion, setRefreshVersion] =
+    useState(0);
+
   const [demoBusy, setDemoBusy] = useState(false);
   const [demoMessage, setDemoMessage] = useState("");
-  const [visibleCount, setVisibleCount] = useState(0);
-
-  /* ---------------- data ---------------- */
 
   useEffect(() => {
     let active = true;
-    async function load() {
+
+    async function loadPortfolios() {
       setLoading(true);
       setError("");
+
       if (!userId) {
-        setError("Sign in to load your portfolios.");
+        setError(
+          "Sign in to load your portfolios."
+        );
         setLoading(false);
         return;
       }
+
       try {
-        const response = await getAllPortfolioDetails(userId);
-        const payload = response?.data?.data ?? response?.data ?? response;
-        const list = payload?.portfolioDetailsDTOList;
-        if (!Array.isArray(list))
+        const response =
+          await getAllPortfolioDetails(userId);
+
+        const payload =
+          response?.data?.data ??
+          response?.data ??
+          response;
+
+        const list =
+          payload?.portfolioDetailsDTOList ??
+          payload?.portfolios ??
+          (Array.isArray(payload)
+            ? payload
+            : null);
+
+        if (!Array.isArray(list)) {
           throw new Error(
-            response?.message || "The portfolio list response was not in the expected format."
+            response?.message ||
+              response?.data?.message ||
+              "The portfolio list response was not in the expected format."
           );
-        if (!active) return;
+        }
 
-        const normalized = list.map((portfolio) => ({
-          ...portfolio,
-          id: portfolio.id ?? portfolio.portfolioId,
-          status: String(portfolio.portfolioStatus ?? portfolio.status ?? "ACTIVE").toUpperCase(),
-          name: portfolio.name || "Unnamed portfolio",
-          code: portfolio.code || `PMS-${portfolio.id ?? portfolio.portfolioId}`,
-          theme: portfolio.theme || "Unassigned theme",
-          allocationType: String(portfolio.allocationType || "—").replaceAll("_", " "),
-          aum: Number(portfolio.aum || 0),
-          returnValue: parseReturn(portfolio.return1Y),
-          benchmark: String(portfolio.benchmark || "—").replaceAll("_", " "),
-          initials: portfolio.initials || initialsFor(portfolio.name),
-        }));
-        setPortfolios(normalized);
+        if (!active) {
+          return;
+        }
 
-        setDriftLoading(true);
-        const activePortfolios = normalized.filter((item) => item.status === "ACTIVE");
-        const validations = await Promise.allSettled(
-          activePortfolios.map((item) => validatePortfolioAllocation(item.id))
+        const normalized = list.map(
+          (portfolio) => {
+            const portfolioId =
+              portfolio.id ??
+              portfolio.portfolioId;
+
+            const portfolioName =
+              portfolio.name ||
+              portfolio.portfolioName ||
+              "Unnamed portfolio";
+
+            return {
+              ...portfolio,
+
+              id: portfolioId,
+
+              name: portfolioName,
+
+              status: String(
+                portfolio.portfolioStatus ??
+                  portfolio.status ??
+                  "ACTIVE"
+              ).toUpperCase(),
+
+              code:
+                portfolio.code ||
+                portfolio.portfolioCode ||
+                `PMS-${portfolioId}`,
+
+              theme:
+                portfolio.theme ||
+                portfolio.themeName ||
+                "Unassigned theme",
+
+              allocationType: formatLabel(
+                portfolio.allocationType ||
+                  portfolio.portfolioType ||
+                  "—"
+              ),
+
+              aum: Number(
+                portfolio.aum ??
+                  portfolio.amount ??
+                  portfolio.currentValue ??
+                  0
+              ),
+
+              returnValue: parseReturn(
+                portfolio.return1Y ??
+                  portfolio.returnValue ??
+                  portfolio.returns
+              ),
+
+              benchmark: formatLabel(
+                portfolio.benchmark || "—"
+              ),
+
+              initials:
+                portfolio.initials ||
+                initialsFor(portfolioName),
+            };
+          }
         );
-        if (!active) return;
+
+        setPortfolios(normalized);
+        setDriftLoading(true);
+
+        const activePortfolios =
+          normalized.filter(
+            (portfolio) =>
+              portfolio.status === "ACTIVE"
+          );
+
+        const validationResults =
+          await Promise.allSettled(
+            activePortfolios.map((portfolio) =>
+              validatePortfolioAllocation(
+                portfolio.id
+              )
+            )
+          );
+
+        if (!active) {
+          return;
+        }
+
         const breachedIds = activePortfolios
-          .filter((item, index) => {
-            const result = validations[index];
-            const allocations = result.status === "fulfilled" ? result.value?.allocations : null;
+          .filter((portfolio, index) => {
+            const result =
+              validationResults[index];
+
+            if (
+              result.status !== "fulfilled"
+            ) {
+              return false;
+            }
+
+            const validationResponse =
+              result.value;
+
+            const validationPayload =
+              validationResponse?.data?.data ??
+              validationResponse?.data ??
+              validationResponse;
+
+            const allocations =
+              validationPayload?.allocations ??
+              validationPayload?.allocationDetails ??
+              validationPayload;
+
             return (
               Array.isArray(allocations) &&
               allocations.some(
-                (a) =>
-                  a.satisfied === false || Math.abs(Number(a.driftPercentage || 0)) >= DRIFT_LIMIT
+                (allocation) => {
+                  const drift = Number(
+                    allocation.driftPercentage ||
+                      0
+                  );
+
+                  return (
+                    allocation.satisfied ===
+                      false ||
+                    Math.abs(drift) >=
+                      DRIFT_LIMIT
+                  );
+                }
               )
             );
           })
-          .map((item) => String(item.id));
+          .map((portfolio) =>
+            String(portfolio.id)
+          );
+
         setDriftPortfolioIds(breachedIds);
       } catch (loadError) {
-        if (active)
+        if (active) {
           setError(
-            loadError?.response?.data?.message ||
+            loadError?.response?.data
+              ?.message ||
               loadError?.message ||
               "Could not load portfolios."
           );
+        }
       } finally {
         if (active) {
           setLoading(false);
@@ -130,24 +268,43 @@ const PortfolioPage = () => {
         }
       }
     }
-    load();
+
+    loadPortfolios();
+
     return () => {
       active = false;
     };
   }, [userId, refreshVersion]);
 
-  const manageDemoPortfolios = async (action) => {
-    if (!userId || demoBusy) return;
+  const manageDemoPortfolios = async (
+    action
+  ) => {
+    if (!userId || demoBusy) {
+      return;
+    }
+
     setDemoBusy(true);
     setDemoMessage("");
+
     try {
       const response =
-        action === "add" ? await createDemoPortfolios(userId) : await deleteDemoPortfolios(userId);
+        action === "add"
+          ? await createDemoPortfolios(userId)
+          : await deleteDemoPortfolios(
+              userId
+            );
+
       setDemoMessage(
         response?.message ||
-          (action === "add" ? "Demo portfolios added." : "Demo portfolios removed.")
+          response?.data?.message ||
+          (action === "add"
+            ? "Demo portfolios added."
+            : "Demo portfolios removed.")
       );
-      setRefreshVersion((value) => value + 1);
+
+      setRefreshVersion(
+        (current) => current + 1
+      );
     } catch (demoError) {
       setDemoMessage(
         demoError?.response?.data?.message ||
@@ -159,364 +316,393 @@ const PortfolioPage = () => {
     }
   };
 
-  const runChecksForActivePortfolios = async () => {
-    const active = portfolios.filter((item) => item.status === "ACTIVE");
-    if (!active.length || driftCheckRunning) return;
-    setDriftCheckRunning(true);
-    setDemoMessage("");
-    try {
-      const results = await Promise.allSettled(active.map((item) => runPortfolioDriftCheck(item.id, userId)));
-      const failed = results.filter((result) => result.status === "rejected");
-      setDemoMessage(failed.length
-        ? `Drift checks completed for ${results.length - failed.length} of ${active.length} active portfolios; ${failed.length} failed.`
-        : `Drift check completed for ${active.length} active portfolio${active.length === 1 ? "" : "s"}.`);
-      setRefreshVersion((value) => value + 1);
-    } finally {
-      setDriftCheckRunning(false);
-    }
-  };
+  const runChecksForActivePortfolios =
+    async () => {
+      const activePortfolios =
+        portfolios.filter(
+          (portfolio) =>
+            portfolio.status === "ACTIVE"
+        );
 
-  /* ---------------- derived ---------------- */
+      if (
+        !activePortfolios.length ||
+        driftCheckRunning
+      ) {
+        return;
+      }
+
+      setDriftCheckRunning(true);
+      setDemoMessage("");
+
+      try {
+        const results =
+          await Promise.allSettled(
+            activePortfolios.map(
+              (portfolio) =>
+                runPortfolioDriftCheck(
+                  portfolio.id,
+                  userId
+                )
+            )
+          );
+
+        const failedResults =
+          results.filter(
+            (result) =>
+              result.status === "rejected"
+          );
+
+        if (failedResults.length) {
+          setDemoMessage(
+            `Drift checks completed for ${
+              results.length -
+              failedResults.length
+            } of ${
+              activePortfolios.length
+            } active portfolios; ${
+              failedResults.length
+            } failed.`
+          );
+        } else {
+          setDemoMessage(
+            `Drift check completed for ${
+              activePortfolios.length
+            } active portfolio${
+              activePortfolios.length === 1
+                ? ""
+                : "s"
+            }.`
+          );
+        }
+
+        setRefreshVersion(
+          (current) => current + 1
+        );
+      } catch (driftError) {
+        setDemoMessage(
+          driftError?.response?.data
+            ?.message ||
+            driftError?.message ||
+            "Could not complete the drift checks."
+        );
+      } finally {
+        setDriftCheckRunning(false);
+      }
+    };
 
   const counts = useMemo(
     () => ({
       All: portfolios.length,
-      Active: portfolios.filter((i) => i.status === "ACTIVE").length,
-      "Rebalance Required": driftPortfolioIds.length,
-      New: portfolios.filter((i) => i.status === "NEW").length,
-      Draft: portfolios.filter((i) => ["DRAFT", "CREATED"].includes(i.status)).length,
-      Closed: portfolios.filter((i) => ["CANCELED", "CLOSED"].includes(i.status)).length,
+
+      New: portfolios.filter(
+        (portfolio) =>
+          portfolio.status === "NEW"
+      ).length,
+
+      Active: portfolios.filter(
+        (portfolio) =>
+          portfolio.status === "ACTIVE"
+      ).length,
+
+      Draft: portfolios.filter(
+        (portfolio) =>
+          ["DRAFT", "CREATED"].includes(
+            portfolio.status
+          )
+      ).length,
+
+      "Rebalance Required":
+        driftPortfolioIds.length,
+
+      Closed: portfolios.filter(
+        (portfolio) =>
+          ["CANCELED", "CLOSED"].includes(
+            portfolio.status
+          )
+      ).length,
     }),
     [portfolios, driftPortfolioIds]
   );
 
-  const rowData = useMemo(
+  const filteredPortfolios = useMemo(
     () =>
-      portfolios.filter((p) =>
-        filter === "All"
-          ? true
-          : filter === "Active"
-            ? p.status === "ACTIVE"
-            : filter === "Rebalance Required"
-              ? driftPortfolioIds.includes(String(p.id))
-              : filter === "New"
-                ? p.status === "NEW"
-              : filter === "Draft"
-                ? ["DRAFT", "CREATED"].includes(p.status)
-                : ["CANCELED", "CLOSED"].includes(p.status)
-      ),
-    [portfolios, filter, driftPortfolioIds]
+      portfolios.filter((portfolio) => {
+        switch (filter) {
+          case "Active":
+            return (
+              portfolio.status === "ACTIVE"
+            );
+
+          case "New":
+            return (
+              portfolio.status === "NEW"
+            );
+
+          case "Draft":
+            return [
+              "DRAFT",
+              "CREATED",
+            ].includes(portfolio.status);
+
+          case "Rebalance Required":
+            return driftPortfolioIds.includes(
+              String(portfolio.id)
+            );
+
+          case "Closed":
+            return [
+              "CANCELED",
+              "CLOSED",
+            ].includes(portfolio.status);
+
+          case "All":
+          default:
+            return true;
+        }
+      }),
+    [
+      portfolios,
+      filter,
+      driftPortfolioIds,
+    ]
   );
 
-  const activePortfolios = portfolios.filter((i) => i.status === "ACTIVE");
-  const totalAum = activePortfolios.reduce((sum, i) => sum + i.aum, 0);
-  const averageReturn = activePortfolios.length
-    ? activePortfolios.reduce((sum, i) => sum + i.returnValue, 0) / activePortfolios.length
-    : 0;
-  const compliance = activePortfolios.length
-    ? Math.max(
-        0,
-        ((activePortfolios.length - driftPortfolioIds.length) / activePortfolios.length) * 100
-      )
-    : 100;
+  const displayedPortfolios = useMemo(
+    () => {
+      const query = search
+        .trim()
+        .toLowerCase();
+
+      if (!query) {
+        return filteredPortfolios;
+      }
+
+      return filteredPortfolios.filter(
+        (portfolio) =>
+          [
+            portfolio.name,
+            portfolio.code,
+            portfolio.theme,
+            portfolio.benchmark,
+            portfolio.allocationType,
+            portfolio.status,
+          ]
+            .filter(Boolean)
+            .some((value) =>
+              String(value)
+                .toLowerCase()
+                .startsWith(query)
+            )
+      );
+    },
+    [filteredPortfolios, search]
+  );
 
   const openPortfolio = useCallback(
     async (portfolio) => {
       try {
-        const basicInfo = await getPortfolioBasicInfo(portfolio.id);
-        navigate(`/portfolio/${portfolio.id}`, {
-          state: { portfolio: { ...portfolio, ...basicInfo } },
-        });
+        const response =
+          await getPortfolioBasicInfo(
+            portfolio.id
+          );
+
+        const basicInfo =
+          response?.data?.data ??
+          response?.data ??
+          response;
+
+        navigate(
+          `/portfolio/${portfolio.id}`,
+          {
+            state: {
+              portfolio: {
+                ...portfolio,
+                ...(basicInfo || {}),
+              },
+            },
+          }
+        );
       } catch {
-        navigate(`/portfolio/${portfolio.id}`, { state: { portfolio } });
+        navigate(
+          `/portfolio/${portfolio.id}`,
+          {
+            state: {
+              portfolio,
+            },
+          }
+        );
       }
     },
     [navigate]
   );
 
-  const exportPortfolios = () =>
-    gridRef.current?.api?.exportDataAsCsv({
-      fileName: "portfolio-ledger.csv",
-      columnKeys: ["name", "theme", "allocationType", "aum", "returnValue", "benchmark", "statusCol"],
-    });
+  const hasActivePortfolio =
+    portfolios.some(
+      (portfolio) =>
+        portfolio.status === "ACTIVE"
+    );
 
-  /* ---------------- columns ---------------- */
-
-  const defaultColDef = useMemo(
-    () => ({ sortable: true, resizable: true, suppressHeaderMenuButton: true }),
-    []
-  );
-
-  const columnDefs = useMemo(
-    () => [
-      {
-        headerName: "Portfolio",
-        field: "name",
-        flex: 2,
-        minWidth: 240,
-        filter: "agTextColumnFilter",
-        floatingFilter: true,
-        cellRenderer: (p) => (
-          <div className="flex h-full min-w-0 items-center gap-2.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#e9effc] text-[11px] font-semibold text-blue-700">
-              {p.data?.initials}
-            </div>
-            <div className="min-w-0 leading-tight">
-              <button
-                onClick={() => openPortfolio(p.data)}
-                className="block max-w-full truncate text-left text-[13px] font-semibold text-slate-800 hover:text-blue-800"
-              >
-                {p.data?.name}
-              </button>
-              <div className="mt-0.5 flex gap-1.5 text-[10px] text-slate-500">
-                <span className="font-mono">{p.data?.code}</span>
-                <span>·</span>
-                <span>{formatStatus(p.data?.status)}</span>
-              </div>
-            </div>
-          </div>
-        ),
-      },
-      {
-        headerName: "Theme / strategy",
-        field: "theme",
-        flex: 1.4,
-        minWidth: 170,
-        filter: "agTextColumnFilter",
-        floatingFilter: true,
-        cellRenderer: (p) => (
-          <span
-            className="block max-w-full truncate text-[12px] font-medium text-slate-700"
-            title={p.value}
-          >
-            {p.value}
-          </span>
-        ),
-      },
-      {
-        headerName: "Allocation type",
-        field: "allocationType",
-        flex: 1.1,
-        minWidth: 150,
-        filter: "agTextColumnFilter",
-        floatingFilter: true,
-        valueGetter: (p) => formatLabel(p.data?.allocationType),
-        cellRenderer: (p) => (
-          <span className="inline-flex items-center gap-1.5 text-slate-600">
-            <Scale size={13} />
-            {p.value}
-          </span>
-        ),
-      },
-      {
-        headerName: "AUM",
-        field: "aum",
-        flex: 1,
-        minWidth: 130,
-        type: "rightAligned",
-        filter: "agNumberColumnFilter",
-        floatingFilter: true,
-        cellClass: "font-mono text-[13px] font-semibold",
-        cellStyle: { color: "#1e3a8a" },
-        valueFormatter: (p) => formatMoney(p.value),
-      },
-      {
-        headerName: "Return",
-        field: "returnValue",
-        flex: 0.9,
-        minWidth: 110,
-        type: "rightAligned",
-        filter: "agNumberColumnFilter",
-        floatingFilter: true,
-        sort: "desc",
-        cellClass: (p) =>
-          `font-mono text-[13px] font-semibold ${
-            Number(p.value) >= 0 ? "text-emerald-700" : "text-red-600"
-          }`,
-        valueFormatter: (p) =>
-          `${Number(p.value) > 0 ? "+" : ""}${Number(p.value || 0).toFixed(2)}%`,
-      },
-      {
-        headerName: "Benchmark",
-        field: "benchmark",
-        flex: 1.1,
-        minWidth: 140,
-        filter: "agTextColumnFilter",
-        floatingFilter: true,
-        valueGetter: (p) => formatLabel(p.data?.benchmark),
-        cellClass: "font-mono text-slate-700",
-      },
-      {
-        headerName: "Status / action",
-        colId: "statusCol",
-        flex: 1.5,
-        minWidth: 230,
-        type: "rightAligned",
-        filter: false,
-        sortable: false,
-        valueGetter: (p) =>
-          driftPortfolioIds.includes(String(p.data?.id))
-            ? "Rebalance required"
-            : formatStatus(p.data?.status),
-        cellRenderer: (p) => {
-          const needsRebalance = driftPortfolioIds.includes(String(p.data?.id));
-          return (
-            <div className="flex h-full items-center justify-end gap-3">
-              <span
-                className={`whitespace-nowrap text-[10px] font-bold uppercase tracking-wide ${
-                  needsRebalance ? "text-red-600" : statusTone(p.data?.status)
-                }`}
-              >
-                {p.value}
-              </span>
-              {needsRebalance && p.data?.status === "ACTIVE" ? (
-                <button
-                  onClick={() => navigate("/rebalancing", { state: { portfolioId: p.data.id } })}
-                  className="inline-flex items-center gap-1 rounded-sm  px-2.5 py-1 text-[11px] font-semibold text-blue-800 "
-                >
-                  <RefreshCw size={12} /> Rebalance
-                </button>
-              ) : (
-                <button
-                  onClick={() => openPortfolio(p.data)}
-                  className="rounded-sm border border-slate-200 px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:border-blue-300 hover:text-blue-800"
-                >
-                  View
-                </button>
-              )}
-            </div>
-          );
-        },
-      },
-    ],
-    [driftPortfolioIds, navigate, openPortfolio]
-  );
-
-  const syncCount = useCallback(() => {
-    setVisibleCount(gridRef.current?.api?.getDisplayedRowCount?.() ?? 0);
-  }, []);
-
-  /* ---------------- render ---------------- */
+  const hasDemoPortfolio =
+    portfolios.some((portfolio) =>
+      String(
+        portfolio.name || ""
+      ).startsWith("DEMO 1Y |")
+    );
 
   return (
     <div className="h-screen overflow-hidden bg-[#f6f8fd]">
       <SideBarComponent activePage="Portfolios" />
 
       <div className="sidebar-content flex h-screen min-w-0 flex-col">
-        <main className="mx-auto flex w-full min-h-0 max-w-[1600px] flex-1 flex-col px-4 py-3 sm:px-5">
-          
-           {/* TITLE + ACTIONS */}
-          <section className="mt-3 mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
-            <div>
+        <main className="mx-auto flex min-h-0 w-full max-w-[1800px] flex-1 flex-col px-4 py-3 sm:px-5">
+          <section className="mb-2 mt-1 flex shrink-0 flex-wrap items-center justify-between gap-3">
+            <div className="shrink-0">
               <div className="text-[10px] font-bold tracking-wider text-blue-700">
-                PORTFOLIO MANAGEMENT SYSTEM · LIVE ALLOCATION
+                PORTFOLIO MANAGEMENT SYSTEM ·
+                LIVE ALLOCATION
               </div>
-              <h1 className="text-xl font-semibold text-slate-900">Fund Portfolios</h1>
+
+              <h1 className="text-xl font-semibold text-slate-900">
+                Fund Portfolios
+              </h1>
             </div>
-            <div className="flex flex-wrap justify-end gap-2">
+
+            <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+              <label className="flex h-8 w-[min(340px,100%)] min-w-[220px] items-center rounded-md border border-slate-200 bg-white px-3 shadow-sm focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-100">
+                <span className="sr-only">
+                  Search portfolios
+                </span>
+
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(event) =>
+                    setSearch(
+                      event.target.value
+                    )
+                  }
+                  className="w-full bg-transparent text-xs text-slate-700 outline-none placeholder:text-slate-400"
+                  placeholder="Search portfolios..."
+                />
+              </label>
+
               <button
-                onClick={runChecksForActivePortfolios}
-                disabled={driftCheckRunning || driftLoading || !portfolios.some((item) => item.status === "ACTIVE")}
-                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-blue-200 bg-white px-3 text-xs font-semibold text-blue-800 hover:bg-blue-50 disabled:opacity-50"
+                type="button"
+                onClick={
+                  runChecksForActivePortfolios
+                }
+                disabled={
+                  driftCheckRunning ||
+                  driftLoading ||
+                  !hasActivePortfolio
+                }
+                className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border border-blue-200 bg-white px-3 text-xs font-semibold text-blue-800 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <RefreshCw size={13} className={driftCheckRunning ? "animate-spin" : ""} />
-                {driftCheckRunning ? "Checking drift…" : "Run Drift Check"}
+                <RefreshCw
+                  size={13}
+                  className={
+                    driftCheckRunning
+                      ? "animate-spin"
+                      : ""
+                  }
+                />
+
+                {driftCheckRunning
+                  ? "Checking drift..."
+                  : "Run Drift Check"}
               </button>
+
               <button
-                onClick={exportPortfolios}
-                disabled={!rowData.length}
-                className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#edf3fd] px-3 text-xs font-semibold text-slate-700 hover:bg-blue-100 disabled:opacity-50"
+                type="button"
+                onClick={() =>
+                  exportPortfolioCsv(
+                    displayedPortfolios
+                  )
+                }
+                disabled={
+                  !displayedPortfolios.length
+                }
+                className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md bg-[#edf3fd] px-3 text-xs font-semibold text-slate-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Download size={14} /> Export
+                <Download size={14} />
+                Export
               </button>
+
               <button
-                onClick={() => manageDemoPortfolios("add")}
+                type="button"
+                onClick={() =>
+                  manageDemoPortfolios("add")
+                }
                 disabled={demoBusy || !userId}
-                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-blue-200 bg-white px-3 text-xs font-semibold text-blue-800 hover:bg-blue-50 disabled:opacity-50"
+                className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border border-blue-200 bg-white px-3 text-xs font-semibold text-blue-800 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Plus size={14} /> {demoBusy ? "Working…" : "Add Demos"}
+                <Plus size={14} />
+
+                {demoBusy
+                  ? "Working..."
+                  : "Add Demos"}
               </button>
+
               <button
-                onClick={() => manageDemoPortfolios("remove")}
-                disabled={demoBusy || !portfolios.some((i) => i.name.startsWith("DEMO 1Y |"))}
-                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-red-200 bg-white px-3 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                type="button"
+                onClick={() =>
+                  manageDemoPortfolios(
+                    "remove"
+                  )
+                }
+                disabled={
+                  demoBusy ||
+                  !hasDemoPortfolio
+                }
+                className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border border-red-200 bg-white px-3 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Trash2 size={13} /> Remove Demos
+                <Trash2 size={13} />
+                Remove Demos
               </button>
+
               <button
-                onClick={() => navigate("/create-portfolio")}
-                className="inline-flex h-8 items-center gap-1.5 rounded-md bg-blue-800 px-3 text-xs font-semibold text-white shadow-sm hover:bg-blue-900"
+                type="button"
+                onClick={() =>
+                  navigate(
+                    "/create-portfolio"
+                  )
+                }
+                className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md bg-blue-800 px-3 text-xs font-semibold text-white shadow-sm hover:bg-blue-900"
               >
-                <Plus size={15} /> Create Portfolio
+                <Plus size={15} />
+                Create Portfolio
               </button>
             </div>
           </section>
-          
-          {/* KPI STRIP */}
-          <section className="grid shrink-0 grid-cols-2 gap-2 xl:grid-cols-4">
-            <SummaryCard
-              title="Active AUM"
-              value={formatMoney(totalAum)}
-              detail={`${activePortfolios.length} active mandates`}
-              icon={Building2}
-            />
-            <SummaryCard
-              title="Rebalance required"
-              value={driftLoading ? "…" : String(driftPortfolioIds.length)}
-              detail={driftPortfolioIds.length ? "Outside tolerance" : "No drift alerts"}
-              icon={AlertTriangle}
-              tone={driftPortfolioIds.length ? "red" : "green"}
-            />
-            <SummaryCard
-              title="Compliance"
-              value={`${compliance.toFixed(1)}%`}
-              detail="Within ±5% threshold"
-              icon={ShieldCheck}
-              tone="green"
-            />
-            <SummaryCard
-              title="Average return"
-              value={`${averageReturn >= 0 ? "+" : ""}${averageReturn.toFixed(2)}%`}
-              detail="Across active mandates"
-              icon={ArrowUpDown}
-              tone={averageReturn >= 0 ? "green" : "red"}
-            />
-          </section>
 
-         
-
-          {/* GRID PANEL */}
-          <section className="mt-2.5 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            {/* Toolbar */}
-            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2">
-              <div className="flex flex-wrap gap-1.5">
-                {FILTERS.map((name) => (
+          <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-slate-100 px-3 py-1.5">
+              {FILTERS.map(
+                (filterName) => (
                   <button
-                    key={name}
-                    onClick={() => setFilter(name)}
-                    className={`rounded-md px-2.5 py-1.5 text-[11px] font-semibold ${
-                      filter === name
+                    type="button"
+                    key={filterName}
+                    onClick={() =>
+                      setFilter(filterName)
+                    }
+                    className={`rounded-md px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
+                      filter === filterName
                         ? "bg-blue-800 text-white"
                         : "bg-[#edf2fb] text-slate-600 hover:bg-[#e4ebf8]"
                     }`}
                   >
-                    {name}
+                    {filterName}
+
                     <span className="ml-1 opacity-70">
-                      {name === "Rebalance Required" && driftLoading ? "…" : counts[name]}
+                      {filterName ===
+                        "Rebalance Required" &&
+                      driftLoading
+                        ? "..."
+                        : counts[filterName]}
                     </span>
                   </button>
-                ))}
-              </div>
-              <label className="flex h-8 w-[min(280px,70vw)] items-center gap-2 rounded-md bg-[#edf2fb] px-3">
-                <Filter size={14} className="shrink-0 text-slate-500" />
-                <span className="sr-only">Filter portfolios</span>
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-full bg-transparent text-xs outline-none placeholder:text-slate-500"
-                  placeholder="Search name, code, theme, benchmark…"
-                />
-              </label>
+                )
+              )}
             </div>
 
             {demoMessage && (
@@ -528,51 +714,66 @@ const PortfolioPage = () => {
               </p>
             )}
 
-            {/* The ONLY scrollable region */}
             {error ? (
               <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-5 text-center">
-                <AlertTriangle className="text-red-500" size={28} />
+                <AlertTriangle
+                  className="text-red-500"
+                  size={28}
+                />
+
                 <p className="mt-3 text-sm font-semibold text-slate-700">
                   Could not load portfolios
                 </p>
-                <p className="mt-1 text-xs text-slate-500">{error}</p>
+
+                <p className="mt-1 text-xs text-slate-500">
+                  {error}
+                </p>
+
                 <button
-                  onClick={() => setRefreshVersion((v) => v + 1)}
-                  className="mt-4 rounded-md bg-blue-800 px-3 py-2 text-xs font-semibold text-white"
+                  type="button"
+                  onClick={() =>
+                    setRefreshVersion(
+                      (current) =>
+                        current + 1
+                    )
+                  }
+                  className="mt-4 rounded-md bg-blue-800 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-900"
                 >
                   Retry
                 </button>
               </div>
             ) : (
-              <div className="min-h-0 flex-1">
-                <AgGridReact
-                  ref={gridRef}
-                  theme={gridTheme}
-                  rowData={rowData}
-                  columnDefs={columnDefs}
-                  defaultColDef={defaultColDef}
-                  quickFilterText={search}
+              <div className="min-h-0 flex-1 overflow-auto">
+                <PortfolioMasterDetail
+                  portfolios={
+                    displayedPortfolios
+                  }
+                  driftPortfolioIds={
+                    driftPortfolioIds
+                  }
+                  openPortfolio={
+                    openPortfolio
+                  }
+                  navigate={navigate}
                   loading={loading}
-                  animateRows
-                  suppressCellFocus
-                  getRowId={(p) => String(p.data.id)}
-                  onGridReady={syncCount}
-                  onModelUpdated={syncCount}
-                  overlayNoRowsTemplate='<span class="text-xs text-slate-500">No portfolios match these filters.</span>'
-                  style={{ height: "100%", width: "100%" }}
+                  refreshVersion={
+                    refreshVersion
+                  }
                 />
               </div>
             )}
 
-            {/* Footer */}
-            <div className="flex shrink-0 items-center justify-between border-t border-slate-100 px-4 py-1.5 text-[11px] text-slate-500">
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-4 py-1.5 text-[11px] text-slate-500">
               <span>
                 {loading
-                  ? "Loading portfolios…"
-                  : `Showing ${visibleCount} of ${portfolios.length} portfolios`}
+                  ? "Loading portfolios..."
+                  : `Showing ${displayedPortfolios.length} of ${portfolios.length} portfolios`}
               </span>
+
               <span className="flex items-center gap-1.5 text-slate-400">
-                <WalletCards size={13} /> Click a header to sort · filter row to search
+                <WalletCards size={13} />
+                Expand a portfolio to view and
+                trade holdings
               </span>
             </div>
           </section>
@@ -582,33 +783,2618 @@ const PortfolioPage = () => {
   );
 };
 
-/* ------------------------- helpers ------------------------- */
+function PortfolioMasterDetail({
+  portfolios,
+  driftPortfolioIds,
+  openPortfolio,
+  navigate,
+  loading,
+  refreshVersion,
+}) {
+  const [expandedIds, setExpandedIds] =
+    useState([]);
 
-function SummaryCard({ title, value, detail, icon: Icon, tone = "blue" }) {
-  const color =
-    tone === "red"
-      ? "text-red-600 bg-red-50"
-      : tone === "green"
-        ? "text-emerald-700 bg-emerald-50"
-        : "text-blue-700 bg-blue-50";
-  return (
-    <article className="flex min-w-0 items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
-      <span className={`rounded-md p-1.5 ${color}`}>
-        <Icon size={16} />
-      </span>
-      <div className="min-w-0">
-        <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500">{title}</div>
-        <div className="truncate font-mono text-base font-semibold text-slate-900">{value}</div>
-        <div className="truncate text-[10px] text-slate-500">{detail}</div>
+  const [portfolioSnapshots, setPortfolioSnapshots] =
+    useState(portfolios);
+
+  const [holdingsById, setHoldingsById] =
+    useState({});
+
+  const [detailsById, setDetailsById] =
+    useState({});
+
+  const [loadingIds, setLoadingIds] =
+    useState([]);
+
+  const [errorsById, setErrorsById] =
+    useState({});
+
+  useEffect(() => {
+    setExpandedIds([]);
+    setHoldingsById({});
+    setDetailsById({});
+    setLoadingIds([]);
+    setErrorsById({});
+    setPortfolioSnapshots(portfolios);
+  }, [portfolios, refreshVersion]);
+
+  async function loadPortfolioData(
+    portfolio,
+    options = {}
+  ) {
+    const { force = false } = options;
+    const portfolioId = String(
+      portfolio.id
+    );
+
+    const alreadyLoaded =
+      Object.prototype.hasOwnProperty.call(
+        holdingsById,
+        portfolioId
+      );
+
+    if (alreadyLoaded && !force) {
+      return;
+    }
+
+    setLoadingIds((current) =>
+      current.includes(portfolioId)
+        ? current
+        : [...current, portfolioId]
+    );
+
+    setErrorsById((current) => {
+      const nextErrors = { ...current };
+      delete nextErrors[portfolioId];
+      return nextErrors;
+    });
+
+    try {
+      const [
+        basicInfoResponse,
+        holdings,
+        validationResponse,
+      ] = await Promise.all([
+        getPortfolioBasicInfo(
+          portfolio.id
+        ),
+        getPortfolioHoldings(
+          portfolio.id
+        ),
+        validatePortfolioAllocation(
+          portfolio.id
+        ).catch(() => null),
+      ]);
+
+      if (!Array.isArray(holdings)) {
+        throw new Error(
+          "The holdings API did not return an array."
+        );
+      }
+
+      const basicInfo =
+        basicInfoResponse?.data?.data ??
+        basicInfoResponse?.data ??
+        basicInfoResponse;
+
+      const validationPayload =
+        validationResponse?.data?.data ??
+        validationResponse?.data ??
+        validationResponse ??
+        {};
+
+      const nextBasicInfo = {
+        ...(basicInfo || {}),
+        ...(validationPayload || {}),
+        allocations:
+          validationPayload?.allocations ??
+          validationPayload?.allocationDetails ??
+          basicInfo?.allocations ??
+          basicInfo?.allocationDetails ??
+          [],
+        allocationDetails:
+          validationPayload?.allocationDetails ??
+          validationPayload?.allocations ??
+          basicInfo?.allocationDetails ??
+          basicInfo?.allocations ??
+          [],
+      };
+
+      setDetailsById((current) => ({
+        ...current,
+        [portfolioId]: nextBasicInfo,
+      }));
+
+      setHoldingsById((current) => ({
+        ...current,
+        [portfolioId]: holdings,
+      }));
+
+      setPortfolioSnapshots((current) =>
+        current.map((item) => {
+          if (
+            String(item.id) !==
+            portfolioId
+          ) {
+            return item;
+          }
+
+          const updatedBalance = Number(
+            nextBasicInfo?.amount ??
+              nextBasicInfo?.cashBalance ??
+              nextBasicInfo?.availableBalance ??
+              nextBasicInfo?.availableCash ??
+              item?.amount ??
+              item?.cashBalance ??
+              item?.availableBalance ??
+              0
+          );
+
+          const holdingsValue =
+            Array.isArray(holdings)
+              ? holdings.reduce(
+                  (sum, holding) =>
+                    sum +
+                    Number(
+                      holding.currentValue ||
+                        0
+                    ),
+                  0
+                )
+              : 0;
+
+          const updatedAum =
+            Number.isFinite(
+              Number(
+                nextBasicInfo?.aum ??
+                  nextBasicInfo?.currentValue ??
+                  nextBasicInfo?.totalCurrentValue ??
+                  item?.aum
+              )
+            )
+              ? Number(
+                  nextBasicInfo?.aum ??
+                    nextBasicInfo?.currentValue ??
+                    nextBasicInfo?.totalCurrentValue ??
+                    item?.aum ??
+                    0
+                )
+              : holdingsValue + updatedBalance;
+
+          const updatedReturnValue =
+            Number.isFinite(
+              Number(
+                nextBasicInfo?.return1Y ??
+                  nextBasicInfo?.returnValue ??
+                  nextBasicInfo?.returns
+              )
+            )
+              ? Number(
+                  nextBasicInfo?.return1Y ??
+                    nextBasicInfo?.returnValue ??
+                    nextBasicInfo?.returns
+                )
+              : item.returnValue ?? 0;
+
+          return {
+            ...item,
+            ...nextBasicInfo,
+            amount: updatedBalance,
+            cashBalance: updatedBalance,
+            availableBalance: updatedBalance,
+            aum: updatedAum,
+            returnValue:
+              updatedReturnValue,
+          };
+        })
+      );
+    } catch (loadError) {
+      setErrorsById((current) => ({
+        ...current,
+        [portfolioId]:
+          loadError?.response?.data
+            ?.message ||
+          loadError?.message ||
+          "Could not load portfolio holdings.",
+      }));
+
+      throw loadError;
+    } finally {
+      setLoadingIds((current) =>
+        current.filter(
+          (id) => id !== portfolioId
+        )
+      );
+    }
+  }
+
+  async function togglePortfolio(
+    portfolio
+  ) {
+    const portfolioId = String(
+      portfolio.id
+    );
+
+    const expanded =
+      expandedIds.includes(portfolioId);
+
+    if (expanded) {
+      setExpandedIds((current) =>
+        current.filter(
+          (id) => id !== portfolioId
+        )
+      );
+
+      return;
+    }
+
+    setExpandedIds((current) =>
+      current.includes(portfolioId)
+        ? current
+        : [...current, portfolioId]
+    );
+
+    try {
+      await loadPortfolioData(portfolio);
+    } catch {
+      // Child row displays the error.
+    }
+  }
+
+  async function reloadPortfolioData(
+    portfolio
+  ) {
+    await loadPortfolioData(portfolio, {
+      force: true,
+    });
+  }
+
+  async function retryPortfolio(
+    portfolio
+  ) {
+    const portfolioId = String(
+      portfolio.id
+    );
+
+    setHoldingsById((current) => {
+      const next = { ...current };
+      delete next[portfolioId];
+      return next;
+    });
+
+    setDetailsById((current) => {
+      const next = { ...current };
+      delete next[portfolioId];
+      return next;
+    });
+
+    try {
+      await loadPortfolioData(portfolio, {
+        force: true,
+      });
+    } catch {
+      // Child row displays the error.
+    }
+  }
+
+  function applyTradeToLocalState(
+    portfolioId,
+    selectedHolding,
+    tradeSide,
+    quantityValue
+  ) {
+    if (!selectedHolding) {
+      return;
+    }
+
+    const normalizedId = String(
+      portfolioId
+    );
+    const selectedKey = String(
+      selectedHolding.holdingId ??
+        selectedHolding.securityId ??
+        ""
+    );
+
+    const currentHoldings =
+      holdingsById[normalizedId] || [];
+
+    const nextHoldings =
+      currentHoldings.map((holding) => {
+        const holdingKey = String(
+          holding.holdingId ??
+            holding.securityId ??
+            ""
+        );
+
+        if (holdingKey !== selectedKey) {
+          return holding;
+        }
+
+        const oldQuantity = Number(
+          holding.quantity || 0
+        );
+        const nextQuantity =
+          tradeSide === "buy"
+            ? oldQuantity + quantityValue
+            : Math.max(
+                oldQuantity - quantityValue,
+                0
+              );
+
+        const oldCurrentValue = Number(
+          holding.currentValue || 0
+        );
+        const oldTotalCost = Number(
+          holding.totalCost || 0
+        );
+        const unitValue =
+          oldQuantity > 0
+            ? oldCurrentValue / oldQuantity
+            : Number(
+                holding.averageCost || 0
+              );
+
+        const updatedCurrentValue =
+          tradeSide === "buy"
+            ? oldCurrentValue +
+              unitValue * quantityValue
+            : Math.max(
+                oldCurrentValue -
+                  unitValue *
+                    quantityValue,
+                0
+              );
+
+        const updatedTotalCost =
+          tradeSide === "buy"
+            ? oldTotalCost +
+              Number(
+                holding.averageCost || 0
+              ) * quantityValue
+            : Math.max(
+                oldTotalCost -
+                  Number(
+                    holding.averageCost || 0
+                  ) * quantityValue,
+                0
+              );
+
+        const safeQuantity = Math.max(
+          nextQuantity,
+          0
+        );
+
+        return {
+          ...holding,
+          quantity: safeQuantity,
+          currentValue: updatedCurrentValue,
+          totalCost: updatedTotalCost,
+          averageCost:
+            safeQuantity > 0
+              ? updatedTotalCost /
+                safeQuantity
+              : 0,
+        };
+      });
+
+    setHoldingsById((current) => ({
+      ...current,
+      [normalizedId]: nextHoldings,
+    }));
+
+    const currentPortfolio =
+      portfolioSnapshots.find(
+        (item) => String(item.id) === normalizedId
+      ) || null;
+
+    const currentAvailableBalance =
+      getAvailableBalance(
+        detailsById[normalizedId],
+        currentPortfolio || {}
+      ) ??
+      Number(
+        (currentPortfolio || {}).availableBalance ??
+          (currentPortfolio || {}).cashBalance ??
+          (currentPortfolio || {}).amount ??
+          0
+      );
+
+    const tradeValue =
+      Number(
+        selectedHolding.currentValue ||
+          selectedHolding.averageCost ||
+          0
+      ) /
+        Math.max(
+          Number(
+            selectedHolding.quantity || 1
+          ),
+          1
+        ) * quantityValue;
+
+    const nextAvailableBalance =
+      tradeSide === "buy"
+        ? currentAvailableBalance - tradeValue
+        : currentAvailableBalance + tradeValue;
+
+    const nextAum = Math.max(
+      Number(
+        (currentPortfolio || {}).aum ?? 0
+      ) +
+        (tradeSide === "buy"
+          ? tradeValue
+          : -tradeValue),
+      0
+    );
+
+    setDetailsById((current) => ({
+      ...current,
+      [normalizedId]: {
+        ...(current[normalizedId] || {}),
+        amount: nextAvailableBalance,
+        cashBalance: nextAvailableBalance,
+        availableBalance: nextAvailableBalance,
+        aum: nextAum,
+      },
+    }));
+
+    setPortfolioSnapshots((current) =>
+      current.map((item) => {
+        if (String(item.id) !== normalizedId) {
+          return item;
+        }
+
+        return {
+          ...item,
+          amount: nextAvailableBalance,
+          cashBalance: nextAvailableBalance,
+          availableBalance: nextAvailableBalance,
+          aum: nextAum,
+        };
+      })
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex h-full min-h-[180px] items-center justify-center gap-2 text-xs text-slate-500">
+        <LoaderCircle
+          size={15}
+          className="animate-spin"
+        />
+
+        Loading portfolios...
       </div>
-    </article>
+    );
+  }
+
+  if (!portfolios.length) {
+    return (
+      <div className="flex h-full min-h-[180px] items-center justify-center p-8 text-center text-xs text-slate-500">
+        No portfolios match the selected
+        filters.
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-w-[1180px]">
+      <div className="sticky top-0 z-20 grid grid-cols-[42px_2fr_1.25fr_1.05fr_1fr_0.8fr_1fr_1.45fr] border-b border-slate-200 bg-[#eff4fc] text-[10px] font-bold uppercase tracking-wide text-slate-500">
+        <div />
+
+        <div className="px-3 py-2">
+          Portfolio
+        </div>
+
+        <div className="px-3 py-2">
+          Theme / strategy
+        </div>
+
+        <div className="px-3 py-2">
+          Allocation type
+        </div>
+
+        <div className="px-3 py-2 text-right">
+          AUM
+        </div>
+
+        <div className="px-3 py-2 text-right">
+          Return
+        </div>
+
+        <div className="px-3 py-2">
+          Benchmark
+        </div>
+
+        <div className="px-3 py-2 text-right">
+          Status / action
+        </div>
+      </div>
+
+      {portfolioSnapshots.map((portfolio) => {
+        const portfolioId = String(
+          portfolio.id
+        );
+
+        const expanded =
+          expandedIds.includes(
+            portfolioId
+          );
+
+        const childLoading =
+          loadingIds.includes(portfolioId);
+
+        const holdings =
+          holdingsById[portfolioId] ||
+          [];
+
+        const details =
+          detailsById[portfolioId];
+
+        const portfolioError =
+          errorsById[portfolioId];
+
+        const needsRebalance =
+          driftPortfolioIds.includes(
+            portfolioId
+          );
+
+        return (
+          <React.Fragment key={portfolioId}>
+            <div
+              className={`grid grid-cols-[42px_2fr_1.25fr_1.05fr_1fr_0.8fr_1fr_1.45fr] items-center border-b border-slate-100 text-sm ${
+                expanded
+                  ? "bg-blue-50/50"
+                  : "bg-white hover:bg-blue-50/30"
+              }`}
+            >
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={() =>
+                    togglePortfolio(
+                      portfolio
+                    )
+                  }
+                  aria-expanded={expanded}
+                  aria-label={
+                    expanded
+                      ? `Collapse holdings for ${portfolio.name}`
+                      : `Expand holdings for ${portfolio.name}`
+                  }
+                  className="rounded p-1 text-slate-500 hover:bg-blue-100 hover:text-blue-800"
+                >
+                  <ChevronRight
+                    size={16}
+                    className={`transition-transform ${
+                      expanded
+                        ? "rotate-90"
+                        : ""
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div className="flex min-w-0 items-center gap-2 px-3 py-2">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#e9effc] text-[10px] font-semibold text-blue-700">
+                  {portfolio.initials}
+                </div>
+
+                <div className="min-w-0 leading-tight">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openPortfolio(
+                        portfolio
+                      )
+                    }
+                    className="block max-w-full truncate text-left text-[12px] font-semibold text-slate-800 hover:text-blue-800"
+                    title={portfolio.name}
+                  >
+                    {portfolio.name}
+                  </button>
+
+                  <div className="mt-0.5 flex items-center gap-1.5 text-[9px] text-slate-500">
+                    <span className="font-mono">
+                      {portfolio.code}
+                    </span>
+
+                    <span>·</span>
+
+                    <span>
+                      {formatStatus(
+                        portfolio.status
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                className="truncate px-3 text-[11px] font-medium text-slate-700"
+                title={portfolio.theme}
+              >
+                {portfolio.theme}
+              </div>
+
+              <div className="flex min-w-0 items-center gap-1.5 px-3 text-[11px] text-slate-600">
+                <Scale
+                  size={12}
+                  className="shrink-0"
+                />
+
+                <span className="truncate">
+                  {
+                    portfolio.allocationType
+                  }
+                </span>
+              </div>
+
+              <div className="px-3 text-right font-mono text-[12px] font-semibold text-blue-900">
+                {formatMoney(
+                  portfolio.aum
+                )}
+              </div>
+
+              <div
+                className={`px-3 text-right font-mono text-[12px] font-semibold ${
+                  portfolio.returnValue >= 0
+                    ? "text-emerald-700"
+                    : "text-red-600"
+                }`}
+              >
+                {portfolio.returnValue >= 0
+                  ? "+"
+                  : ""}
+                {portfolio.returnValue.toFixed(
+                  2
+                )}
+                %
+              </div>
+
+              <div
+                className="truncate px-3 font-mono text-[11px] text-slate-700"
+                title={portfolio.benchmark}
+              >
+                {portfolio.benchmark}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 px-3">
+                <span
+                  className={`whitespace-nowrap text-[9px] font-bold uppercase tracking-wide ${
+                    needsRebalance
+                      ? "text-red-600"
+                      : statusTone(
+                          portfolio.status
+                        )
+                  }`}
+                >
+                  {needsRebalance
+                    ? "Rebalance required"
+                    : formatStatus(
+                        portfolio.status
+                      )}
+                </span>
+
+                {needsRebalance &&
+                portfolio.status ===
+                  "ACTIVE" ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate(
+                        "/rebalancing",
+                        {
+                          state: {
+                            portfolioId:
+                              portfolio.id,
+                          },
+                        }
+                      )
+                    }
+                    className="inline-flex items-center gap-1 whitespace-nowrap rounded border border-blue-200 px-2 py-1 text-[10px] font-semibold text-blue-800 hover:bg-blue-50"
+                  >
+                    <RefreshCw size={11} />
+                    Rebalance
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openPortfolio(
+                        portfolio
+                      )
+                    }
+                    className="rounded border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 hover:border-blue-300 hover:text-blue-800"
+                  >
+                    View
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {expanded && (
+              <div className="border-b border-slate-200 bg-[#f8faff] px-5 py-2.5">
+                {childLoading && (
+                  <div className="flex min-h-[70px] items-center justify-center gap-2 text-xs text-slate-500">
+                    <LoaderCircle
+                      size={14}
+                      className="animate-spin"
+                    />
+
+                    Loading portfolio details
+                    and holdings...
+                  </div>
+                )}
+
+                {!childLoading &&
+                  portfolioError && (
+                    <div className="flex min-h-[70px] items-center justify-between gap-3 rounded-md border border-red-100 bg-red-50 px-4 text-xs text-red-700">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle
+                          size={14}
+                        />
+
+                        <span>
+                          {portfolioError}
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          retryPortfolio(
+                            portfolio
+                          )
+                        }
+                        className="rounded border border-red-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-red-700 hover:bg-red-100"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
+
+                {!childLoading &&
+                  !portfolioError && (
+                    <PortfolioChildPanel
+                      portfolio={portfolio}
+                      details={details}
+                      holdings={holdings}
+                      onHoldingChanged={() =>
+                        reloadPortfolioData(
+                          portfolio
+                        )
+                      }
+                    />
+                  )}
+              </div>
+            )}
+          </React.Fragment>
+        );
+      })}
+    </div>
   );
 }
 
+function PortfolioChildPanel({
+  portfolio,
+  details,
+  holdings,
+  onHoldingChanged,
+}) {
+  const [sortConfig, setSortConfig] =
+    useState({
+      key: "allocationPercentage",
+      direction: "desc",
+    });
+
+  const [activeTab, setActiveTab] =
+    useState("holdings");
+  const [tradeRows, setTradeRows] =
+    useState([]);
+
+  const totalCurrentValue = useMemo(
+    () =>
+      holdings.reduce(
+        (total, holding) =>
+          total +
+          Number(
+            holding.currentValue || 0
+          ),
+        0
+      ),
+    [holdings]
+  );
+
+  const totalCost = useMemo(
+    () =>
+      holdings.reduce(
+        (total, holding) =>
+          total +
+          Number(
+            holding.totalCost || 0
+          ),
+        0
+      ),
+    [holdings]
+  );
+
+  const totalPnl =
+    totalCurrentValue - totalCost;
+
+  const availableBalance =
+    getAvailableBalance(
+      details,
+      portfolio
+    );
+
+  const sortedHoldings = useMemo(() => {
+    const result = [...holdings];
+
+    result.sort((first, second) => {
+      const firstValue =
+        getHoldingSortValue(
+          first,
+          sortConfig.key
+        );
+
+      const secondValue =
+        getHoldingSortValue(
+          second,
+          sortConfig.key
+        );
+
+      let comparison;
+
+      if (
+        typeof firstValue === "string" ||
+        typeof secondValue === "string"
+      ) {
+        comparison = String(
+          firstValue
+        ).localeCompare(
+          String(secondValue),
+          undefined,
+          {
+            numeric: true,
+            sensitivity: "base",
+          }
+        );
+      } else {
+        comparison =
+          Number(firstValue || 0) -
+          Number(secondValue || 0);
+      }
+
+      return sortConfig.direction ===
+        "asc"
+        ? comparison
+        : -comparison;
+    });
+
+    return result;
+  }, [holdings, sortConfig]);
+
+  const themeRows = useMemo(() => {
+    const allocationSource =
+      details?.allocations ??
+      details?.allocationDetails ??
+      portfolio?.allocations ??
+      portfolio?.allocationDetails ??
+      [];
+
+    if (
+      Array.isArray(allocationSource) &&
+      allocationSource.length
+    ) {
+      return allocationSource
+        .map((allocation) => {
+          const assetClass =
+            allocation.assetClass ||
+            allocation.name ||
+            "Unassigned";
+          const investedAmount = holdings.reduce(
+            (sum, holding) =>
+              sum +
+              (holding.assetClass ===
+                assetClass ||
+              holding.assetClass ===
+                allocation.assetClass
+                ? Number(
+                    holding.totalCost || 0
+                  )
+                : 0),
+            0
+          );
+          const currentAmount = holdings.reduce(
+            (sum, holding) =>
+              sum +
+              (holding.assetClass ===
+                assetClass ||
+              holding.assetClass ===
+                allocation.assetClass
+                ? Number(
+                    holding.currentValue ||
+                      0
+                  )
+                : 0),
+            0
+          );
+          const targetPct = parsePercentageValue(
+            allocation.targetPercentage ??
+              allocation.targetPct ??
+              allocation.target ??
+              allocation.targetAllocation ??
+              allocation.targetAllocationPercentage ??
+              allocation.allocationPercentage ??
+              0
+          );
+          const actualPct =
+            parsePercentageValue(
+              allocation.currentPercentage ??
+                allocation.actualPercentage ??
+                allocation.actualPct ??
+                (totalCurrentValue
+                  ? (currentAmount /
+                      totalCurrentValue) *
+                    100
+                  : 0)
+            );
+          const drift =
+            Math.round(
+              (actualPct - targetPct) * 100
+            ) / 100;
+
+          return {
+            assetClass: formatLabel(assetClass),
+            theme: portfolio.theme || "Theme",
+            targetPct,
+            investedAmount,
+            actualPct,
+            drift,
+            currentAmount,
+            satisfied:
+              allocation.satisfied !== false &&
+              Math.abs(drift) < 5,
+          };
+        })
+        .sort((first, second) =>
+          second.currentAmount -
+            first.currentAmount
+        );
+    }
+
+    const grouped = new Map();
+
+    holdings.forEach((holding) => {
+      const assetClass =
+        holding.assetClass ||
+        holding.securityType ||
+        "Unassigned";
+
+      const currentValueForHolding = Number(
+        holding.currentValue || 0
+      );
+      const totalCostForHolding = Number(
+        holding.totalCost || 0
+      );
+
+      if (!grouped.has(assetClass)) {
+        grouped.set(assetClass, {
+          assetClass,
+          value: 0,
+          cost: 0,
+          pnl: 0,
+          positions: 0,
+        });
+      }
+
+      const row = grouped.get(assetClass);
+      row.value += currentValueForHolding;
+      row.cost += totalCostForHolding;
+      row.pnl +=
+        currentValueForHolding -
+        totalCostForHolding;
+      row.positions += 1;
+    });
+
+    return Array.from(grouped.values())
+      .map((row) => ({
+        assetClass: formatLabel(row.assetClass),
+        theme: portfolio.theme || "Theme",
+        targetPct: 0,
+        investedAmount: row.cost,
+        actualPct: totalCurrentValue
+          ? (row.value / totalCurrentValue) *
+            100
+          : 0,
+        drift: 0,
+        currentAmount: row.value,
+        satisfied: true,
+      }))
+      .sort((first, second) =>
+        second.currentAmount -
+          first.currentAmount
+      );
+  }, [details, holdings, portfolio.theme, totalCurrentValue]);
+
+  function handleSort(key) {
+    setSortConfig((current) => {
+      if (current.key === key) {
+        return {
+          key,
+          direction:
+            current.direction === "asc"
+              ? "desc"
+              : "asc",
+        };
+      }
+
+      return {
+        key,
+        direction:
+          isNumericHoldingColumn(key)
+            ? "desc"
+            : "asc",
+      };
+    });
+  }
+
+  const tabOptions = [
+    { key: "holdings", label: "Holdings" },
+    { key: "theme", label: "Theme allocation" },
+    { key: "trade", label: "Buy / Sell" },
+  ];
+
+  function createTradeRow(side = "buy", holding = null) {
+    return {
+      id:
+        Date.now() +
+        Math.random() * 1000,
+      side,
+      searchText:
+        holding?.securityName ||
+        holding?.symbol ||
+        "",
+      selectedHoldingId:
+        holding
+          ? String(
+              holding.holdingId ??
+                holding.securityId ??
+                ""
+            )
+          : "",
+      quantity: "",
+      error: "",
+    };
+  }
+
+  function addTradeRow(side = "buy", holding = null) {
+    setTradeRows((current) => [
+      ...current,
+      createTradeRow(side, holding),
+    ]);
+    setActiveTab("trade");
+  }
+
+  function updateTradeRow(rowId, changes) {
+    setTradeRows((current) =>
+      current.map((row) =>
+        row.id === rowId
+          ? { ...row, ...changes }
+          : row
+      )
+    );
+  }
+
+  async function submitTradeRow(row) {
+    const quantityValue = Number(row.quantity);
+    const selectedHolding =
+      holdings.find(
+        (item) =>
+          String(
+            item.holdingId ??
+              item.securityId
+          ) === row.selectedHoldingId
+      ) || null;
+
+    if (
+      !selectedHolding ||
+      !row.selectedHoldingId
+    ) {
+      updateTradeRow(row.id, {
+        error:
+          "Select a security before submitting.",
+      });
+      return;
+    }
+
+    if (
+      !Number.isInteger(quantityValue) ||
+      quantityValue <= 0
+    ) {
+      updateTradeRow(row.id, {
+        error:
+          "Enter a whole-number quantity greater than zero.",
+      });
+      return;
+    }
+
+    if (
+      row.side === "sell" &&
+      quantityValue >
+        Number(selectedHolding.quantity || 0)
+    ) {
+      updateTradeRow(row.id, {
+        error:
+          "You cannot sell more than the currently held quantity.",
+      });
+      return;
+    }
+
+    try {
+      if (row.side === "buy") {
+        await buyPortfolioSecurities([
+          {
+            portfolioId: Number(
+              portfolio.id
+            ),
+            quantity: quantityValue,
+            securityId: Number(
+              selectedHolding.securityId
+            ),
+            equityCategory:
+              selectedHolding.equityCategory ??
+              null,
+          },
+        ]);
+      } else {
+        await sellPortfolioHoldings([
+          {
+            id: Number(
+              selectedHolding.holdingId
+            ),
+            quantity: quantityValue,
+          },
+        ]);
+      }
+
+      setTradeRows((current) =>
+        current.filter(
+          (tradeRow) => tradeRow.id !== row.id
+        )
+      );
+
+      applyTradeToLocalState(
+        portfolio.id,
+        selectedHolding,
+        row.side,
+        quantityValue
+      );
+
+      await onHoldingChanged();
+    } catch (tradeError) {
+      updateTradeRow(row.id, {
+        error:
+          tradeError?.response?.data
+            ?.message ||
+          tradeError?.message ||
+          `Could not complete the ${
+            row.side
+          } order.`,
+      });
+    }
+  }
+
+  async function executeAllTradeRows() {
+    const rowsToSubmit = [...tradeRows];
+
+    if (!rowsToSubmit.length) {
+      return;
+    }
+
+    for (const row of rowsToSubmit) {
+      const quantityValue = Number(row.quantity);
+      const selectedHolding =
+        holdings.find(
+          (item) =>
+            String(
+              item.holdingId ??
+                item.securityId
+            ) === row.selectedHoldingId
+        ) || null;
+
+      if (
+        !selectedHolding ||
+        !row.selectedHoldingId
+      ) {
+        updateTradeRow(row.id, {
+          error:
+            "Select a security before submitting.",
+        });
+        continue;
+      }
+
+      if (
+        !Number.isInteger(quantityValue) ||
+        quantityValue <= 0
+      ) {
+        updateTradeRow(row.id, {
+          error:
+            "Enter a whole-number quantity greater than zero.",
+        });
+        continue;
+      }
+
+      if (
+        row.side === "sell" &&
+        quantityValue >
+          Number(selectedHolding.quantity || 0)
+      ) {
+        updateTradeRow(row.id, {
+          error:
+            "You cannot sell more than the currently held quantity.",
+        });
+        continue;
+      }
+
+      try {
+        if (row.side === "buy") {
+          await buyPortfolioSecurities([
+            {
+              portfolioId: Number(
+                portfolio.id
+              ),
+              quantity: quantityValue,
+              securityId: Number(
+                selectedHolding.securityId
+              ),
+              equityCategory:
+                selectedHolding.equityCategory ??
+                null,
+            },
+          ]);
+        } else {
+          await sellPortfolioHoldings([
+            {
+              id: Number(
+                selectedHolding.holdingId
+              ),
+              quantity: quantityValue,
+            },
+          ]);
+        }
+
+        setTradeRows((current) =>
+          current.filter(
+            (tradeRow) => tradeRow.id !== row.id
+          )
+        );
+
+        applyTradeToLocalState(
+          portfolio.id,
+          selectedHolding,
+          row.side,
+          quantityValue
+        );
+      } catch (tradeError) {
+        updateTradeRow(row.id, {
+          error:
+            tradeError?.response?.data
+              ?.message ||
+            tradeError?.message ||
+            `Could not complete the ${
+              row.side
+            } order.`,
+        });
+      }
+    }
+
+    await onHoldingChanged();
+  }
+
+  return (
+    <div>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <h3 className="max-w-[500px] truncate text-[13px] font-semibold text-slate-800">
+              {portfolio.name}
+            </h3>
+
+            <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[9px] font-semibold text-blue-700">
+              {holdings.length} securities
+            </span>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-4 text-right">
+          <CompactMetric
+            label="Available balance"
+            value={
+              availableBalance === null
+                ? "Unavailable"
+                : formatMoney(
+                    availableBalance
+                  )
+            }
+            valueClass={
+              availableBalance === null
+                ? "text-amber-600"
+                : "text-blue-800"
+            }
+          />
+
+          <CompactMetric
+            label="Holdings value"
+            value={formatMoney(
+              totalCurrentValue
+            )}
+          />
+
+          <CompactMetric
+            label="Total cost"
+            value={formatMoney(
+              totalCost
+            )}
+          />
+
+          <CompactMetric
+            label="Unrealized P&L"
+            value={`${
+              totalPnl >= 0 ? "+" : ""
+            }${formatMoney(totalPnl)}`}
+            valueClass={
+              totalPnl >= 0
+                ? "text-emerald-700"
+                : "text-red-600"
+            }
+          />
+        </div>
+      </div>
+
+      <div className="mb-2 flex flex-wrap items-center gap-1.5 border-b border-slate-200 pb-1.5">
+        {tabOptions.map((tab) => (
+          <button
+            type="button"
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+              activeTab === tab.key
+                ? "bg-blue-800 text-white"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {!holdings.length ? (
+        <div className="rounded border border-slate-200 bg-white px-3 py-4 text-center text-[11px] text-slate-500">
+          No holdings found for this
+          portfolio.
+        </div>
+      ) : activeTab === "holdings" ? (
+        <div className="w-full overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-[0_1px_0_rgba(15,23,42,0.02)]">
+          <table className="w-full min-w-[1100px] table-fixed text-left text-[11px]" style={{ tableLayout: "fixed" }}>
+            <colgroup>
+              <col style={{ width: "20%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "9%" }} />
+            </colgroup>
+
+            <thead className="bg-slate-50 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">
+              <tr>
+                <SortableHeader
+                  label="Security"
+                  sortKey="symbol"
+                  sortConfig={sortConfig}
+                  onSort={handleSort}
+                />
+
+                <SortableHeader
+                  label="Asset class"
+                  sortKey="assetClass"
+                  sortConfig={sortConfig}
+                  onSort={handleSort}
+                />
+
+                <SortableHeader
+                  label="Category"
+                  sortKey="equityCategory"
+                  sortConfig={sortConfig}
+                  onSort={handleSort}
+                />
+
+                <SortableHeader
+                  label="Quantity"
+                  sortKey="quantity"
+                  align="right"
+                  sortConfig={sortConfig}
+                  onSort={handleSort}
+                />
+
+                <SortableHeader
+                  label="Average cost"
+                  sortKey="averageCost"
+                  align="right"
+                  sortConfig={sortConfig}
+                  onSort={handleSort}
+                />
+
+                <SortableHeader
+                  label="Total cost"
+                  sortKey="totalCost"
+                  align="right"
+                  sortConfig={sortConfig}
+                  onSort={handleSort}
+                />
+
+                <SortableHeader
+                  label="Current value"
+                  sortKey="currentValue"
+                  align="right"
+                  sortConfig={sortConfig}
+                  onSort={handleSort}
+                />
+
+                <SortableHeader
+                  label="Weight"
+                  sortKey="allocationPercentage"
+                  align="right"
+                  sortConfig={sortConfig}
+                  onSort={handleSort}
+                />
+
+                <SortableHeader
+                  label="P&L"
+                  sortKey="pnl"
+                  align="right"
+                  sortConfig={sortConfig}
+                  onSort={handleSort}
+                />
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-slate-200/80">
+              {sortedHoldings.map(
+                (holding) => {
+                  const holdingPnl =
+                    Number(
+                      holding.currentValue ||
+                        0
+                    ) -
+                    Number(
+                      holding.totalCost || 0
+                    );
+
+                  return (
+                    <tr
+                      key={
+                        holding.holdingId ??
+                        `${holding.securityId}-${holding.symbol}`
+                      }
+                      className="h-11 text-[10px] transition-colors hover:bg-slate-50"
+                    >
+                      <td className="border-t border-slate-200 px-2.5 py-2 align-middle">
+                        <div className="truncate text-[12px] font-semibold tracking-[-0.01em] text-slate-800">
+                          {holding.symbol ||
+                            "—"}
+                        </div>
+
+                        <div
+                          className="truncate text-[10px] text-slate-500"
+                          title={
+                            holding.securityName
+                          }
+                        >
+                          {holding.securityName ||
+                            "Unnamed security"}
+                        </div>
+                      </td>
+
+                      <td className="border-t border-slate-200 px-2.5 py-2 align-middle text-slate-600">
+                        {holding.assetClass ||
+                          "—"}
+                      </td>
+
+                      <td className="border-t border-slate-200 px-2.5 py-2 align-middle text-slate-600">
+                        {formatLabel(
+                          holding.equityCategory ||
+                            holding.securityType ||
+                            "—"
+                        )}
+                      </td>
+
+                      <td className="border-t border-slate-200 px-2.5 py-2 align-middle text-right font-mono text-slate-700">
+                        {formatNumber(
+                          holding.quantity
+                        )}
+                      </td>
+
+                      <td className="border-t border-slate-200 px-2.5 py-2 align-middle text-right font-mono text-slate-700">
+                        {formatCurrencyAmount(
+                          holding.averageCost
+                        )}
+                      </td>
+
+                      <td className="border-t border-slate-200 px-2.5 py-2 align-middle text-right font-mono text-slate-700">
+                        {formatMoney(
+                          holding.totalCost
+                        )}
+                      </td>
+
+                      <td className="border-t border-slate-200 px-2.5 py-2 align-middle text-right font-mono font-semibold text-blue-900">
+                        {formatMoney(
+                          holding.currentValue
+                        )}
+                      </td>
+
+                      <td className="border-t border-slate-200 px-2.5 py-2 align-middle text-right font-mono text-slate-700">
+                        {Number(
+                          holding.allocationPercentage ||
+                            0
+                        ).toFixed(2)}
+                        %
+                      </td>
+
+                      <td
+                        className={`border-t border-slate-200 px-2.5 py-2 align-middle text-right font-mono font-semibold ${
+                          holdingPnl >= 0
+                            ? "text-emerald-700"
+                            : "text-red-600"
+                        }`}
+                      >
+                        {holdingPnl >= 0
+                          ? "+"
+                          : ""}
+                        {formatMoney(
+                          holdingPnl
+                        )}
+                      </td>
+
+                    </tr>
+                  );
+                }
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : activeTab === "theme" ? (
+        <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
+          <table className="w-full min-w-[760px] text-left text-[11px]">
+            <thead className="bg-[#eaf0fa] text-[9px] uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-2.5 py-2">Theme</th>
+                <th className="px-2.5 py-2">Asset</th>
+                <th className="px-2.5 py-2 text-right">Theme alloc.</th>
+                <th className="px-2.5 py-2 text-right">Invested</th>
+                <th className="px-2.5 py-2 text-right">Actual alloc.</th>
+                <th className="px-2.5 py-2 text-right">Drift</th>
+                <th className="px-2.5 py-2 text-right">Current amount</th>
+                <th className="px-2.5 py-2 text-right">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {themeRows.map((row) => (
+                <tr key={row.assetClass} className="text-slate-700">
+                  <td className="px-2.5 py-2 font-medium text-slate-700">
+                    {row.theme}
+                  </td>
+                  <td className="px-2.5 py-2 font-medium text-slate-700">
+                    {row.assetClass}
+                  </td>
+                  <td className="px-2.5 py-2 text-right font-mono text-slate-700">
+                    {Number(row.targetPct || 0).toFixed(2)}%
+                  </td>
+                  <td className="px-2.5 py-2 text-right font-mono font-semibold text-blue-900">
+                    {formatMoney(row.investedAmount || 0)}
+                  </td>
+                  <td className="px-2.5 py-2 text-right font-mono font-semibold text-slate-700">
+                    {Number(row.actualPct || 0).toFixed(2)}%
+                  </td>
+                  <td
+                    className={`px-2.5 py-2 text-right font-mono font-semibold ${
+                      Math.abs(Number(row.drift || 0)) < 5
+                        ? "text-emerald-700"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {Number(row.drift || 0) > 0 ? "+" : ""}
+                    {Number(row.drift || 0).toFixed(2)}%
+                  </td>
+                  <td className="px-2.5 py-2 text-right font-mono font-semibold text-blue-900">
+                    {formatMoney(row.currentAmount || 0)}
+                  </td>
+                  <td className="px-2.5 py-2 text-right">
+                    <span
+                      className={`inline-flex rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                        row.satisfied
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-red-50 text-red-700"
+                      }`}
+                    >
+                      {row.satisfied ? "In band" : "Breached"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="rounded-md border border-slate-200 bg-white">
+          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3 py-2">
+            <div className="text-[9px] font-bold uppercase tracking-wide text-slate-500">
+              Trade rows
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={executeAllTradeRows}
+                disabled={!tradeRows.length}
+                className="inline-flex items-center gap-1 rounded bg-blue-800 px-2.5 py-1.5 text-[10px] font-semibold text-white hover:bg-blue-900 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                Execute orders
+              </button>
+
+              <button
+                type="button"
+                onClick={() => addTradeRow("buy")}
+                className="inline-flex items-center gap-1 rounded border border-blue-200 bg-white px-2 py-1 text-[10px] font-semibold text-blue-800 hover:bg-blue-50"
+              >
+                <Plus size={12} />
+                Add row
+              </button>
+            </div>
+          </div>
+
+          <div className="w-full overflow-x-auto">
+            <table className="w-full min-w-[760px] table-fixed border-collapse text-left text-[10px]">
+              <thead className="bg-slate-50 text-[9px] font-bold uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="border-b border-slate-200 px-2 py-2">Side</th>
+                  <th className="border-b border-slate-200 px-2 py-2">Security / holding</th>
+                  <th className="border-b border-slate-200 px-2 py-2 text-right">Qty</th>
+                  <th className="border-b border-slate-200 px-2 py-2 text-right">Est. value</th>
+                  <th className="border-b border-slate-200 px-2 py-2 text-right">Action</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {tradeRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-8 text-center text-[11px] text-slate-500">
+                      No trade rows yet. Add a row to begin.
+                    </td>
+                  </tr>
+                ) : (
+                  tradeRows.map((row) => {
+                    const options = holdings.filter((item) => {
+                      const query = (row.searchText || "").trim().toLowerCase();
+
+                      if (!query) return true;
+
+                      return (
+                        (item.securityName || "").toLowerCase().includes(query) ||
+                        (item.symbol || "").toLowerCase().includes(query)
+                      );
+                    });
+
+                    const selectedHolding = holdings.find(
+                      (item) =>
+                        String(item.holdingId ?? item.securityId) === row.selectedHoldingId
+                    ) || null;
+                    const selectedDisplayName =
+                      selectedHolding?.securityName ||
+                      selectedHolding?.symbol ||
+                      row.searchText ||
+                      "";
+
+                    const isSell = row.side === "sell";
+                    const ownedQuantity = Number(selectedHolding?.quantity || 0);
+                    const unitPrice = selectedHolding
+                      ? Number(selectedHolding.currentValue || 0) /
+                        Math.max(Number(selectedHolding.quantity || 1), 1)
+                      : 0;
+                    const estimatedValue =
+                      Number(row.quantity || 0) > 0 ? unitPrice * Number(row.quantity || 0) : 0;
+
+                    return (
+                      <tr key={row.id} className={isSell ? "bg-red-50/30" : "bg-emerald-50/30"}>
+                        <td className="border-b border-slate-200 px-2 py-2 align-top">
+                          <select
+                            value={row.side}
+                            onChange={(event) =>
+                              updateTradeRow(row.id, {
+                                side: event.target.value,
+                                selectedHoldingId: "",
+                                searchText: "",
+                                quantity: "",
+                                error: "",
+                              })
+                            }
+                            className={`h-8 w-full rounded border bg-white px-2 text-[10px] font-semibold outline-none focus:border-blue-500 ${
+                              isSell ? "border-red-200 text-red-700" : "border-emerald-200 text-emerald-700"
+                            }`}
+                          >
+                            <option value="buy">Buy</option>
+                            <option value="sell">Sell</option>
+                          </select>
+                        </td>
+
+                        <td className="border-b border-slate-200 px-2 py-2 align-top">
+                          <div className="relative">
+                            <input
+                              value={
+                                row.selectedHoldingId
+                                  ? selectedDisplayName
+                                  : row.searchText
+                              }
+                              onChange={(event) => {
+                                updateTradeRow(row.id, {
+                                  selectedHoldingId: "",
+                                  searchText: event.target.value,
+                                  error: "",
+                                });
+                              }}
+                              placeholder={isSell ? "Search held security…" : "Search security…"}
+                              className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-[10px] outline-none focus:border-blue-500"
+                            />
+
+                            {!row.selectedHoldingId && row.searchText && (
+                              <ul className="absolute left-0 right-0 z-20 mt-1 max-h-36 overflow-auto rounded border border-slate-200 bg-white text-[10px] shadow-sm">
+                                {options.length ? (
+                                  options.map((item) => (
+                                    <li
+                                      key={item.holdingId ?? item.securityId}
+                                      onMouseDown={(event) => {
+                                        event.preventDefault();
+                                        updateTradeRow(row.id, {
+                                          selectedHoldingId: String(item.holdingId ?? item.securityId),
+                                          searchText: item.securityName || item.symbol || "",
+                                          quantity: "",
+                                          error: "",
+                                        });
+                                      }}
+                                      className="cursor-pointer px-2 py-1.5 hover:bg-slate-50"
+                                    >
+                                      {item.securityName || item.symbol || "—"} <span className="text-slate-500">({item.symbol || "—"})</span>
+                                    </li>
+                                  ))
+                                ) : (
+                                  <li className="px-2 py-1.5 text-slate-500">No matches found</li>
+                                )}
+                              </ul>
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="border-b border-slate-200 px-2 py-2 align-top text-right">
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            max={isSell ? ownedQuantity || undefined : undefined}
+                            value={row.quantity}
+                            onChange={(event) =>
+                              updateTradeRow(row.id, {
+                                quantity: event.target.value,
+                                error: "",
+                              })
+                            }
+                            className="h-8 w-24 rounded border border-slate-200 bg-white px-2 text-right text-[10px] outline-none focus:border-blue-500"
+                            placeholder="Qty"
+                          />
+                        </td>
+
+                        <td className="border-b border-slate-200 px-2 py-2 align-top text-right font-mono font-semibold text-slate-800">
+                          {formatMoney(estimatedValue)}
+                        </td>
+
+                        <td className="border-b border-slate-200 px-2 py-2 align-top text-right">
+                          <div className="flex justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setTradeRows((current) => current.filter((tradeRow) => tradeRow.id !== row.id))
+                              }
+                              className="rounded border border-slate-200 bg-white px-2 py-1.5 text-[9px] font-semibold text-slate-600 hover:bg-slate-50"
+                            >
+                              Remove
+                            </button>
+                          </div>
+
+                          {row.error && (
+                            <div className="mt-2 rounded border border-red-100 bg-red-50 px-2 py-1 text-[9px] text-red-700">
+                              {row.error}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TradeDialog({
+  type,
+  holding,
+  holdings,
+  portfolio,
+  availableBalance,
+  onClose,
+  onCompleted,
+}) {
+  const [quantity, setQuantity] =
+    useState("");
+  const [submitting, setSubmitting] =
+    useState(false);
+  const [error, setError] =
+    useState("");
+  const [tradeSide, setTradeSide] =
+    useState(type);
+  const [searchText, setSearchText] =
+    useState(
+      holding?.securityName ||
+        holding?.symbol ||
+        ""
+    );
+  const [selectedHoldingId, setSelectedHoldingId] =
+    useState(
+      String(
+        holding?.holdingId ??
+          holding?.securityId ??
+          ""
+      )
+    );
+
+  const isBuy = tradeSide === "buy";
+  const matchingHoldings =
+    holdings?.filter((item) => {
+      const query =
+        searchText.trim().toLowerCase();
+      if (!query) return true;
+
+      return (
+        (item.securityName || "")
+          .toLowerCase()
+          .includes(query) ||
+        (item.symbol || "")
+          .toLowerCase()
+          .includes(query)
+      );
+    }) || [holding];
+
+  const selectedHolding =
+    holdings?.find(
+      (item) =>
+        String(item.holdingId ?? item.securityId) ===
+        selectedHoldingId
+    ) || holding;
+
+  const activeHolding =
+    selectedHolding ||
+    matchingHoldings[0] ||
+    holding;
+
+  const enteredQuantity = Number(quantity);
+  const ownedQuantity = Number(
+    activeHolding?.quantity || 0
+  );
+
+  const estimatedUnitPrice =
+    ownedQuantity > 0
+      ? Number(
+          activeHolding?.currentValue || 0
+        ) / ownedQuantity
+      : Number(
+          activeHolding?.averageCost || 0
+        );
+
+  const estimatedOrderValue =
+    Number.isFinite(enteredQuantity) &&
+    enteredQuantity > 0
+      ? estimatedUnitPrice *
+        enteredQuantity
+      : 0;
+
+  const quantityIsValid =
+    Number.isInteger(enteredQuantity) &&
+    enteredQuantity > 0;
+
+  const exceedsOwnedQuantity =
+    !isBuy &&
+    quantityIsValid &&
+    enteredQuantity > ownedQuantity;
+
+  const hasKnownBalance =
+    availableBalance !== null;
+
+  const hasInsufficientBalance =
+    isBuy &&
+    quantityIsValid &&
+    hasKnownBalance &&
+    estimatedOrderValue >
+      availableBalance;
+
+  const canSubmit =
+    quantityIsValid &&
+    !exceedsOwnedQuantity &&
+    !hasInsufficientBalance &&
+    !submitting;
+
+  useEffect(() => {
+    function handleEscape(event) {
+      if (
+        event.key === "Escape" &&
+        !submitting
+      ) {
+        onClose();
+      }
+    }
+
+    window.addEventListener(
+      "keydown",
+      handleEscape
+    );
+
+    return () => {
+      window.removeEventListener(
+        "keydown",
+        handleEscape
+      );
+    };
+  }, [onClose, submitting]);
+
+  async function submitTrade(event) {
+    event.preventDefault();
+    setError("");
+
+    if (!quantityIsValid) {
+      setError(
+        "Enter a whole-number quantity greater than zero."
+      );
+      return;
+    }
+
+    if (exceedsOwnedQuantity) {
+      setError(
+        `You only own ${formatNumber(
+          ownedQuantity
+        )} units.`
+      );
+      return;
+    }
+
+    if (hasInsufficientBalance) {
+      setError(
+        "The portfolio does not have enough available balance for this estimated order."
+      );
+      return;
+    }
+
+    if (
+      isBuy &&
+      (activeHolding.securityId === null ||
+        activeHolding.securityId === undefined)
+    ) {
+      setError(
+        "The security ID is missing. The buy order cannot be submitted."
+      );
+      return;
+    }
+
+    if (
+      !isBuy &&
+      (activeHolding.holdingId === null ||
+        activeHolding.holdingId === undefined)
+    ) {
+      setError(
+        "The holding ID is missing. The sell order cannot be submitted."
+      );
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      if (isBuy) {
+        const buyOrders = [
+          {
+            portfolioId: Number(
+              portfolio.id
+            ),
+            quantity: enteredQuantity,
+            securityId: Number(
+              activeHolding.securityId
+            ),
+            equityCategory:
+              activeHolding.equityCategory ??
+              null,
+          },
+        ];
+
+        await buyPortfolioSecurities(
+          buyOrders
+        );
+      } else {
+        const sellOrders = [
+          {
+            id: Number(
+              activeHolding.holdingId
+            ),
+            quantity: enteredQuantity,
+          },
+        ];
+
+        await sellPortfolioHoldings(
+          sellOrders
+        );
+      }
+
+      await onCompleted();
+    } catch (tradeError) {
+      setError(
+        tradeError?.response?.data
+          ?.message ||
+          tradeError?.message ||
+          `Could not complete the ${
+            isBuy ? "buy" : "sell"
+          } order.`
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div
+        className={`flex items-center justify-between border-b px-3 py-2 ${
+          isBuy
+            ? "border-emerald-100 bg-emerald-50"
+            : "border-rose-100 bg-rose-50"
+        }`}
+      >
+        <div className="flex items-center gap-2">
+          <span
+            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+              isBuy
+                ? "bg-emerald-100 text-emerald-700"
+                : "bg-rose-100 text-rose-700"
+            }`}
+          >
+            {isBuy ? "Buy" : "Sell"}
+          </span>
+          <span className="text-[11px] font-semibold text-slate-800">
+            {activeHolding?.symbol || "Security"}
+          </span>
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={submitting}
+          aria-label="Close trade panel"
+          className="rounded p-1 text-slate-400 hover:bg-white hover:text-slate-700 disabled:opacity-50"
+        >
+          <X size={15} />
+        </button>
+      </div>
+
+      <form onSubmit={submitTrade} className="space-y-3 p-3">
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="block text-[10px] font-semibold text-slate-700">
+            Action
+            <select
+              value={tradeSide}
+              onChange={(event) => {
+                const nextSide =
+                  event.target.value;
+                setTradeSide(nextSide);
+                setSearchText(
+                  nextSide === "buy"
+                    ?
+                        activeHolding?.securityName ||
+                        activeHolding?.symbol ||
+                        ""
+                    :
+                        activeHolding?.securityName ||
+                        activeHolding?.symbol ||
+                        ""
+                );
+              }}
+              className="mt-1 h-8 w-full rounded border border-slate-200 bg-white px-2 text-[11px] outline-none focus:border-blue-500"
+            >
+              <option value="buy">Buy</option>
+              <option value="sell">Sell</option>
+            </select>
+          </label>
+
+          <label className="block text-[10px] font-semibold text-slate-700">
+            Quantity
+            <input
+              type="number"
+              min="1"
+              step="1"
+              max={
+                isBuy
+                  ? undefined
+                  : ownedQuantity
+              }
+              value={quantity}
+              onChange={(event) => {
+                setQuantity(
+                  event.target.value
+                );
+                setError("");
+              }}
+              className="mt-1 h-8 w-full rounded border border-slate-200 bg-white px-2 text-[11px] outline-none focus:border-blue-500"
+              placeholder="Qty"
+            />
+          </label>
+        </div>
+
+        <label className="block text-[10px] font-semibold text-slate-700">
+          Search security
+          <input
+            value={searchText}
+            onChange={(event) =>
+              setSearchText(
+                event.target.value
+              )
+            }
+            placeholder="Type symbol or name…"
+            className="mt-1 h-8 w-full rounded border border-slate-200 bg-white px-2 text-[11px] outline-none focus:border-blue-500"
+          />
+        </label>
+
+        {searchText && (
+          <div className="max-h-32 overflow-auto rounded border border-slate-200 bg-slate-50">
+            {matchingHoldings.length ? (
+              matchingHoldings.map((item) => (
+                <button
+                  key={
+                    item.holdingId ??
+                    item.securityId
+                  }
+                  type="button"
+                  onClick={() => {
+                    const nextKey = String(
+                      item.holdingId ??
+                        item.securityId
+                    );
+                    setSelectedHoldingId(nextKey);
+                    setSearchText(
+                      item.securityName ||
+                        item.symbol ||
+                        ""
+                    );
+                    setQuantity("");
+                    setError("");
+                  }}
+                  className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-[10px] hover:bg-white"
+                >
+                  <span>
+                    {item.securityName ||
+                      item.symbol || "—"}
+                  </span>
+                  <span className="font-mono text-slate-500">
+                    {item.symbol || "—"}
+                  </span>
+                </button>
+              ))
+            ) : (
+              <div className="px-2 py-1.5 text-[10px] text-slate-500">
+                No matches found
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between rounded-md border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-[10px] text-slate-600">
+          <span>Estimated value</span>
+          <span className="font-mono font-semibold text-slate-900">
+            {formatMoney(estimatedOrderValue)}
+          </span>
+        </div>
+
+        {exceedsOwnedQuantity && (
+          <TradeWarning tone="red">
+            You cannot sell more than{" "}
+            {formatNumber(ownedQuantity)} units.
+          </TradeWarning>
+        )}
+
+        {hasInsufficientBalance && (
+          <TradeWarning tone="red">
+            Insufficient available balance.
+          </TradeWarning>
+        )}
+
+        {error && (
+          <div
+            role="alert"
+            className="rounded border border-red-100 bg-red-50 px-2.5 py-1.5 text-[10px] text-red-700"
+          >
+            {error}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="h-8 rounded border border-slate-200 bg-white px-2.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            className={`inline-flex h-8 items-center gap-1 rounded px-2.5 text-[10px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 ${
+              isBuy
+                ? "bg-emerald-700 hover:bg-emerald-800"
+                : "bg-red-700 hover:bg-red-800"
+            }`}
+          >
+            {submitting ? (
+              <LoaderCircle
+                size={12}
+                className="animate-spin"
+              />
+            ) : isBuy ? (
+              <TrendingUp size={12} />
+            ) : (
+              <TrendingDown size={12} />
+            )}
+            {submitting
+              ? "Processing..."
+              : `Confirm ${isBuy ? "Buy" : "Sell"}`}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function TradeWarning({
+  tone,
+  children,
+}) {
+  const classes =
+    tone === "red"
+      ? "border-red-100 bg-red-50 text-red-700"
+      : "border-amber-100 bg-amber-50 text-amber-700";
+
+  return (
+    <div
+      className={`flex gap-2 rounded-md border px-3 py-2 text-[11px] ${classes}`}
+    >
+      <AlertTriangle
+        size={14}
+        className="shrink-0"
+      />
+
+      <span>{children}</span>
+    </div>
+  );
+}
+
+function SortableHeader({
+  label,
+  sortKey,
+  sortConfig,
+  onSort,
+  align = "left",
+}) {
+  const isActive =
+    sortConfig.key === sortKey;
+
+  return (
+    <th
+      scope="col"
+      aria-sort={
+        isActive
+          ? sortConfig.direction === "asc"
+            ? "ascending"
+            : "descending"
+          : "none"
+      }
+      className={`border-b border-slate-200 px-2.5 py-1.5 ${
+        align === "right"
+          ? "text-right"
+          : "text-left"
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        className={`inline-flex w-full items-center gap-1 whitespace-nowrap text-[9px] font-bold uppercase tracking-wide ${
+          align === "right"
+            ? "justify-end"
+            : "justify-start"
+        } ${
+          isActive
+            ? "text-blue-800"
+            : "text-slate-500 hover:text-blue-800"
+        }`}
+      >
+        <span>{label}</span>
+
+        {isActive ? (
+          sortConfig.direction === "asc" ? (
+            <ArrowUp size={10} />
+          ) : (
+            <ArrowDown size={10} />
+          )
+        ) : (
+          <ChevronsUpDown
+            size={10}
+            className="opacity-50"
+          />
+        )}
+      </button>
+    </th>
+  );
+}
+
+function CompactMetric({
+  label,
+  value,
+  valueClass = "text-slate-800",
+}) {
+  return (
+    <div>
+      <div className="text-[8px] font-semibold uppercase tracking-wide text-slate-400">
+        {label}
+      </div>
+
+      <div
+        className={`whitespace-nowrap font-mono text-[10px] font-semibold ${valueClass}`}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function TradeSummary({
+  label,
+  value,
+  valueClass = "text-slate-800",
+}) {
+  return (
+    <div>
+      <div className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+        {label}
+      </div>
+
+      <div
+        className={`mt-0.5 font-mono text-xs font-semibold ${valueClass}`}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function parsePercentageValue(value) {
+  if (value === null || value === undefined || value === "") {
+    return 0;
+  }
+
+  const numericValue =
+    typeof value === "string"
+      ? value.replace(/%/g, "").replace(/,/g, "").trim()
+      : value;
+
+  const parsed = Number(numericValue);
+
+  if (!Number.isFinite(parsed)) {
+    return 0;
+  }
+
+  return parsed;
+}
+
+function getAvailableBalance(
+  details,
+  portfolio
+) {
+  const possibleBalance =
+    details?.availableBalance ??
+    details?.cashBalance ??
+    details?.availableCash ??
+    details?.balance ??
+    portfolio?.availableBalance ??
+    portfolio?.cashBalance ??
+    portfolio?.availableCash ??
+    portfolio?.balance;
+
+  if (
+    possibleBalance === null ||
+    possibleBalance === undefined ||
+    possibleBalance === ""
+  ) {
+    return null;
+  }
+
+  const balance = Number(
+    possibleBalance
+  );
+
+  return Number.isFinite(balance)
+    ? balance
+    : null;
+}
+
+function getHoldingSortValue(
+  holding,
+  key
+) {
+  switch (key) {
+    case "symbol":
+      return `${holding.symbol || ""} ${
+        holding.securityName || ""
+      }`;
+
+    case "assetClass":
+      return holding.assetClass || "";
+
+    case "equityCategory":
+      return (
+        holding.equityCategory ||
+        holding.securityType ||
+        ""
+      );
+
+    case "quantity":
+      return Number(
+        holding.quantity || 0
+      );
+
+    case "averageCost":
+      return Number(
+        holding.averageCost || 0
+      );
+
+    case "totalCost":
+      return Number(
+        holding.totalCost || 0
+      );
+
+    case "currentValue":
+      return Number(
+        holding.currentValue || 0
+      );
+
+    case "allocationPercentage":
+      return Number(
+        holding.allocationPercentage ||
+          0
+      );
+
+    case "pnl":
+      return (
+        Number(
+          holding.currentValue || 0
+        ) -
+        Number(holding.totalCost || 0)
+      );
+
+    default:
+      return holding[key] ?? "";
+  }
+}
+
+function isNumericHoldingColumn(key) {
+  return [
+    "quantity",
+    "averageCost",
+    "totalCost",
+    "currentValue",
+    "allocationPercentage",
+    "pnl",
+  ].includes(key);
+}
+
+function exportPortfolioCsv(rows) {
+  const headers = [
+    "Portfolio",
+    "Code",
+    "Theme",
+    "Allocation Type",
+    "AUM",
+    "Return",
+    "Benchmark",
+    "Status",
+  ];
+
+  const dataRows = rows.map(
+    (portfolio) => [
+      portfolio.name,
+      portfolio.code,
+      portfolio.theme,
+      portfolio.allocationType,
+      portfolio.aum,
+      portfolio.returnValue,
+      portfolio.benchmark,
+      portfolio.status,
+    ]
+  );
+
+  const content = [
+    headers,
+    ...dataRows,
+  ]
+    .map((row) =>
+      row
+        .map(
+          (value) =>
+            `"${String(
+              value ?? ""
+            ).replaceAll('"', '""')}"`
+        )
+        .join(",")
+    )
+    .join("\n");
+
+  const blob = new Blob([content], {
+    type: "text/csv;charset=utf-8;",
+  });
+
+  const objectUrl =
+    URL.createObjectURL(blob);
+
+  const link =
+    document.createElement("a");
+
+  link.href = objectUrl;
+  link.download =
+    "portfolio-ledger.csv";
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  URL.revokeObjectURL(objectUrl);
+}
+
 function parseReturn(value) {
-  if (typeof value === "number") return value;
-  const parsed = Number.parseFloat(String(value ?? "0").replaceAll(",", ""));
-  return Number.isFinite(parsed) ? parsed : 0;
+  if (typeof value === "number") {
+    return Number.isFinite(value)
+      ? value
+      : 0;
+  }
+
+  const parsed = Number.parseFloat(
+    String(value ?? "0")
+      .replaceAll(",", "")
+      .replace("%", "")
+  );
+
+  return Number.isFinite(parsed)
+    ? parsed
+    : 0;
 }
 
 function initialsFor(name) {
@@ -622,36 +3408,135 @@ function initialsFor(name) {
     .toUpperCase();
 }
 
+function formatNumber(value) {
+  const number = Number(value || 0);
+
+  return number.toLocaleString(
+    "en-IN",
+    {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }
+  );
+}
+
+function formatCurrencyAmount(value) {
+  const amount = Number(value || 0);
+
+  return `₹ ${amount.toLocaleString(
+    "en-IN",
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }
+  )}`;
+}
+
 function formatMoney(value) {
   const amount = Number(value || 0);
-  if (amount >= 10000000) return `₹ ${(amount / 10000000).toFixed(2)} Cr`;
-  if (amount >= 100000) return `₹ ${(amount / 100000).toFixed(2)} L`;
-  return `₹ ${amount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+  const absoluteAmount =
+    Math.abs(amount);
+  const sign = amount < 0 ? "-" : "";
+
+  if (absoluteAmount >= 10000000) {
+    return `${sign}₹ ${(
+      absoluteAmount / 10000000
+    ).toFixed(2)} Cr`;
+  }
+
+  if (absoluteAmount >= 100000) {
+    return `${sign}₹ ${(
+      absoluteAmount / 100000
+    ).toFixed(2)} L`;
+  }
+
+  return `${sign}₹ ${absoluteAmount.toLocaleString(
+    "en-IN",
+    {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }
+  )}`;
 }
 
 function formatLabel(value) {
-  return String(value ?? "—").replaceAll("_", " ");
+  const label = String(
+    value ?? ""
+  ).trim();
+
+  if (!label || label === "—") {
+    return "—";
+  }
+
+  return label
+    .replaceAll("_", " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (character) =>
+      character.toUpperCase()
+    );
 }
 
 function formatStatus(status) {
-  const s = String(status || "");
-  return s === "NEW"
-    ? "New"
-    : s === "CANCELED"
-    ? "Closed"
-    : s === "CREATED"
-      ? "Draft"
-      : s.charAt(0) + s.slice(1).toLowerCase();
+  const normalizedStatus = String(
+    status || ""
+  ).toUpperCase();
+
+  if (normalizedStatus === "NEW") {
+    return "New";
+  }
+
+  if (
+    ["CANCELED", "CLOSED"].includes(
+      normalizedStatus
+    )
+  ) {
+    return "Closed";
+  }
+
+  if (
+    ["CREATED", "DRAFT"].includes(
+      normalizedStatus
+    )
+  ) {
+    return "Draft";
+  }
+
+  if (!normalizedStatus) {
+    return "Unknown";
+  }
+
+  return (
+    normalizedStatus.charAt(0) +
+    normalizedStatus
+      .slice(1)
+      .toLowerCase()
+  );
 }
 
 function statusTone(status) {
-  return status === "NEW"
-    ? "text-blue-700"
-    : status === "ACTIVE"
-    ? "text-emerald-700"
-    : ["DRAFT", "CREATED"].includes(status)
-      ? "text-amber-600"
-      : "text-slate-500";
+  const normalizedStatus = String(
+    status || ""
+  ).toUpperCase();
+
+  if (normalizedStatus === "NEW") {
+    return "text-blue-700";
+  }
+
+  if (
+    normalizedStatus === "ACTIVE"
+  ) {
+    return "text-emerald-700";
+  }
+
+  if (
+    ["DRAFT", "CREATED"].includes(
+      normalizedStatus
+    )
+  ) {
+    return "text-amber-600";
+  }
+
+  return "text-slate-500";
 }
 
 export default PortfolioPage;

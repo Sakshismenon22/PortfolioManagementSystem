@@ -51,6 +51,8 @@ export default function SecuritiesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [visibleCount, setVisibleCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const defaultPageSize = 50;
 
   const loadSecurities = useCallback(async () => {
     setLoading(true);
@@ -78,6 +80,17 @@ export default function SecuritiesPage() {
   useEffect(() => {
     loadSecurities();
   }, [loadSecurities]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [securities]);
+
+  const pageSize = useMemo(() => (securities?.length || 0) <= defaultPageSize ? 10 : defaultPageSize, [securities]);
+  const totalPages = Math.max(1, Math.ceil((securities?.length || 0) / pageSize));
+  const pagedSecurities = useMemo(() => {
+    const start = (Math.max(1, currentPage) - 1) * pageSize;
+    return (securities || []).slice(start, start + pageSize);
+  }, [securities, currentPage, pageSize]);
 
   const defaultColDef = useMemo(
     () => ({
@@ -218,13 +231,26 @@ export default function SecuritiesPage() {
               <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
                 Instrument reference data
               </span>
-              <button
-                onClick={loadSecurities}
-                disabled={loading}
-                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 px-3 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
-              >
-                <RefreshCw size={13} className={loading ? "animate-spin" : ""} /> Refresh
-              </button>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setCurrentPage(p)}
+                      className={`h-8 min-w-[36px] rounded-md px-2 text-sm font-medium ${p === currentPage ? "bg-blue-800 text-white" : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"}`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={loadSecurities}
+                  disabled={loading}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 px-3 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                >
+                  <RefreshCw size={13} className={loading ? "animate-spin" : ""} /> Refresh
+                </button>
+              </div>
             </div>
 
             {error && (
@@ -239,12 +265,14 @@ export default function SecuritiesPage() {
               </div>
             )}
 
+            
+
             {/* ---------- SCROLLABLE GRID ---------- */}
             <div className="min-h-0 flex-1">
               <AgGridReact
                 ref={gridRef}
                 theme={compactTheme}
-                rowData={securities}
+                rowData={pagedSecurities}
                 columnDefs={columnDefs}
                 defaultColDef={defaultColDef}
                 loading={loading}

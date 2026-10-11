@@ -71,7 +71,7 @@ const CreatePortfolioPage = () => {
     <div className="min-h-screen bg-[#f6f8fd] text-slate-900">
       <SideBarComponent activePage="Portfolios" />
       <div className="sidebar-content">
-        <TopBarComponent />
+        {/* <TopBarComponent /> */}
         <main className="mx-auto max-w-[1100px] px-4 py-5 sm:px-6">
           <button onClick={() => navigate("/portfolio")} className="mb-3 inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-blue-800">
             <ArrowLeft size={14} /> Portfolios

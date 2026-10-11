@@ -96,6 +96,7 @@ const PortfolioDetailsPage = () => {
   const [notice, setNotice] = useState("");
   const [showBenchmark, setShowBenchmark] = useState(false);
   const [driftCheckRunning, setDriftCheckRunning] = useState(false);
+  const [searchTexts, setSearchTexts] = useState({});
 
   /* ------------------------- load ------------------------- */
 
@@ -951,39 +952,81 @@ const PortfolioDetailsPage = () => {
                             </td>
                             <td className="px-1.5 py-1">
                               {isSell ? (
-                                <select
-                                  aria-label="Holding to sell"
-                                  value={order.holdingId}
-                                  disabled={tradeSubmitting}
-                                  onChange={(e) => updateOrder(order.rowId, { holdingId: e.target.value, quantity: "" })}
-                                  className="h-7 w-full min-w-0 rounded border border-slate-200 bg-white px-1.5 text-[10px] outline-none focus:border-blue-500"
-                                >
-                                  <option value="">Choose holding…</option>
-                                  {selectableHoldings.map((h) => (
-                                    <option key={h.holdingId} value={h.holdingId}>
-                                      {h.securityName} ({h.symbol || "—"}) · held {Number(h.quantity).toLocaleString("en-IN")}{isGold(h.symbol) ? " g" : ""}
-                                    </option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <select
-                                  aria-label="Security to buy"
-                                  value={order.securityId}
-                                  disabled={tradeSubmitting}
-                                  onChange={(e) => updateOrder(order.rowId, { securityId: e.target.value })}
-                                  className="h-7 w-full min-w-0 rounded border border-slate-200 bg-white px-1.5 text-[10px] outline-none focus:border-blue-500"
-                                >
-                                  <option value="">Choose security…</option>
-                                  {(portfolioIsNew ? themeAllocations : [{ assetId: "all", assetClass: "All securities" }]).map((allocation) => (
-                                    <optgroup key={allocation.assetId} label={allocation.assetId === "all" ? allocation.assetClass : formatLabel(allocation.assetClass)}>
-                                      {selectableSecurities
-                                        .filter((s) => allocation.assetId === "all" || securityMatchesAllocation(s, allocation))
-                                        .map((s) => (
-                                          <option key={s.id} value={s.id}>{s.name} ({s.symbol || s.isin || "—"})</option>
+                                <div className="relative">
+                                  <input
+                                    aria-label="Holding to sell"
+                                    value={
+                                      searchTexts[order.rowId] ?? selectableHoldings.find((h) => String(h.holdingId) === String(order.holdingId))?.securityName ?? ""
+                                    }
+                                    disabled={tradeSubmitting}
+                                    onChange={(e) => setSearchTexts((p) => ({ ...p, [order.rowId]: e.target.value }))}
+                                    onFocus={() => setSearchTexts((p) => ({ ...p }))}
+                                    placeholder="Type holding name…"
+                                    className="h-7 w-full min-w-0 rounded border border-slate-200 bg-white px-1.5 text-[10px] outline-none focus:border-blue-500"
+                                  />
+                                  {searchTexts[order.rowId] && (
+                                    <ul className="absolute left-0 right-0 z-20 max-h-40 overflow-auto rounded border bg-white text-[10px]">
+                                      {selectableHoldings
+                                        .filter((h) => {
+                                          const q = (searchTexts[order.rowId] || "").toLowerCase();
+                                          return (
+                                            h.securityName.toLowerCase().includes(q) || (h.symbol || "").toLowerCase().includes(q)
+                                          );
+                                        })
+                                        .map((h) => (
+                                          <li
+                                            key={h.holdingId}
+                                            onMouseDown={(ev) => {
+                                              ev.preventDefault();
+                                              updateOrder(order.rowId, { holdingId: h.holdingId, quantity: "" });
+                                              setSearchTexts((p) => { const np = { ...p }; delete np[order.rowId]; return np; });
+                                            }}
+                                            className="cursor-pointer px-2 py-1 hover:bg-slate-50"
+                                          >
+                                            {h.securityName} ({h.symbol || "—"}) · held {Number(h.quantity).toLocaleString("en-IN")}{isGold(h.symbol) ? " g" : ""}
+                                          </li>
                                         ))}
-                                    </optgroup>
-                                  ))}
-                                </select>
+                                    </ul>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="relative">
+                                  <input
+                                    aria-label="Security to buy"
+                                    value={
+                                      searchTexts[order.rowId] ?? selectableSecurities.find((s) => String(s.id) === String(order.securityId))?.name ?? ""
+                                    }
+                                    disabled={tradeSubmitting}
+                                    onChange={(e) => setSearchTexts((p) => ({ ...p, [order.rowId]: e.target.value }))}
+                                    placeholder="Type security name…"
+                                    className="h-7 w-full min-w-0 rounded border border-slate-200 bg-white px-1.5 text-[10px] outline-none focus:border-blue-500"
+                                  />
+                                  {searchTexts[order.rowId] && (
+                                    <ul className="absolute left-0 right-0 z-20 max-h-56 overflow-auto rounded border bg-white text-[10px]">
+                                      {selectableSecurities
+                                        .filter((s) => {
+                                          const q = (searchTexts[order.rowId] || "").toLowerCase();
+                                          return (
+                                            s.name.toLowerCase().includes(q) || (s.symbol || "").toLowerCase().includes(q) || (s.isin || "").toLowerCase().includes(q)
+                                          );
+                                        })
+                                        .slice(0, 100)
+                                        .map((s) => (
+                                          <li
+                                            key={s.id}
+                                            onMouseDown={(ev) => {
+                                              ev.preventDefault();
+                                              updateOrder(order.rowId, { securityId: s.id });
+                                              setSearchTexts((p) => { const np = { ...p }; delete np[order.rowId]; return np; });
+                                            }}
+                                            className="cursor-pointer px-2 py-1 hover:bg-slate-50"
+                                          >
+                                            {s.name} ({s.symbol || s.isin || "—"})
+                                          </li>
+                                        ))}
+                                    </ul>
+                                  )}
+                                </div>
                               )}
                             </td>
                             <td className="px-1 py-1">

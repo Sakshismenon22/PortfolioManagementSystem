@@ -200,6 +200,16 @@ const PortfolioBenchmarkChart = ({
   );
 };
 const dashboardColors = ["#123b9d", "#4169c9", "#59657a", "#d97706", "#16a085", "#8b5cf6"];
+const getInitials = (name) => {
+  if (!name) return "";
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+};
 const DRIFT_LIMIT = 5;
 const unwrapResponse = (response) => response?.data?.data ?? response?.data ?? response;
 const formatMoney = (value) => {
@@ -276,7 +286,7 @@ const DriftMonitoringCard = ({ rows, loading, error, actionableCount, onViewAll,
       </div>
       <div className="flex items-center gap-3">
         <span className={"rounded px-2 py-1 text-[10px] font-bold " + (actionableCount ? "bg-red-100 text-red-700" : "bg-emerald-50 text-emerald-700")}>{actionableCount} Actionable</span>
-        <button onClick={onViewAll} className="inline-flex items-center gap-1 text-xs font-semibold text-blue-800 hover:text-blue-950">Rebalancing <ArrowRight size={14} /></button>
+        {/* <button onClick={onViewAll} className="inline-flex items-center gap-1 text-xs font-semibold text-blue-800 hover:text-blue-950">Rebalancing <ArrowRight size={14} /></button> */}
       </div>
     </div>
     {error ? <div className="mt-4 rounded-md bg-amber-50 px-3 py-4 text-xs text-amber-800">{error}</div> : loading ? (
@@ -324,6 +334,7 @@ const DashboardPage = () => {
   const [driftError, setDriftError] = useState("");
 
   const userId = localStorage.getItem("userId");
+  const [userName, setUserName] = useState(() => localStorage.getItem("userName") || "");
 
 
   const selectedPortfolio = mandates.find((entry) => String(entry.portfolio.id) === String(selectedPortfolioId));
@@ -517,11 +528,18 @@ const DashboardPage = () => {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <DashboardNotificationBell />
-             
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-800 text-sm font-semibold text-white">
+                  {getInitials(userName) || "U"}
+                </div>
+                <div className="text-sm font-medium text-slate-700">{userName || "User"}</div>
+                <DashboardNotificationBell />
+                
+              </div>
+
               <button 
-              onClick={() => navigate("/create-portfolio")}
-              className="flex items-center gap-2 rounded-md bg-blue-800 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-900">
+                onClick={() => navigate("/create-portfolio")}
+                className="flex items-center gap-2 rounded-md bg-blue-800 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-900">
                 <Plus size={15} />
                 Quick Create Portfolio
               </button>

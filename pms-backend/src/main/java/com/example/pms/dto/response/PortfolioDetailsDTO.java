@@ -21,4 +21,5 @@ public class PortfolioDetailsDTO {
     private Benchmark benchmark;
     private PortfolioStatus portfolioStatus;
     private String action;
+    private Double balance;
 }
