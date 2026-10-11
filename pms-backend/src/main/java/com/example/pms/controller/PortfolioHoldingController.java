@@ -5,12 +5,14 @@ import com.example.pms.dto.request.BuyHoldingDTO;
 import com.example.pms.dto.request.CreatePortfolioDTO;
 import com.example.pms.dto.request.SellHoldingDTO;
 import com.example.pms.dto.request.UpdateEquityCategoryDTO;
+import com.example.pms.dto.response.PortfolioTransactionDTO;
 import com.example.pms.response.Response;
 import com.example.pms.service.PortfolioHoldingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -62,6 +64,17 @@ public class PortfolioHoldingController {
             @RequestBody UpdateEquityCategoryDTO request) {
         return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(), true, null,
                 portfolioHoldingService.updateEquityCategory(holdingId, request.getEquityCategory()), LocalDateTime.now()));
+    }
+
+    @GetMapping("/transactions/{portfolioId}/{userId}")
+    public ResponseEntity<?> getTransactions(
+            @PathVariable Long portfolioId,
+            @PathVariable Integer userId
+    ) {
+        return ResponseEntity.ok(new Response<List<PortfolioTransactionDTO>>(
+                HttpStatus.OK.value(), true,
+                portfolioHoldingService.getTransactions(portfolioId, userId),
+                "Portfolio transactions retrieved.", LocalDateTime.now()));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

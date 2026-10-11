@@ -11,6 +11,7 @@ import {
   ChevronRight,
   ChevronsUpDown,
   Download,
+  History,
   LoaderCircle,
   Plus,
   RefreshCw,
@@ -32,6 +33,7 @@ import {
   getAllPortfolioDetails,
   getPortfolioBasicInfo,
   getPortfolioHoldings,
+  getPortfolioTransactions,
   sellPortfolioHoldings,
   validatePortfolioAllocation,
 } from "../services/portfolioService";
@@ -751,6 +753,22 @@ const PortfolioPage = () => {
                   driftPortfolioIds={
                     driftPortfolioIds
                   }
+                  onDriftChange={(portfolioId, isDrifting) =>
+                    setDriftPortfolioIds((current) => {
+                      const withoutPortfolio = current.filter(
+                        (id) => String(id) !== String(portfolioId)
+                      );
+                      const alreadyMarked = current.some(
+                        (id) => String(id) === String(portfolioId)
+                      );
+                      if (alreadyMarked === isDrifting) {
+                        return current;
+                      }
+                      return isDrifting
+                        ? [...withoutPortfolio, String(portfolioId)]
+                        : withoutPortfolio;
+                    })
+                  }
                   openPortfolio={
                     openPortfolio
                   }
@@ -786,6 +804,7 @@ const PortfolioPage = () => {
 function PortfolioMasterDetail({
   portfolios,
   driftPortfolioIds,
+  onDriftChange,
   openPortfolio,
   navigate,
   loading,
@@ -816,7 +835,11 @@ function PortfolioMasterDetail({
     setLoadingIds([]);
     setErrorsById({});
     setPortfolioSnapshots(portfolios);
-  }, [portfolios, refreshVersion]);
+  }, [refreshVersion]);
+
+  useEffect(() => {
+    setPortfolioSnapshots(portfolios);
+  }, [portfolios]);
 
   async function loadPortfolioData(
     portfolio,
@@ -900,6 +923,25 @@ function PortfolioMasterDetail({
           [],
       };
 
+      const refreshedAllocations =
+        nextBasicInfo.allocations ??
+        nextBasicInfo.allocationDetails ??
+        [];
+      const isDrifting =
+        Array.isArray(refreshedAllocations) &&
+        refreshedAllocations.some((allocation) => {
+          const drift = Number(
+            allocation?.driftPercentage ??
+              allocation?.drift ??
+              0
+          );
+          return (
+            allocation?.satisfied === false ||
+            Math.abs(drift) >= DRIFT_LIMIT
+          );
+        });
+      onDriftChange?.(portfolioId, isDrifting);
+
       setDetailsById((current) => ({
         ...current,
         [portfolioId]: nextBasicInfo,
@@ -920,13 +962,9 @@ function PortfolioMasterDetail({
           }
 
           const updatedBalance = Number(
-            nextBasicInfo?.amount ??
-              nextBasicInfo?.cashBalance ??
-              nextBasicInfo?.availableBalance ??
-              nextBasicInfo?.availableCash ??
+            getAvailableBalance(nextBasicInfo, item) ??
+              nextBasicInfo?.amount ??
               item?.amount ??
-              item?.cashBalance ??
-              item?.availableBalance ??
               0
           );
 
@@ -943,38 +981,36 @@ function PortfolioMasterDetail({
                 )
               : 0;
 
+          const reportedAum =
+            nextBasicInfo?.aum ??
+            nextBasicInfo?.totalCurrentValue ??
+            nextBasicInfo?.portfolioValue ??
+            nextBasicInfo?.currentValue;
           const updatedAum =
-            Number.isFinite(
-              Number(
-                nextBasicInfo?.aum ??
-                  nextBasicInfo?.currentValue ??
-                  nextBasicInfo?.totalCurrentValue ??
-                  item?.aum
-              )
-            )
-              ? Number(
-                  nextBasicInfo?.aum ??
-                    nextBasicInfo?.currentValue ??
-                    nextBasicInfo?.totalCurrentValue ??
-                    item?.aum ??
-                    0
-                )
+            reportedAum !== null &&
+            reportedAum !== undefined &&
+            Number.isFinite(Number(reportedAum))
+              ? Number(reportedAum)
               : holdingsValue + updatedBalance;
 
+          const holdingsCost = holdings.reduce(
+            (sum, holding) =>
+              sum + Number(holding.totalCost || 0),
+            0
+          );
+          const calculatedReturn =
+            holdingsCost > 0
+              ? ((holdingsValue - holdingsCost) / holdingsCost) * 100
+              : 0;
+          const reportedReturn =
+            nextBasicInfo?.return1Y ??
+            nextBasicInfo?.returnValue ??
+            nextBasicInfo?.returns;
           const updatedReturnValue =
-            Number.isFinite(
-              Number(
-                nextBasicInfo?.return1Y ??
-                  nextBasicInfo?.returnValue ??
-                  nextBasicInfo?.returns
-              )
-            )
-              ? Number(
-                  nextBasicInfo?.return1Y ??
-                    nextBasicInfo?.returnValue ??
-                    nextBasicInfo?.returns
-                )
-              : item.returnValue ?? 0;
+            reportedReturn !== null &&
+            reportedReturn !== undefined
+              ? parseReturn(reportedReturn)
+              : calculatedReturn;
 
           return {
             ...item,
@@ -1588,11 +1624,46 @@ function PortfolioChildPanel({
       key: "allocationPercentage",
       direction: "desc",
     });
+  const [themeSortConfig, setThemeSortConfig] =
+    useState({ key: "assetClass", direction: "asc" });
+  const [transactionSortConfig, setTransactionSortConfig] =
+    useState({ key: "executedAt", direction: "desc" });
 
   const [activeTab, setActiveTab] =
     useState("holdings");
   const [tradeRows, setTradeRows] =
     useState([]);
+  const [transactions, setTransactions] =
+    useState([]);
+  const [transactionsLoading, setTransactionsLoading] =
+    useState(false);
+  const [transactionsError, setTransactionsError] =
+    useState("");
+
+  useEffect(() => {
+    if (activeTab !== "transactions") return undefined;
+    let active = true;
+    setTransactionsLoading(true);
+    setTransactionsError("");
+    getPortfolioTransactions(portfolio.id)
+      .then((rows) => {
+        if (active) setTransactions(Array.isArray(rows) ? rows : []);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setTransactionsError(
+          error?.response?.data?.message ||
+            error?.message ||
+            "Transaction history could not be loaded."
+        );
+      })
+      .finally(() => {
+        if (active) setTransactionsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeTab, portfolio.id]);
 
   const totalCurrentValue = useMemo(
     () =>
@@ -1622,6 +1693,11 @@ function PortfolioChildPanel({
 
   const totalPnl =
     totalCurrentValue - totalCost;
+
+  const sortedTransactions = useMemo(
+    () => sortRows(transactions, transactionSortConfig),
+    [transactions, transactionSortConfig]
+  );
 
   const availableBalance =
     getAvailableBalance(
@@ -1819,6 +1895,11 @@ function PortfolioChildPanel({
       );
   }, [details, holdings, portfolio.theme, totalCurrentValue]);
 
+  const sortedThemeRows = useMemo(
+    () => sortRows(themeRows, themeSortConfig),
+    [themeRows, themeSortConfig]
+  );
+
   function handleSort(key) {
     setSortConfig((current) => {
       if (current.key === key) {
@@ -1845,6 +1926,7 @@ function PortfolioChildPanel({
     { key: "holdings", label: "Holdings" },
     { key: "theme", label: "Theme allocation" },
     { key: "trade", label: "Buy / Sell" },
+    { key: "transactions", label: "Transactions", icon: History },
   ];
 
   function createTradeRow(side = "buy", holding = null) {
@@ -1966,13 +2048,6 @@ function PortfolioChildPanel({
         )
       );
 
-      applyTradeToLocalState(
-        portfolio.id,
-        selectedHolding,
-        row.side,
-        quantityValue
-      );
-
       await onHoldingChanged();
     } catch (tradeError) {
       updateTradeRow(row.id, {
@@ -2072,12 +2147,6 @@ function PortfolioChildPanel({
           )
         );
 
-        applyTradeToLocalState(
-          portfolio.id,
-          selectedHolding,
-          row.side,
-          quantityValue
-        );
       } catch (tradeError) {
         updateTradeRow(row.id, {
           error:
@@ -2156,22 +2225,79 @@ function PortfolioChildPanel({
 
       <div className="mb-2 flex flex-wrap items-center gap-1.5 border-b border-slate-200 pb-1.5">
         {tabOptions.map((tab) => (
-          <button
-            type="button"
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-              activeTab === tab.key
-                ? "bg-blue-800 text-white"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-            }`}
-          >
-            {tab.label}
-          </button>
+          (() => {
+            const TabIcon = tab.icon;
+            return (
+              <button
+                type="button"
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                  activeTab === tab.key
+                    ? "bg-blue-800 text-white"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                {TabIcon && <TabIcon size={12} />}
+                {tab.label}
+              </button>
+            );
+          })()
         ))}
       </div>
 
-      {!holdings.length ? (
+      {activeTab === "transactions" ? (
+        <div role="tabpanel" className="overflow-hidden rounded-md border border-slate-200 bg-white">
+          <div className="max-h-[260px] overflow-auto">
+            <table className="w-full min-w-[900px] table-fixed text-left text-[10px]">
+              <thead className="sticky top-0 z-[1] bg-[#eaf0fa] text-[9px] font-bold uppercase tracking-wide text-slate-500">
+                <tr>
+                  <SortableHeader label="Date / time" sortKey="executedAt" sortConfig={transactionSortConfig} onSort={(key) => setTransactionSortConfig((current) => nextSortConfig(current, key))} />
+                  <SortableHeader label="Side" sortKey="side" sortConfig={transactionSortConfig} onSort={(key) => setTransactionSortConfig((current) => nextSortConfig(current, key))} />
+                  <SortableHeader label="Security" sortKey="securityName" sortConfig={transactionSortConfig} onSort={(key) => setTransactionSortConfig((current) => nextSortConfig(current, key))} />
+                  <SortableHeader label="Qty" sortKey="quantity" align="right" sortConfig={transactionSortConfig} onSort={(key) => setTransactionSortConfig((current) => nextSortConfig(current, key))} />
+                  <SortableHeader label="Execution price" sortKey="executionPrice" align="right" sortConfig={transactionSortConfig} onSort={(key) => setTransactionSortConfig((current) => nextSortConfig(current, key))} />
+                  <SortableHeader label="Total value" sortKey="totalAmount" align="right" sortConfig={transactionSortConfig} onSort={(key) => setTransactionSortConfig((current) => nextSortConfig(current, key))} />
+                  <SortableHeader label="Realized P&L" sortKey="realizedPnl" align="right" sortConfig={transactionSortConfig} onSort={(key) => setTransactionSortConfig((current) => nextSortConfig(current, key))} />
+                  <SortableHeader label="Cash after" sortKey="cashBalanceAfter" align="right" sortConfig={transactionSortConfig} onSort={(key) => setTransactionSortConfig((current) => nextSortConfig(current, key))} />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {transactionsLoading ? (
+                  <tr><td colSpan={8} className="px-3 py-5 text-center text-slate-500">Loading transactions…</td></tr>
+                ) : transactionsError ? (
+                  <tr><td colSpan={8} className="px-3 py-5 text-center text-red-600">{transactionsError}</td></tr>
+                ) : transactions.length ? (
+                  sortedTransactions.map((transaction) => {
+                    const realizedPnl = Number(transaction.realizedPnl);
+                    const isSell = String(transaction.side).toUpperCase() === "SELL";
+                    return (
+                      <tr key={transaction.transactionId} className="text-slate-700 hover:bg-slate-50">
+                        <td className="whitespace-nowrap px-2.5 py-2 font-mono text-slate-500">{formatTransactionDate(transaction.executedAt)}</td>
+                        <td className={`px-2.5 py-2 font-bold ${isSell ? "text-red-700" : "text-emerald-700"}`}>{transaction.side || "—"}</td>
+                        <td className="truncate px-2.5 py-2 font-medium" title={transaction.securityName}>{transaction.securityName || "—"}<span className="ml-1.5 font-mono text-[9px] text-slate-400">{transaction.symbol}</span></td>
+                        <td className="px-2.5 py-2 text-right font-mono">{formatNumber(transaction.quantity)}</td>
+                        <td className="px-2.5 py-2 text-right font-mono">{transaction.executionPrice == null ? "—" : formatMoney(transaction.executionPrice)}</td>
+                        <td className="px-2.5 py-2 text-right font-mono font-semibold text-blue-900">{transaction.totalAmount == null ? "—" : formatMoney(transaction.totalAmount)}</td>
+                        <td className={`px-2.5 py-2 text-right font-mono font-semibold ${!isSell || transaction.realizedPnl == null ? "text-slate-300" : realizedPnl >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                          {!isSell || transaction.realizedPnl == null ? "—" : `${realizedPnl >= 0 ? "+" : "−"}${formatMoney(Math.abs(realizedPnl))}`}
+                        </td>
+                        <td className="px-2.5 py-2 text-right font-mono">{transaction.cashBalanceAfter == null ? "—" : formatMoney(transaction.cashBalanceAfter)}</td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr><td colSpan={8} className="px-3 py-5 text-center text-slate-500">No buy or sell transactions recorded for this portfolio.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex justify-between border-t border-slate-100 px-3 py-1.5 text-[10px] text-slate-500">
+            <span>Recorded buy and sell activity</span>
+            <span>{transactions.length} transaction{transactions.length === 1 ? "" : "s"}</span>
+          </div>
+        </div>
+      ) : !holdings.length ? (
         <div className="rounded border border-slate-200 bg-white px-3 py-4 text-center text-[11px] text-slate-500">
           No holdings found for this
           portfolio.
@@ -2373,18 +2499,18 @@ function PortfolioChildPanel({
           <table className="w-full min-w-[760px] text-left text-[11px]">
             <thead className="bg-[#eaf0fa] text-[9px] uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-2.5 py-2">Theme</th>
-                <th className="px-2.5 py-2">Asset</th>
-                <th className="px-2.5 py-2 text-right">Theme alloc.</th>
-                <th className="px-2.5 py-2 text-right">Invested</th>
-                <th className="px-2.5 py-2 text-right">Actual alloc.</th>
-                <th className="px-2.5 py-2 text-right">Drift</th>
-                <th className="px-2.5 py-2 text-right">Current amount</th>
-                <th className="px-2.5 py-2 text-right">Status</th>
+                <SortableHeader label="Theme" sortKey="theme" sortConfig={themeSortConfig} onSort={(key) => setThemeSortConfig((current) => nextSortConfig(current, key))} />
+                <SortableHeader label="Asset" sortKey="assetClass" sortConfig={themeSortConfig} onSort={(key) => setThemeSortConfig((current) => nextSortConfig(current, key))} />
+                <SortableHeader label="Theme alloc." sortKey="targetPct" align="right" sortConfig={themeSortConfig} onSort={(key) => setThemeSortConfig((current) => nextSortConfig(current, key))} />
+                <SortableHeader label="Invested" sortKey="investedAmount" align="right" sortConfig={themeSortConfig} onSort={(key) => setThemeSortConfig((current) => nextSortConfig(current, key))} />
+                <SortableHeader label="Actual alloc." sortKey="actualPct" align="right" sortConfig={themeSortConfig} onSort={(key) => setThemeSortConfig((current) => nextSortConfig(current, key))} />
+                <SortableHeader label="Drift" sortKey="drift" align="right" sortConfig={themeSortConfig} onSort={(key) => setThemeSortConfig((current) => nextSortConfig(current, key))} />
+                <SortableHeader label="Current amount" sortKey="currentAmount" align="right" sortConfig={themeSortConfig} onSort={(key) => setThemeSortConfig((current) => nextSortConfig(current, key))} />
+                <SortableHeader label="Status" sortKey="satisfied" align="right" sortConfig={themeSortConfig} onSort={(key) => setThemeSortConfig((current) => nextSortConfig(current, key))} />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {themeRows.map((row) => (
+              {sortedThemeRows.map((row) => (
                 <tr key={row.assetClass} className="text-slate-700">
                   <td className="px-2.5 py-2 font-medium text-slate-700">
                     {row.theme}
@@ -3225,10 +3351,12 @@ function getAvailableBalance(
     details?.cashBalance ??
     details?.availableCash ??
     details?.balance ??
+    details?.amount ??
     portfolio?.availableBalance ??
     portfolio?.cashBalance ??
     portfolio?.availableCash ??
-    portfolio?.balance;
+    portfolio?.balance ??
+    portfolio?.amount;
 
   if (
     possibleBalance === null ||
@@ -3245,6 +3373,73 @@ function getAvailableBalance(
   return Number.isFinite(balance)
     ? balance
     : null;
+}
+
+function nextSortConfig(current, key) {
+  if (current.key === key) {
+    return {
+      key,
+      direction: current.direction === "asc" ? "desc" : "asc",
+    };
+  }
+
+  const descendingByDefault = new Set([
+    "executedAt",
+    "quantity",
+    "executionPrice",
+    "totalAmount",
+    "realizedPnl",
+    "cashBalanceAfter",
+    "targetPct",
+    "investedAmount",
+    "actualPct",
+    "drift",
+    "currentAmount",
+    "satisfied",
+  ]);
+  return {
+    key,
+    direction: descendingByDefault.has(key) ? "desc" : "asc",
+  };
+}
+
+function sortRows(rows, sortConfig) {
+  const numericFields = new Set([
+    "quantity",
+    "executionPrice",
+    "totalAmount",
+    "realizedPnl",
+    "cashBalanceAfter",
+    "targetPct",
+    "investedAmount",
+    "actualPct",
+    "drift",
+    "currentAmount",
+    "satisfied",
+  ]);
+
+  return [...rows].sort((first, second) => {
+    let firstValue = first?.[sortConfig.key];
+    let secondValue = second?.[sortConfig.key];
+
+    if (sortConfig.key === "executedAt") {
+      firstValue = Date.parse(firstValue || "") || 0;
+      secondValue = Date.parse(secondValue || "") || 0;
+    }
+
+    let comparison;
+    if (numericFields.has(sortConfig.key)) {
+      comparison = Number(firstValue || 0) - Number(secondValue || 0);
+    } else {
+      comparison = String(firstValue ?? "").localeCompare(
+        String(secondValue ?? ""),
+        undefined,
+        { numeric: true, sensitivity: "base" }
+      );
+    }
+
+    return sortConfig.direction === "asc" ? comparison : -comparison;
+  });
 }
 
 function getHoldingSortValue(
@@ -3457,6 +3652,20 @@ function formatMoney(value) {
       maximumFractionDigits: 2,
     }
   )}`;
+}
+
+function formatTransactionDate(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? String(value)
+    : date.toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
 }
 
 function formatLabel(value) {

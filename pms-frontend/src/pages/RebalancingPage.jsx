@@ -942,7 +942,7 @@ export default function RebalancingPage() {
     const maxQuantity = Number(holding?.quantity || 0);
     const unitPrice =
       holding && Number(holding.quantity) > 0
-        ? Number(holding.currentValue || 0) / Number(holding.quantity)
+        ? holdingTradePrice(holding)
         : Number(holding?.averageCost || 0);
     const qty = Number(line.quantity);
     const validQty = Number.isInteger(qty) && qty > 0 && qty <= maxQuantity;
@@ -1597,11 +1597,19 @@ function DetailTile({ label, value }) {
   );
 }
 
+function holdingTradePrice(holding) {
+  if (String(holding?.securityType || "").toUpperCase() === "BOND") {
+    return Number(holding?.bondReturnPrice?.tradePrice || holding?.averageCost || 0);
+  }
+  const quantity = Number(holding?.quantity || 0);
+  return quantity > 0 ? Number(holding?.currentValue || 0) / quantity : 0;
+}
+
 function getMaxSellQuantity(holding, allocation, validation) {
   const total = Number(validation?.totalCurrentValue || validation?.totalInvestedAmount || 0);
   const current = Number(allocation?.currentPercentage || 0);
   const target = Number(allocation?.targetPercentage || 0);
-  const unitMarketValue = Number(holding?.currentValue || 0) / Math.max(1, Number(holding?.quantity || 0));
+  const unitMarketValue = holdingTradePrice(holding);
   if (total <= 0 || unitMarketValue <= 0 || current <= target || target >= 100) return 0;
   const currentClassCost = (total * current) / 100;
   const targetClassCost = (total * target) / 100;

@@ -4,6 +4,7 @@ import com.example.pms.dto.request.AddPortfolioHoldingDTO;
 import com.example.pms.dto.request.BuyHoldingDTO;
 import com.example.pms.dto.request.CreatePortfolioDTO;
 import com.example.pms.dto.request.SellHoldingDTO;
+import com.example.pms.dto.response.PortfolioTransactionDTO;
 import com.example.pms.model.PortfolioHolding;
 
 import java.util.List;
@@ -24,6 +25,8 @@ public interface PortfolioHoldingService {
     public String buySecurities(BuyHoldingDTO buyHoldingDTO);
 
     public String buySecuritiesBatch(List<BuyHoldingDTO> buyHoldingDTOList);
+
+    List<PortfolioTransactionDTO> getTransactions(Long portfolioId, Integer userId);
 
     public String updateEquityCategory(Integer holdingId, String equityCategory);
 }

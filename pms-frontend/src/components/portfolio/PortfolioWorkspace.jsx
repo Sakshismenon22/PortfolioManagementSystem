@@ -194,10 +194,7 @@ const PortfolioWorkspace = ({
       holdings.reduce((sum, h) => sum + Number(h.totalCost || 0), 0)
   );
   const invested = holdingsInvested + cashBalance;
-  const currentValue = Number(
-    validation?.totalCurrentValue ??
-      holdings.reduce((sum, h) => sum + holdingValue(h), 0) + cashBalance
-  );
+  const currentValue = holdings.reduce((sum, holding) => sum + holdingValue(holding), 0) + cashBalance;
   const pnl = currentValue - invested;
   const returnPercentage = invested ? (pnl / invested) * 100 : 0;
 //   const portfolioId = portfolio?.portfolioId ?? id;
@@ -411,9 +408,8 @@ const PortfolioWorkspace = ({
   const themeAllocations = allocations.filter((a) => Number(a.targetPercentage) > 0);
   const eligibleSecurities = securities.filter((s) => {
     const matchesTheme = !portfolioIsNew || themeAllocations.some((a) => securityMatchesAllocation(s, a));
-    const isFixedIncome = normalizeAssetClass(s?.asset?.assetClass || s?.assetClass || s?.securityType || "") === "FIXED_INCOME";
     const hasPrice = Number.isFinite(Number(s?.price)) && Number(s?.price) > 0;
-    return matchesTheme && (hasPrice || isFixedIncome);
+    return matchesTheme && hasPrice;
   });
   const sellableHoldings = holdings.filter((h) => h.holdingId != null && Number(h.quantity) > 0);
 
@@ -423,7 +419,7 @@ const PortfolioWorkspace = ({
       const quantity = Number(order.quantity);
       const held = Number(holding?.quantity || 0);
       const valid = Boolean(holding) && Number.isInteger(quantity) && quantity > 0 && quantity <= held;
-      const price = holding ? holdingPrice(holding) : 0;
+      const price = holding ? holdingTradePrice(holding) : 0;
       return {
         ...order,
         holding,
@@ -444,14 +440,11 @@ const PortfolioWorkspace = ({
       ? portfolioUsesWeights ? allocationBase * enteredValue / 100 : enteredValue
       : 0;
     const price = Number(security?.price || 0);
-    const isFixedIncomeSecurity = normalizeAssetClass(security?.asset?.assetClass || security?.assetClass || security?.securityType || "") === "FIXED_INCOME";
     const quantity = price > 0 && requestedAmount > 0
       ? Math.floor(requestedAmount / price)
-      : isFixedIncomeSecurity && requestedAmount > 0
-        ? 1
-        : 0;
-    const valid = Boolean(security) && validEntry && ((price > 0 && quantity > 0) || isFixedIncomeSecurity);
-    const resolvedAmount = price > 0 ? price * quantity : requestedAmount;
+      : 0;
+    const valid = Boolean(security) && validEntry && price > 0 && quantity > 0;
+    const resolvedAmount = price * quantity;
     return {
       ...order,
       holding: null,
@@ -624,7 +617,7 @@ const refreshPortfolioData = async () => {
         assetHoldings
           .filter((h) => h.holdingId != null && Number(h.quantity) > 0)
           .forEach((h) => {
-            const price = holdingPrice(h);
+            const price = holdingTradePrice(h);
             if (!(price > 0)) return;
             const share = currentAssetValue > 0 ? holdingValue(h) / currentAssetValue : 0;
             const qty = Math.min(Number(h.quantity), Math.floor((toRaise * share) / price));
@@ -646,13 +639,13 @@ const refreshPortfolioData = async () => {
         return;
       }
 
-      const existing = assetHoldings.filter((h) => h.securityId != null && holdingPrice(h) > 0);
+      const existing = assetHoldings.filter((h) => h.securityId != null && holdingTradePrice(h) > 0);
       const candidates = existing.length
         ? existing.map((h) => ({
             securityId: h.securityId,
             name: h.securityName,
             symbol: h.symbol,
-            price: holdingPrice(h),
+            price: holdingTradePrice(h),
             weight: currentAssetValue > 0 ? holdingValue(h) / currentAssetValue : 1 / existing.length,
           }))
         : eligibleSecurities
@@ -1348,6 +1341,11 @@ const holdingPrice = (holding) => {
   const qty = Number(holding.quantity || 0);
   return qty ? holdingValue(holding) / qty : 0;
 };
+
+const holdingTradePrice = (holding) =>
+  String(holding?.securityType || "").toUpperCase() === "BOND"
+    ? Number(holding?.bondReturnPrice?.tradePrice || holding?.averageCost || 0)
+    : holdingPrice(holding);
 
 const securityMatchesAllocation = (security, allocation) => {
   if (!security || !allocation) return false;

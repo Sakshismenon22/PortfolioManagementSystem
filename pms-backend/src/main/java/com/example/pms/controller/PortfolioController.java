@@ -55,13 +55,19 @@ public class PortfolioController {
         return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(),true,null,portfolioService.createAndActivatePortfolio(createAndActivatePortfolioDTO), LocalDateTime.now()));
     }
 
-    @PostMapping("/add-initial-holdings/{id}")
-    public ResponseEntity<?> addInitialHoldingsAndActivate(
+    @PostMapping({"/add-holdings/{id}", "/add-initial-holdings/{id}"})
+    public ResponseEntity<?> addHoldings(
             @PathVariable Long id,
             @RequestBody List<BuyHoldingDTO> holdings
     ) {
         return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(), true, null,
                 portfolioService.addInitialHoldingsAndActivate(id, holdings), LocalDateTime.now()));
+    }
+
+    @PostMapping("/activate/{id}/{userId}")
+    public ResponseEntity<?> activatePortfolio(@PathVariable Long id, @PathVariable Integer userId) {
+        return ResponseEntity.ok(new Response<String>(HttpStatus.OK.value(), true, null,
+                portfolioService.activatePortfolio(id, userId), LocalDateTime.now()));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

@@ -141,8 +141,34 @@ export const getPortfolioHoldings = async (portfolioId) => {
   const response = await axios.get(
     `${API_URL}/holdings/${portfolioId}/${userId}`,
   );
+  const holdings = response.data.data;
+  if (!Array.isArray(holdings)) return holdings;
 
-  return response.data.data;
+  return Promise.all(holdings.map(async (holding) => {
+    if (String(holding.securityType || "").toUpperCase() !== "BOND") return holding;
+    try {
+      const priceResponse = await axios.get(
+        `http://localhost:8082/api/security/bond-return-price/${holding.securityId}`,
+        { params: { purchaseDate: holding.firstBuyDate || undefined } },
+      );
+      const bondReturnPrice = priceResponse.data?.data;
+      const price = Number(bondReturnPrice?.currentReturnPrice);
+      const quantity = Number(holding.quantity || 0);
+      if (!(price > 0) || !(quantity > 0)) return holding;
+      return {
+        ...holding,
+        currentPrice: price,
+        currentValue: price * quantity,
+        bondReturnPrice: {
+          ...bondReturnPrice,
+          tradePrice: Number(bondReturnPrice.tradePrice) || Number(holding.averageCost) || 0,
+        },
+      };
+    } catch (error) {
+      console.warn(`Bond return valuation unavailable for security ${holding.securityId}.`, error);
+      return holding;
+    }
+  }));
 };
 
 export const validatePortfolioAllocation = async (portfolioId) => {
@@ -170,10 +196,26 @@ export const buyPortfolioSecurities = async (orders) => {
 
 export const addInitialPortfolioHoldings = async ({ portfolioId, orders }) => {
   const response = await axios.post(
-    `http://localhost:8082/api/portfolio/add-initial-holdings/${portfolioId}`,
+    `http://localhost:8082/api/portfolio/add-holdings/${portfolioId}`,
     orders,
   );
   return response.data;
+};
+
+export const activatePortfolio = async (portfolioId) => {
+  const userId = localStorage.getItem("userId");
+  const response = await axios.post(
+    `http://localhost:8082/api/portfolio/activate/${portfolioId}/${userId}`,
+  );
+  return response.data;
+};
+
+export const getPortfolioTransactions = async (portfolioId) => {
+  const userId = localStorage.getItem("userId");
+  const response = await axios.get(
+    `http://localhost:8082/api/portfolio-holding/transactions/${portfolioId}/${userId}`,
+  );
+  return response.data?.data ?? [];
 };
 
 export const sellPortfolioHolding = async ({ holdingId, quantity }) => {
