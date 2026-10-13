@@ -11,6 +11,7 @@ import com.example.pms.repository.DriftDetectionRepository;
 import com.example.pms.repository.DriftWatchListRepository;
 import com.example.pms.repository.NotificationRepository;
 import com.example.pms.repository.PortfolioRepository;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -38,6 +39,7 @@ class DriftCalculationServiceTest {
     @InjectMocks private DriftCalculationService service;
 
     @Test
+    @DisplayName("TC-DRIFT-001 | Drift is saved and notification is created")
     void recordsBreachAndCreatesNotificationForActivePortfolio() {
         Portfolio portfolio = activePortfolio();
         when(portfolioService.validatePortfolioAllocation(10L, 2)).thenReturn(validation(6.0, true));
@@ -55,6 +57,7 @@ class DriftCalculationServiceTest {
     }
 
     @Test
+    @DisplayName("TC-DRIFT-002 | Portfolio is valid but no notification or drift is saved")
     void doesNotRecordDriftBelowThreshold() {
         when(portfolioService.validatePortfolioAllocation(10L, 2)).thenReturn(validation(4.99, true));
         when(portfolioRepository.findById(10L)).thenReturn(Optional.of(activePortfolio()));
@@ -68,6 +71,7 @@ class DriftCalculationServiceTest {
     }
 
     @Test
+    @DisplayName("TC-DRIFT-003 | Avoids duplicate notification")
     void avoidsDuplicateNotificationForSameDailyDrift() {
         when(portfolioService.validatePortfolioAllocation(10L, 2)).thenReturn(validation(-5.0, false));
         when(portfolioRepository.findById(10L)).thenReturn(Optional.of(activePortfolio()));
@@ -83,6 +87,7 @@ class DriftCalculationServiceTest {
     }
 
     @Test
+    @DisplayName("TC-DRIFT-004 | Throws exception when portfolio does not exist")
     void throwsWhenPortfolioDoesNotExist() {
         when(portfolioService.validatePortfolioAllocation(10L, 2)).thenReturn(validation(null, true));
         when(portfolioRepository.findById(10L)).thenReturn(Optional.empty());

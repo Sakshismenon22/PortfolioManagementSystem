@@ -239,3 +239,8 @@ export const updatePortfolioHoldingEquityCategory = async ({ holdingId, equityCa
   return response.data;
 };
 
+// export const getPortfolioTransactions = async (portfolioId) => {
+//   const response = await axios.get(`http://localhost:8082/api/transactions/portfolio/${portfolioId}`);
+//   return response.data;
+// };
+
