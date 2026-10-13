@@ -46,7 +46,6 @@ const FILTERS = [
   "All",
   "New",
   "Active",
-  "Draft",
   "Rebalance Required",
   "Closed",
 ];
@@ -406,13 +405,6 @@ const PortfolioPage = () => {
           portfolio.status === "ACTIVE"
       ).length,
 
-      Draft: portfolios.filter(
-        (portfolio) =>
-          ["DRAFT", "CREATED"].includes(
-            portfolio.status
-          )
-      ).length,
-
       "Rebalance Required":
         driftPortfolioIds.length,
 
@@ -439,12 +431,6 @@ const PortfolioPage = () => {
             return (
               portfolio.status === "NEW"
             );
-
-          case "Draft":
-            return [
-              "DRAFT",
-              "CREATED",
-            ].includes(portfolio.status);
 
           case "Rebalance Required":
             return driftPortfolioIds.includes(

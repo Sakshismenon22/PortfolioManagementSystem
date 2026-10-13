@@ -477,6 +477,25 @@ const PortfolioDetailsPage = () => {
   });
   const basketCanSubmit = basketRowsValid && (buyTotal > 0 || sellTotal > 0) && basketWithinCash && !tradeSubmitting;
 
+  const isOrderComplete = (order) => {
+    if (!order) return false;
+    if (order.side === "SELL") {
+      return Boolean(order.holdingId) && Number(order.quantity) > 0;
+    }
+    return Boolean(order.securityId) && Number(order.quantity) > 0;
+  };
+
+  useEffect(() => {
+    setOrders((prev) => {
+      if (!prev.length) return prev;
+      const last = prev[prev.length - 1];
+      if (isOrderComplete(last)) {
+        return [...prev, newOrder()];
+      }
+      return prev;
+    });
+  }, [orders]);
+
   const updateOrder = (rowId, patch) => {
     setOrders((prev) => prev.map((o) => (o.rowId === rowId ? { ...o, ...patch } : o)));
     setTradeError("");
@@ -995,7 +1014,7 @@ const PortfolioDetailsPage = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {orders.map((order) => {
+                      {orders.map((order, index) => {
                         const item = basketItems.find((c) => c.rowId === order.rowId);
                         const isSell = order.side === "SELL";
                         const usedSecurities = new Set(orders.filter((o) => o.rowId !== order.rowId && o.side === "BUY").map((o) => String(o.securityId)));
@@ -1003,6 +1022,10 @@ const PortfolioDetailsPage = () => {
                         const selectableSecurities = eligibleSecurities;
                         const selectableHoldings = sellableHoldings.filter((h) => !usedHoldings.has(String(h.holdingId)) || String(h.holdingId) === String(order.holdingId));
                         const held = Number(item?.holding?.quantity || 0);
+                        const showAddButton =
+                          index === orders.length - 1 &&
+                          !isOrderComplete(order) &&
+                          ((isSell && Boolean(order.holdingId)) || (!isSell && Boolean(order.securityId)));
                         return (
                           <tr key={order.rowId} className={isSell ? "bg-red-50/40" : "bg-amber-50/40"}>
                             <td className="px-1.5 py-1">
@@ -1117,7 +1140,9 @@ const PortfolioDetailsPage = () => {
                               {item?.valid ? `${isSell ? "+" : "−"}${formatCompactMoney(item.amount)}` : "—"}
                             </td>
                             <td className="whitespace-nowrap px-1 py-1 text-right">
-                              <button type="button" onClick={addOrderRow} disabled={tradeSubmitting} className="rounded bg-blue-800 px-1.5 py-1 text-[9px] font-semibold text-white disabled:opacity-40">Add</button>
+                              {showAddButton && (
+                                <button type="button" onClick={addOrderRow} disabled={tradeSubmitting} className="rounded bg-blue-800 px-1.5 py-1 text-[9px] font-semibold text-white disabled:opacity-40">Add</button>
+                              )}
                               <button type="button" onClick={() => removeOrderRow(order.rowId)} disabled={orders.length <= 1 || tradeSubmitting} className="ml-1 rounded border border-slate-200 px-1.5 py-1 text-[9px] font-semibold text-slate-600 disabled:opacity-40">×</button>
                             </td>
                           </tr>
