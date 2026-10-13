@@ -1,0 +1,14 @@
+{
+  "generatedAt": "2026-10-09T10:40:44.108Z",
+  "total": 2603,
+  "equities": 2603,
+  "funds": 0,
+  "byExchange": {
+    "NSE": 2603
+  },
+  "unclassified": 2603,
+  "rejectedBreakdown": {
+    "DUPLICATE_SYMBOL": 1,
+    "INVALID_ISIN": 353
+  }
+}

@@ -17,6 +17,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.List;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -65,8 +67,8 @@ class SecurityMasterServiceImplTest {
     }
 
     @Test
-    @DisplayName("TC-SECURITY-009 | Refresh commodity quotes but preserve other security prices")
-    void getAllSecuritiesInfo_shouldRefreshOnlyCommodityQuotes() {
+    @DisplayName("TC-SECURITY-009 | Refresh commodity and bond quotes but preserve other security prices")
+    void getAllSecuritiesInfo_shouldRefreshCommodityAndBondQuotes() {
         SecurityInfoDTO commodity = new SecurityInfoDTO();
         commodity.setId(5L);
         commodity.setSymbol("SILVER");
@@ -78,8 +80,13 @@ class SecurityMasterServiceImplTest {
         equity.setPrice(200.0);
         equity.setAsset(new Asset());
         equity.getAsset().setAssetClass("EQUITY");
+        SecurityInfoDTO bondInfo = new SecurityInfoDTO();
+        bondInfo.setId(7L);
+        bondInfo.setSymbol("CORP-BOND");
+        bondInfo.setAsset(new Asset());
+        bondInfo.getAsset().setAssetClass("BOND");
         when(securityMasterClient.getAllSecurityInfo())
-                .thenReturn(Optional.of(new SecuritiesInfoDTO(List.of(commodity, equity))));
+                .thenReturn(Optional.of(new SecuritiesInfoDTO(List.of(commodity, equity, bondInfo))));
 
         SecurityMaster securityMaster = new SecurityMaster();
         securityMaster.setSecurityType(SecurityType.COMMODITY);
@@ -91,10 +98,21 @@ class SecurityMasterServiceImplTest {
         quote.setCommoditySpotData(spot);
         when(securityMasterClient.findBySecurityId(5L)).thenReturn(Optional.of(quote));
 
+        SecurityMaster bondMaster = new SecurityMaster();
+        bondMaster.setSecurityType(SecurityType.BOND);
+        Bond bond = new Bond();
+        bond.setFaceValue(1000.0);
+        bond.setCleanPrice(985.0);
+        SecurityPriceDTO bondQuote = new SecurityPriceDTO();
+        bondQuote.setSecurityMaster(bondMaster);
+        bondQuote.setBond(bond);
+        when(securityMasterClient.findBySecurityId(7L)).thenReturn(Optional.of(bondQuote));
+
         SecuritiesInfoDTO result = securityMasterService.getAllSecuritiesInfo();
 
         assertEquals(7250.0, result.getSecurities().get(0).getPrice());
         assertEquals(200.0, result.getSecurities().get(1).getPrice());
+        assertEquals(985.0, result.getSecurities().get(2).getPrice());
         verify(securityMasterClient, never()).findBySecurityId(6L);
     }
 
@@ -274,6 +292,45 @@ class SecurityMasterServiceImplTest {
                 securityMasterService
                         .getCurrentPrice(4L)
         );
+    }
+
+    @Test
+    @DisplayName("TC-SECURITY-005A | Prefer bond clean market price over face value")
+    void getCurrentPrice_shouldPreferBondCleanPrice() {
+        SecurityMaster security = security(44L, SecurityType.BOND);
+        Bond bond = new Bond();
+        bond.setFaceValue(1000.0);
+        bond.setCleanPrice(987.5);
+
+        SecurityPriceDTO quote = new SecurityPriceDTO();
+        quote.setSecurityMaster(security);
+        quote.setBond(bond);
+        when(securityMasterClient.findBySecurityId(44L)).thenReturn(Optional.of(quote));
+
+        assertEquals(987.5, securityMasterService.getCurrentPrice(44L));
+    }
+
+    @Test
+    @DisplayName("TC-SECURITY-005B | Bond return price uses face value plus accrued coupon")
+    void getBondReturnPrice_shouldIncludeAccruedCouponOnFaceValue() {
+        SecurityMaster security = security(45L, SecurityType.BOND);
+        Bond bond = new Bond();
+        bond.setFaceValue(1000.0);
+        bond.setCleanPrice(920.0);
+        bond.setCouponRate(0.08);
+        SecurityPriceDTO quote = new SecurityPriceDTO();
+        quote.setSecurityMaster(security);
+        quote.setBond(bond);
+        when(securityMasterClient.findBySecurityId(45L)).thenReturn(Optional.of(quote));
+
+        LocalDate purchaseDate = LocalDate.now().minusDays(365);
+        var result = securityMasterService.getBondReturnPrice(45L, purchaseDate);
+        double days = ChronoUnit.DAYS.between(purchaseDate, LocalDate.now());
+
+        assertEquals(1000.0, result.getFaceValue());
+        assertEquals(1000.0 * 0.08 * days / 365.0, result.getAccruedCouponInterest(), 0.01);
+        assertEquals(1000.0 + result.getAccruedCouponInterest(), result.getCurrentReturnPrice(), 0.001);
+        assertEquals("ACT/365", result.getDayCountConvention());
     }
 
 

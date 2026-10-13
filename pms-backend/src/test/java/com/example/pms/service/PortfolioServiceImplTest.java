@@ -55,6 +55,8 @@ public class PortfolioServiceImplTest {
     private SecurityMasterService securityMasterService;
     @Mock
     private SecurityMasterRepository securityMasterRepository;
+    @Mock
+    private PortfolioTransactionRepository portfolioTransactionRepository;
 
     @InjectMocks
     private PortfolioServiceImpl portfolioService;
@@ -1612,7 +1614,7 @@ public class PortfolioServiceImplTest {
         when(securityMasterRepository.findById(200L))
                 .thenReturn(Optional.of(security));
 
-        when(securityMasterService.getCurrentPrice(200L))
+        when(securityMasterService.getCurrentTradePrice(200L))
                 .thenReturn(0.0);
 
         assertThrows(
@@ -1653,7 +1655,7 @@ public class PortfolioServiceImplTest {
         when(securityMasterRepository.findById(200L))
                 .thenReturn(Optional.of(security));
 
-        when(securityMasterService.getCurrentPrice(200L))
+        when(securityMasterService.getCurrentTradePrice(200L))
                 .thenReturn(100.0);
 
         when(driftWatchListRepository.findAllByPortfolioId(100L))

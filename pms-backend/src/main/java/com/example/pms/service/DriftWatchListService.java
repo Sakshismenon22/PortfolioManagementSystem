@@ -61,7 +61,7 @@ public class DriftWatchListService {
     }
 
 
-    @Scheduled(cron = "0 46 15 * * MON-FRI",
+    @Scheduled(cron = "0 00 09 * * MON-FRI",
             zone = "Asia/Kolkata")
     public void doDriftCalculation(){
         List<User> userList = userRepository.findAll();

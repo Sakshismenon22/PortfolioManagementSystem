@@ -30,6 +30,8 @@ public interface PortfolioService {
 
     String addInitialHoldingsAndActivate(Long portfolioId, List<BuyHoldingDTO> holdings);
 
+    String activatePortfolio(Long portfolioId, Integer userId);
+
     String createDemoPortfolios(Integer userId);
 
     String deleteDemoPortfolios(Integer userId);

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft, AlertTriangle, CheckCircle2, Download, Filter, LineChart,
-  RefreshCw, TrendingUp, WalletCards, Wallet, PieChart, Table2, ArrowLeftRight, Scale,
+  RefreshCw, TrendingUp, WalletCards, Wallet, PieChart, Table2, ArrowLeftRight, Scale, History, X,
 } from "lucide-react";
 import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-community";
@@ -14,6 +14,7 @@ import {
   getPortfolioHoldings,
   getThemeAllocation,
   validatePortfolioAllocation,
+  activatePortfolio,
   getPortfolioTransactions,
   buyPortfolioSecurities,
   addInitialPortfolioHoldings,
@@ -67,10 +68,10 @@ const DRIFT_BAND = 5;
 
 const TABS = [
   { key: "holdings", label: "Portfolio holdings", icon: Table2 },
+  { key: "transactions", label: "Transactions", icon: History },
   { key: "trade", label: "Buy or Sell holdings", icon: ArrowLeftRight },
   { key: "composition", label: "Theme composition", icon: PieChart },
   { key: "rebalance", label: "Rebalance recommendation", icon: Scale },
-  { key: "orders", label: "Orders history", icon: Table2 },
 ];
 
 /* ------------------------- page ------------------------- */
@@ -82,25 +83,32 @@ const PortfolioDetailsPage = () => {
 
   const [portfolio, setPortfolio] = useState(location.state?.portfolio ?? null);
   const [holdings, setHoldings] = useState([]);
+  const [transactions, setTransactions] = useState([]);
   const [validation, setValidation] = useState(null);
   const [themeAllocation, setThemeAllocation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [holdingsError, setHoldingsError] = useState("");
+  const [transactionsError, setTransactionsError] = useState("");
   const [assetFilter, setAssetFilter] = useState("ALL");
   const [activeTab, setActiveTab] = useState("holdings");
 
   const [securities, setSecurities] = useState([]);
   const [securitiesLoading, setSecuritiesLoading] = useState(true);
   const [orders, setOrders] = useState([newOrder()]);
-  const [transactionsList, setTransactionsList] = useState([]);
-  const [transactionsLoading, setTransactionsLoading] = useState(false);
-  const [transactionsError, setTransactionsError] = useState("");
   const [tradeSubmitting, setTradeSubmitting] = useState(false);
+  const [activationSubmitting, setActivationSubmitting] = useState(false);
   const [tradeError, setTradeError] = useState("");
   const [notice, setNotice] = useState("");
   const [showBenchmark, setShowBenchmark] = useState(false);
   const [driftCheckRunning, setDriftCheckRunning] = useState(false);
+  const [searchTexts, setSearchTexts] = useState({});
+
+  useEffect(() => {
+    if (!notice) return undefined;
+    const timeoutId = window.setTimeout(() => setNotice(""), 1000);
+    return () => window.clearTimeout(timeoutId);
+  }, [notice]);
 
   /* ------------------------- load ------------------------- */
 
@@ -113,10 +121,11 @@ const PortfolioDetailsPage = () => {
       getPortfolioHoldings(id),
       validatePortfolioAllocation(id).catch(() => null),
       getThemeAllocation(id).catch(() => null),
+      getPortfolioTransactions(id),
     ])
       .then((results) => {
         if (!active) return;
-        const [basicResult, holdingsResult, validationResult, themeResult] = results;
+        const [basicResult, holdingsResult, validationResult, themeResult, transactionsResult] = results;
         const basicInfo =
           basicResult.status === "fulfilled" ? basicResult.value : location.state?.portfolio;
         if (!basicInfo) throw basicResult.reason || new Error("Could not load this portfolio.");
@@ -133,6 +142,8 @@ const PortfolioDetailsPage = () => {
         );
         setValidation(validationResult.status === "fulfilled" ? validationResult.value : null);
         setThemeAllocation(themeResult.status === "fulfilled" ? themeResult.value : null);
+        setTransactions(transactionsResult.status === "fulfilled" && Array.isArray(transactionsResult.value) ? transactionsResult.value : []);
+        setTransactionsError(transactionsResult.status === "rejected" ? "Transaction history could not be loaded." : "");
         if (String(basicInfo?.portfolioStatus || "").toUpperCase() === "NEW") {
           setActiveTab("trade");
         }
@@ -171,38 +182,12 @@ const PortfolioDetailsPage = () => {
       holdings.reduce((sum, h) => sum + Number(h.totalCost || 0), 0)
   );
   const invested = holdingsInvested + cashBalance;
-  const currentValue = Number(
-    validation?.totalCurrentValue ??
-      holdings.reduce((sum, h) => sum + holdingValue(h), 0) + cashBalance
-  );
+  const currentValue = holdings.reduce((sum, holding) => sum + holdingValue(holding), 0) + cashBalance;
   const pnl = currentValue - invested;
   const returnPercentage = invested ? (pnl / invested) * 100 : 0;
   const portfolioId = portfolio?.portfolioId ?? id;
-
-  useEffect(() => {
-    let active = true;
-    if (!portfolioId) return () => { active = false; };
-
-    setTransactionsLoading(true);
-    setTransactionsError("");
-    getPortfolioTransactions(portfolioId)
-      .then((response) => {
-        if (!active) return;
-        const list = response?.data?.data ?? response?.data ?? response ?? [];
-        setTransactionsList(Array.isArray(list) ? list : []);
-      })
-      .catch((err) => {
-        if (!active) return;
-        setTransactionsError(err?.response?.data?.message || err?.message || "Could not load transactions.");
-        setTransactionsList([]);
-      })
-      .finally(() => active && setTransactionsLoading(false));
-
-    return () => { active = false; };
-  }, [portfolioId]);
   const portfolioIsNew = String(portfolio?.portfolioStatus || "").toUpperCase() === "NEW";
   const portfolioUsesWeights = String(portfolio?.portfolioType || "").toUpperCase() === "WEIGHTAGE";
-  const allocationBase = Math.max(0, holdingsInvested + cashBalance);
   const themeName = portfolio?.themeName || themeAllocation?.themeName || "—";
   const allocations = validation?.allocations || [];
 
@@ -373,25 +358,18 @@ const PortfolioDetailsPage = () => {
     { headerName: "Why", field: "reason", flex: 1.2, minWidth: 150, cellClass: "text-[10px] text-slate-500" },
   ], []);
 
-  const transactionsColumnDefs = useMemo(() => [
-    { headerName: "Date", field: "transactionDate", flex: 1.4, minWidth: 160, valueFormatter: (p) => p.value ? new Date(p.value).toLocaleString() : "—" },
-    { headerName: "Type", field: "transactionType", width: 110, cellClass: (p) => `text-[11px] font-semibold ${p.value === "SELL" ? "text-red-600" : p.value === "BUY" ? "text-emerald-700" : "text-slate-700"}` },
-    { headerName: "Security", field: "security", flex: 1.6, minWidth: 160, cellClass: "font-medium text-slate-800" },
-    numericCol({ headerName: "Qty", field: "quantity", width: 100, valueFormatter: (p) => p.value == null ? "" : Number(p.value).toLocaleString("en-IN") }),
-    numericCol({ headerName: "Price/unit", field: "pricePerUnit", width: 120, valueFormatter: (p) => p.value == null ? "" : formatMoney(p.value) }),
-    numericCol({ headerName: "Amount", field: "totalAmount", width: 140, cellStyle: { ...RIGHT_CELL, color: "#1e3a8a" }, valueFormatter: (p) => p.value == null ? "" : formatMoney(p.value) }),
-    numericCol({
-      headerName: "P&L",
-      field: "realizedPnl",
-      width: 130,
-      cellClass: (p) => `font-mono text-[11px] font-semibold ${Number(p.value) > 0 ? "text-emerald-700" : Number(p.value) < 0 ? "text-red-600" : "text-slate-500"}`,
-      valueFormatter: (p) => {
-        const value = Number(p.value);
-        if (!Number.isFinite(value)) return "—";
-        const signed = value >= 0 ? "+" : "−";
-        return `${signed}${formatMoney(Math.abs(value))}`;
-      },
-    }),
+  const transactionColumnDefs = useMemo(() => [
+    { headerName: "Transaction ID", field: "transactionId", width: 125, sort: "desc", valueFormatter: (p) => p.value == null ? "—" : `TX-${p.value}`, cellClass: "font-mono text-[10px] text-slate-500" },
+    { headerName: "Date / time", field: "executedAt", width: 170, valueFormatter: (p) => formatTransactionDate(p.value), cellClass: "font-mono text-[10px] text-slate-600" },
+    { headerName: "Side", field: "side", width: 90, cellClass: (p) => `text-[10px] font-bold uppercase ${p.value === "BUY" ? "text-emerald-700" : "text-red-700"}` },
+    { headerName: "Security", field: "securityName", flex: 1.5, minWidth: 155, tooltipField: "securityName", cellClass: "font-medium text-slate-800" },
+    { headerName: "Symbol", field: "symbol", width: 90, cellClass: "font-mono text-[10px] text-slate-500" },
+    { headerName: "Asset class", field: "assetClass", width: 120, valueFormatter: (p) => formatLabel(p.value), cellClass: "text-[10px] text-slate-600" },
+    numericCol({ headerName: "Quantity", field: "quantity", width: 100, cellClass: "font-mono font-semibold text-slate-700", valueFormatter: (p) => p.value == null ? "—" : `${Number(p.value).toLocaleString("en-IN")}${isGold(p.data?.symbol) ? " g" : ""}` }),
+    numericCol({ headerName: "Execution price", field: "executionPrice", width: 135, valueFormatter: (p) => p.value == null ? "—" : formatMoney(p.value), cellClass: "font-mono text-slate-600" }),
+    numericCol({ headerName: "Total value", field: "totalAmount", width: 135, valueFormatter: (p) => p.value == null ? "—" : formatMoney(p.value), cellStyle: { ...RIGHT_CELL, color: "#1e3a8a" }, cellClass: "font-mono font-semibold" }),
+    numericCol({ headerName: "Realized P/L", field: "realizedPnl", headerTooltip: "Sell execution value minus the sold shares' average cost basis.", width: 135, valueFormatter: (p) => p.data?.side !== "SELL" || p.value == null ? "—" : `${Number(p.value) >= 0 ? "+" : "−"}${formatMoney(Math.abs(Number(p.value)))}`, cellClass: (p) => `font-mono font-semibold ${p.data?.side !== "SELL" || p.value == null ? "text-slate-300" : Number(p.value) >= 0 ? "text-emerald-700" : "text-red-600"}` }),
+    numericCol({ headerName: "Cash after", field: "cashBalanceAfter", width: 135, valueFormatter: (p) => p.value == null ? "—" : formatMoney(p.value), cellClass: "font-mono text-slate-700" }),
   ], []);
 
   const handleHoldingCellValueChanged = async (event) => {
@@ -428,12 +406,9 @@ const PortfolioDetailsPage = () => {
 
   /* ------------------------- buy / sell basket ------------------------- */
 
-  const themeAllocations = allocations.filter((a) => Number(a.targetPercentage) > 0);
   const eligibleSecurities = securities.filter((s) => {
-    const matchesTheme = !portfolioIsNew || themeAllocations.some((a) => securityMatchesAllocation(s, a));
-    const isFixedIncome = normalizeAssetClass(s?.asset?.assetClass || s?.assetClass || s?.securityType || "") === "FIXED_INCOME";
     const hasPrice = Number.isFinite(Number(s?.price)) && Number(s?.price) > 0;
-    return matchesTheme && (hasPrice || isFixedIncome);
+    return hasPrice;
   });
   const sellableHoldings = holdings.filter((h) => h.holdingId != null && Number(h.quantity) > 0);
 
@@ -443,7 +418,7 @@ const PortfolioDetailsPage = () => {
       const quantity = Number(order.quantity);
       const held = Number(holding?.quantity || 0);
       const valid = Boolean(holding) && Number.isInteger(quantity) && quantity > 0 && quantity <= held;
-      const price = holding ? holdingPrice(holding) : 0;
+      const price = holding ? holdingTradePrice(holding) : 0;
       return {
         ...order,
         holding,
@@ -457,21 +432,11 @@ const PortfolioDetailsPage = () => {
       };
     }
     const security = eligibleSecurities.find((s) => String(s.id) === String(order.securityId));
-    const enteredValue = Number(order.allocationValue);
-    const validEntry = Number.isFinite(enteredValue) && enteredValue > 0 &&
-      (!portfolioUsesWeights || enteredValue <= 100);
-    const requestedAmount = validEntry
-      ? portfolioUsesWeights ? allocationBase * enteredValue / 100 : enteredValue
-      : 0;
+    const quantity = Number(order.quantity);
+    const validQuantity = Number.isInteger(quantity) && quantity > 0;
     const price = Number(security?.price || 0);
-    const isFixedIncomeSecurity = normalizeAssetClass(security?.asset?.assetClass || security?.assetClass || security?.securityType || "") === "FIXED_INCOME";
-    const quantity = price > 0 && requestedAmount > 0
-      ? Math.floor(requestedAmount / price)
-      : isFixedIncomeSecurity && requestedAmount > 0
-        ? 1
-        : 0;
-    const valid = Boolean(security) && validEntry && ((price > 0 && quantity > 0) || isFixedIncomeSecurity);
-    const resolvedAmount = price > 0 ? price * quantity : requestedAmount;
+    const valid = Boolean(security) && validQuantity && price > 0;
+    const resolvedAmount = price * quantity;
     return {
       ...order,
       holding: null,
@@ -510,10 +475,7 @@ const PortfolioDetailsPage = () => {
     const drift = Math.round((projected - Number(allocation.targetPercentage || 0)) * 100) / 100;
     return { ...allocation, projectedPercentage: projected, projectedDrift: drift, satisfiedAfterTrade: Math.abs(drift) < DRIFT_BAND };
   });
-  const basketSatisfiesTheme = !portfolioIsNew || (
-    projectedAllocations.length > 0 && projectedAllocations.every((a) => a.satisfiedAfterTrade)
-  );
-  const basketCanSubmit = basketRowsValid && (buyTotal > 0 || sellTotal > 0) && basketWithinCash && basketSatisfiesTheme && !tradeSubmitting;
+  const basketCanSubmit = basketRowsValid && (buyTotal > 0 || sellTotal > 0) && basketWithinCash && !tradeSubmitting;
 
   const updateOrder = (rowId, patch) => {
     setOrders((prev) => prev.map((o) => (o.rowId === rowId ? { ...o, ...patch } : o)));
@@ -523,49 +485,54 @@ const PortfolioDetailsPage = () => {
   const removeOrderRow = (rowId) => setOrders((prev) => prev.filter((o) => o.rowId !== rowId));
   const clearBasket = () => { setOrders([newOrder()]); setTradeError(""); };
 
-  const refreshTransactionsData = async () => {
-    const pid = portfolio?.portfolioId ?? id;
-    if (!pid) return;
-
-    try {
-      const response = await getPortfolioTransactions(pid);
-      const list = response?.data?.data ?? response?.data ?? response ?? [];
-      setTransactionsList(Array.isArray(list) ? list : []);
-      setTransactionsError("");
-    } catch (error) {
-      setTransactionsError(error?.response?.data?.message || error?.message || "Could not load transactions.");
-      setTransactionsList([]);
-    }
-  };
-
   const refreshPortfolioData = async () => {
-    const pid = portfolio?.portfolioId ?? id;
-    const [freshPortfolio, freshHoldings, freshValidation, freshTheme] = await Promise.all([
-      getPortfolioBasicInfo(pid),
-      getPortfolioHoldings(pid),
-      validatePortfolioAllocation(pid),
-      getThemeAllocation(pid).catch(() => null),
+    const [freshPortfolio, freshHoldings, freshValidation, freshTheme, freshTransactions] = await Promise.all([
+      getPortfolioBasicInfo(portfolioId),
+      getPortfolioHoldings(portfolioId),
+      validatePortfolioAllocation(portfolioId),
+      getThemeAllocation(portfolioId).catch(() => null),
+      getPortfolioTransactions(portfolioId).catch(() => null),
     ]);
     setPortfolio(freshPortfolio);
     setHoldings(Array.isArray(freshHoldings) ? freshHoldings : []);
     setValidation(freshValidation);
     setThemeAllocation(freshTheme);
-    await refreshTransactionsData();
+    if (Array.isArray(freshTransactions)) {
+      setTransactions(freshTransactions);
+      setTransactionsError("");
+    } else {
+      setTransactionsError("Transaction history could not be refreshed.");
+    }
+  };
+
+  const activateCurrentPortfolio = async () => {
+    if (!portfolioIsNew || activationSubmitting) return;
+    setTradeError("");
+    setActivationSubmitting(true);
+    try {
+      const result = await activatePortfolio(portfolioId);
+      if (result?.success === false) throw new Error(result.message || "Portfolio activation failed.");
+      await refreshPortfolioData();
+      setNotice(result?.message || "Portfolio activated successfully.");
+      toast.success(result?.message || "Portfolio activated successfully.");
+    } catch (failure) {
+      const message = failure?.response?.data?.message || failure?.message || "Portfolio activation failed.";
+      setTradeError(message);
+      toast.error(message);
+    } finally {
+      setActivationSubmitting(false);
+    }
   };
 
   const submitTrades = async (event) => {
     event.preventDefault();
     setTradeError("");
     if (!basketRowsValid) {
-      setTradeError("Every line needs a security/holding and a valid quantity or amount (whole units, within what you hold).");
+      setTradeError("Enter a positive whole-unit quantity for every buy or sell line. Sell quantities cannot exceed the amount held.");
       return;
     }
     if (!basketWithinCash) {
       setTradeError("Buy cost exceeds available cash plus sell proceeds.");
-      return;
-    }
-    if (portfolioIsNew && !basketSatisfiesTheme) {
-      setTradeError(`Adjust the basket so every asset class is within ${DRIFT_BAND} percentage points of its theme target.`);
       return;
     }
     const sells = basketItems.filter((i) => i.side === "SELL");
@@ -596,7 +563,7 @@ const PortfolioDetailsPage = () => {
       if (buys.length) parts.push(`${buys.length} buy${buys.length === 1 ? "" : "s"}`);
       setNotice(`${parts.join(" and ")} recorded.`);
       setOrders([newOrder()]);
-      setActiveTab("orders");
+      setActiveTab("holdings");
     } catch (failure) {
       if (completedSells > 0) await refreshPortfolioData().catch(() => {});
       setTradeError(
@@ -642,7 +609,7 @@ const PortfolioDetailsPage = () => {
         assetHoldings
           .filter((h) => h.holdingId != null && Number(h.quantity) > 0)
           .forEach((h) => {
-            const price = holdingPrice(h);
+            const price = holdingTradePrice(h);
             if (!(price > 0)) return;
             const share = currentAssetValue > 0 ? holdingValue(h) / currentAssetValue : 0;
             const qty = Math.min(Number(h.quantity), Math.floor((toRaise * share) / price));
@@ -664,13 +631,13 @@ const PortfolioDetailsPage = () => {
         return;
       }
 
-      const existing = assetHoldings.filter((h) => h.securityId != null && holdingPrice(h) > 0);
+      const existing = assetHoldings.filter((h) => h.securityId != null && holdingTradePrice(h) > 0);
       const candidates = existing.length
         ? existing.map((h) => ({
             securityId: h.securityId,
             name: h.securityName,
             symbol: h.symbol,
-            price: holdingPrice(h),
+            price: holdingTradePrice(h),
             weight: currentAssetValue > 0 ? holdingValue(h) / currentAssetValue : 1 / existing.length,
           }))
         : eligibleSecurities
@@ -731,9 +698,7 @@ const PortfolioDetailsPage = () => {
             ...newOrder(),
             side: "BUY",
             securityId: String(line.securityId),
-            allocationValue: portfolioUsesWeights
-              ? String(Math.round(((line.amount / allocationBase) * 100 + 0.01) * 100) / 100)
-              : String(Math.ceil(line.amount)),
+            quantity: String(line.quantity),
           }
     );
     setOrders(next);
@@ -788,13 +753,11 @@ const PortfolioDetailsPage = () => {
 
   const tabCounts = {
     holdings: holdings.length,
+    transactions: transactions.length,
     trade: basketValidCount,
     composition: compositionRows.length,
     rebalance: rebalanceActionLines.length,
-    orders: transactionsList.length,
   };
-
-  const inputHeader = portfolioUsesWeights ? "Alloc. % | Qty" : "Amount | Qty";
 
   return (
     <div className="h-screen overflow-hidden bg-[#f6f8fd] text-slate-900">
@@ -840,6 +803,11 @@ const PortfolioDetailsPage = () => {
               {!portfolioIsNew && (
                 <button onClick={() => setShowBenchmark(true)} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-blue-800 hover:bg-blue-50">
                   <LineChart size={14} /> View benchmark
+                </button>
+              )}
+              {portfolioIsNew && (
+                <button onClick={activateCurrentPortfolio} disabled={activationSubmitting} className="inline-flex h-8 items-center gap-1.5 rounded-md bg-blue-800 px-3 text-xs font-semibold text-white hover:bg-blue-900 disabled:cursor-wait disabled:opacity-50">
+                  <CheckCircle2 size={14} /> {activationSubmitting ? "Validating…" : "Activate Portfolio"}
                 </button>
               )}
               {/* {!portfolioIsNew && (
@@ -908,7 +876,7 @@ const PortfolioDetailsPage = () => {
                     Available cash <strong className="font-mono font-semibold" style={{ color: "#1e3a8a" }}>{formatMoney(cashBalance)}</strong>
                   </span>
                   <span className="text-[10px] text-slate-500">
-                    Buy input <strong className="font-semibold text-slate-700">{portfolioUsesWeights ? "Allocation %" : "Amount ₹"}</strong>
+                    Trade input <strong className="font-semibold text-slate-700">Quantity</strong>
                   </span>
                 </div>
               )}
@@ -974,52 +942,36 @@ const PortfolioDetailsPage = () => {
               </div>
             )}
 
-            {/* ------------------ TAB: ORDERS HISTORY ------------------ */}
-            {activeTab === "orders" && (
-              <div role="tabpanel" id="panel-orders" aria-labelledby="tab-orders" className="flex min-h-0 flex-1 flex-col">
-                <p className="shrink-0 border-b border-slate-100 px-3 py-1.5 text-[10px] text-slate-500">Transactions and order history recorded for this portfolio</p>
-
-                {transactionsLoading ? (
-                  <div className="flex min-h-0 flex-1 items-center justify-center px-5 text-center text-xs text-slate-500">
-                    Loading order history…
-                  </div>
-                ) : transactionsError ? (
+            {/* ------------------ TAB: TRANSACTION HISTORY ------------------ */}
+            {activeTab === "transactions" && (
+              <div role="tabpanel" id="panel-transactions" aria-labelledby="tab-transactions" className="flex min-h-0 flex-1 flex-col">
+                <p className="shrink-0 border-b border-slate-100 px-3 py-1.5 text-[10px] text-slate-500">
+                  Executed portfolio trades, ordered newest first. Historical activity starts being recorded when transaction logging is enabled.
+                </p>
+                {transactionsError ? (
                   <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-5 text-center">
-                    <AlertTriangle size={28} className="text-amber-500" />
-                    <p className="mt-2 text-sm font-semibold text-slate-600">Transactions unavailable</p>
+                    <AlertTriangle size={26} className="text-amber-500" />
+                    <p className="mt-2 text-sm font-semibold text-slate-600">Transaction history unavailable</p>
                     <p className="mt-1 text-xs text-slate-400">{transactionsError}</p>
                   </div>
                 ) : (
                   <div className="min-h-0 flex-1">
                     <AgGridReact
                       theme={gridTheme}
-                      rowData={transactionsList.map((t) => ({
-                        rowKey: String(t.transactionId || t.id || Math.random()),
-                        transactionId: t.transactionId,
-                        transactionDate: t.transactionDate,
-                        transactionType: t.transactionType,
-                        security: (t.securityMaster && (t.securityMaster.name || t.securityMaster.symbol)) || (t.portfolioHolding && (t.portfolioHolding.securityName || t.portfolioHolding.symbol)) || "—",
-                        quantity: t.quantity,
-                        pricePerUnit: t.pricePerUnit,
-                        totalAmount: t.totalAmount,
-                        realizedPnl: t.realizedPnl,
-                        fees: t.fees,
-                      }))}
-                      columnDefs={transactionsColumnDefs}
+                      rowData={transactions}
+                      columnDefs={transactionColumnDefs}
                       defaultColDef={defaultColDef}
-                      getRowId={(p) => String(p.data.rowKey)}
+                      getRowId={(params) => String(params.data.transactionId)}
                       suppressCellFocus
-                      overlayNoRowsTemplate='<span class="text-xs text-slate-500">No transactions recorded for this portfolio.</span>'
+                      animateRows
+                      overlayNoRowsTemplate='<span class="text-xs text-slate-500">No buy or sell transactions have been recorded for this portfolio.</span>'
                       style={{ height: "100%", width: "100%" }}
                     />
                   </div>
                 )}
-
                 <div className="flex shrink-0 items-center justify-between border-t border-slate-100 px-3 py-1.5 text-[10px] text-slate-500">
-                  <span>{transactionsList.length} transaction{transactionsList.length === 1 ? "" : "s"}</span>
-                  <div className="flex items-center gap-2">
-                    <button type="button" onClick={() => setActiveTab("holdings")} className="rounded-md border border-slate-200 px-3 py-2 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">Back</button>
-                  </div>
+                  <span>Execution price × quantity · cash balance captured after each trade</span>
+                  <span>{transactions.length} transaction{transactions.length === 1 ? "" : "s"}</span>
                 </div>
               </div>
             )}
@@ -1029,7 +981,7 @@ const PortfolioDetailsPage = () => {
               <form role="tabpanel" id="panel-trade" aria-labelledby="tab-trade" onSubmit={submitTrades} className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <p className="shrink-0 border-b border-slate-100 px-3 py-1.5 text-[10px] text-slate-500">
                   {portfolioIsNew
-                    ? `Build the opening basket (buys only). Every asset class must land within ±${DRIFT_BAND} points of its theme target to activate the portfolio.`
+                    ? "Buy or sell opening holdings in one or more batches. Theme rules are checked only when you activate the portfolio."
                     : "Choose Buy or Sell per line. Sells execute first, then buys, so sale proceeds can fund purchases in the same basket."}
                 </p>
 
@@ -1037,7 +989,7 @@ const PortfolioDetailsPage = () => {
                   <table className="w-full min-w-[720px] table-fixed border-collapse text-left text-[10px]">
                     <thead className="sticky top-0 z-[1] bg-slate-50 text-[9px] font-bold uppercase tracking-wide text-slate-500">
                       <tr>
-                        {[["Side", "11%"], ["Security / holding", "29%"], [inputHeader, "14%"], ["Qty", "10%"], ["Price", "12%"], ["Est. value", "13%"], ["Actions", "11%"]].map(([label, width]) => (
+                        {[["Side", "11%"], ["Security / holding", "33%"], ["Quantity", "14%"], ["Price", "13%"], ["Est. value", "16%"], ["Actions", "13%"]].map(([label, width]) => (
                           <th key={label} style={{ width }} className="px-1.5 py-1.5">{label}</th>
                         ))}
                       </tr>
@@ -1048,7 +1000,7 @@ const PortfolioDetailsPage = () => {
                         const isSell = order.side === "SELL";
                         const usedSecurities = new Set(orders.filter((o) => o.rowId !== order.rowId && o.side === "BUY").map((o) => String(o.securityId)));
                         const usedHoldings = new Set(orders.filter((o) => o.rowId !== order.rowId && o.side === "SELL").map((o) => String(o.holdingId)));
-                        const selectableSecurities = portfolioIsNew ? eligibleSecurities : securities;
+                        const selectableSecurities = eligibleSecurities;
                         const selectableHoldings = sellableHoldings.filter((h) => !usedHoldings.has(String(h.holdingId)) || String(h.holdingId) === String(order.holdingId));
                         const held = Number(item?.holding?.quantity || 0);
                         return (
@@ -1057,8 +1009,8 @@ const PortfolioDetailsPage = () => {
                               <select
                                 aria-label="Order side"
                                 value={order.side}
-                                disabled={portfolioIsNew || tradeSubmitting}
-                                onChange={(e) => updateOrder(order.rowId, { side: e.target.value, securityId: "", holdingId: "", allocationValue: "", quantity: "" })}
+                                disabled={tradeSubmitting}
+                                onChange={(e) => updateOrder(order.rowId, { side: e.target.value, securityId: "", holdingId: "", quantity: "" })}
                                 className={`h-7 w-full rounded border bg-white px-1.5 text-[10px] font-semibold outline-none focus:border-blue-500 ${isSell ? "border-red-200 text-red-700" : "border-slate-200 text-emerald-700"}`}
                               >
                                 <option value="BUY">Buy</option>
@@ -1067,74 +1019,100 @@ const PortfolioDetailsPage = () => {
                             </td>
                             <td className="px-1.5 py-1">
                               {isSell ? (
-                                <select
-                                  aria-label="Holding to sell"
-                                  value={order.holdingId}
-                                  disabled={tradeSubmitting}
-                                  onChange={(e) => updateOrder(order.rowId, { holdingId: e.target.value, quantity: "" })}
-                                  className="h-7 w-full min-w-0 rounded border border-slate-200 bg-white px-1.5 text-[10px] outline-none focus:border-blue-500"
-                                >
-                                  <option value="">Choose holding…</option>
-                                  {selectableHoldings.map((h) => (
-                                    <option key={h.holdingId} value={h.holdingId}>
-                                      {h.securityName} ({h.symbol || "—"}) · held {Number(h.quantity).toLocaleString("en-IN")}{isGold(h.symbol) ? " g" : ""}
-                                    </option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <select
-                                  aria-label="Security to buy"
-                                  value={order.securityId}
-                                  disabled={tradeSubmitting}
-                                  onChange={(e) => updateOrder(order.rowId, { securityId: e.target.value })}
-                                  className="h-7 w-full min-w-0 rounded border border-slate-200 bg-white px-1.5 text-[10px] outline-none focus:border-blue-500"
-                                >
-                                  <option value="">Choose security…</option>
-                                  {(portfolioIsNew ? themeAllocations : [{ assetId: "all", assetClass: "All securities" }]).map((allocation) => (
-                                    <optgroup key={allocation.assetId} label={allocation.assetId === "all" ? allocation.assetClass : formatLabel(allocation.assetClass)}>
-                                      {selectableSecurities
-                                        .filter((s) => allocation.assetId === "all" || securityMatchesAllocation(s, allocation))
-                                        .map((s) => (
-                                          <option key={s.id} value={s.id}>{s.name} ({s.symbol || s.isin || "—"})</option>
+                                <div className="relative">
+                                  <input
+                                    aria-label="Holding to sell"
+                                    value={
+                                      searchTexts[order.rowId] ?? selectableHoldings.find((h) => String(h.holdingId) === String(order.holdingId))?.securityName ?? ""
+                                    }
+                                    disabled={tradeSubmitting}
+                                    onChange={(e) => setSearchTexts((p) => ({ ...p, [order.rowId]: e.target.value }))}
+                                    onFocus={() => setSearchTexts((p) => ({ ...p }))}
+                                    placeholder="Type holding name…"
+                                    className="h-7 w-full min-w-0 rounded border border-slate-200 bg-white px-1.5 text-[10px] outline-none focus:border-blue-500"
+                                  />
+                                  {searchTexts[order.rowId] && (
+                                    <ul className="absolute left-0 right-0 z-20 max-h-40 overflow-auto rounded border bg-white text-[10px]">
+                                      {selectableHoldings
+                                        .filter((h) => {
+                                          const q = (searchTexts[order.rowId] || "").toLowerCase();
+                                          return (
+                                            h.securityName.toLowerCase().includes(q) || (h.symbol || "").toLowerCase().includes(q)
+                                          );
+                                        })
+                                        .map((h) => (
+                                          <li
+                                            key={h.holdingId}
+                                            onMouseDown={(ev) => {
+                                              ev.preventDefault();
+                                              updateOrder(order.rowId, { holdingId: h.holdingId, quantity: "" });
+                                              setSearchTexts((p) => { const np = { ...p }; delete np[order.rowId]; return np; });
+                                            }}
+                                            className="cursor-pointer px-2 py-1 hover:bg-slate-50"
+                                          >
+                                            {h.securityName} ({h.symbol || "—"}) · held {Number(h.quantity).toLocaleString("en-IN")}{isGold(h.symbol) ? " g" : ""}
+                                          </li>
                                         ))}
-                                    </optgroup>
-                                  ))}
-                                </select>
+                                    </ul>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="relative">
+                                  <input
+                                    aria-label="Security to buy"
+                                    value={
+                                      searchTexts[order.rowId] ?? selectableSecurities.find((s) => String(s.id) === String(order.securityId))?.name ?? ""
+                                    }
+                                    disabled={tradeSubmitting}
+                                    onChange={(e) => setSearchTexts((p) => ({ ...p, [order.rowId]: e.target.value }))}
+                                    placeholder="Type security name…"
+                                    className="h-7 w-full min-w-0 rounded border border-slate-200 bg-white px-1.5 text-[10px] outline-none focus:border-blue-500"
+                                  />
+                                  {searchTexts[order.rowId] && (
+                                    <ul className="absolute left-0 right-0 z-20 max-h-56 overflow-auto rounded border bg-white text-[10px]">
+                                      {selectableSecurities
+                                        .filter((s) => {
+                                          const q = (searchTexts[order.rowId] || "").toLowerCase();
+                                          return (
+                                            s.name.toLowerCase().includes(q) || (s.symbol || "").toLowerCase().includes(q) || (s.isin || "").toLowerCase().includes(q)
+                                          );
+                                        })
+                                        .slice(0, 100)
+                                        .map((s) => (
+                                          <li
+                                            key={s.id}
+                                            onMouseDown={(ev) => {
+                                              ev.preventDefault();
+                                              updateOrder(order.rowId, { securityId: s.id });
+                                              setSearchTexts((p) => { const np = { ...p }; delete np[order.rowId]; return np; });
+                                            }}
+                                            className="cursor-pointer px-2 py-1 hover:bg-slate-50"
+                                          >
+                                            {s.name} ({s.symbol || s.isin || "—"})
+                                          </li>
+                                        ))}
+                                    </ul>
+                                  )}
+                                </div>
                               )}
                             </td>
                             <td className="px-1 py-1">
-                              {isSell ? (
-                                <input
-                                  aria-label="Quantity to sell"
-                                  type="number"
-                                  min="1"
-                                  max={held || undefined}
-                                  step="1"
-                                  value={order.quantity}
-                                  disabled={tradeSubmitting || !order.holdingId}
-                                  onChange={(e) => updateOrder(order.rowId, { quantity: e.target.value })}
-                                  placeholder={held ? `≤ ${held}` : "Qty"}
-                                  className="h-7 w-full rounded border border-red-200 bg-white px-1.5 text-right font-mono text-[10px] outline-none focus:border-red-500 disabled:bg-slate-50"
-                                />
-                              ) : (
-                                <input
-                                  aria-label={portfolioUsesWeights ? "Allocation percentage" : "Buy amount"}
-                                  type="number"
-                                  min="0.01"
-                                  max={portfolioUsesWeights ? 100 : undefined}
-                                  step="any"
-                                  value={order.allocationValue}
-                                  disabled={tradeSubmitting}
-                                  onChange={(e) => updateOrder(order.rowId, { allocationValue: e.target.value })}
-                                  placeholder={portfolioUsesWeights ? "%" : "₹"}
-                                  className="h-7 w-full rounded border border-slate-200 bg-white px-1.5 text-right font-mono text-[10px] outline-none focus:border-blue-500"
-                                />
-                              )}
+                              <input
+                                aria-label={isSell ? "Quantity to sell" : "Quantity to buy"}
+                                type="number"
+                                min="1"
+                                max={isSell ? held || undefined : undefined}
+                                step="1"
+                                value={order.quantity}
+                                disabled={tradeSubmitting || (isSell && !order.holdingId)}
+                                onChange={(e) => updateOrder(order.rowId, { quantity: e.target.value })}
+                                placeholder={isSell && held ? `≤ ${held}` : "Qty"}
+                                className={`h-7 w-full rounded border bg-white px-1.5 text-right font-mono text-[10px] outline-none disabled:bg-slate-50 ${isSell ? "border-red-200 focus:border-red-500" : "border-slate-200 focus:border-blue-500"}`}
+                              />
                             </td>
-                            <td className="px-1.5 py-1 text-right font-mono text-[10px] font-semibold text-slate-800">
-                              {item?.valid ? `${item.quantity.toLocaleString("en-IN")}${isGold(item.symbol) ? " g" : ""}` : "—"}
+                            <td className="px-1.5 py-1 text-right font-mono text-[10px]">
+                              {item?.price ? formatCompactMoney(item.price) : "—"}
                             </td>
-                            <td className="px-1.5 py-1 text-right font-mono text-[10px]">{item?.price ? formatCompactMoney(item.price) : "—"}</td>
                             <td className={`px-1.5 py-1 text-right font-mono text-[10px] font-semibold ${isSell ? "text-emerald-700" : "text-slate-800"}`}>
                               {item?.valid ? `${isSell ? "+" : "−"}${formatCompactMoney(item.amount)}` : "—"}
                             </td>
@@ -1173,16 +1151,12 @@ const PortfolioDetailsPage = () => {
                     <span className="font-medium text-slate-600">Buys {formatCompactMoney(buyTotal)}</span>
                     <span className="ml-2 font-medium text-slate-600">Sells {formatCompactMoney(sellTotal)}</span>
                     <span className={`ml-2 ${basketWithinCash ? "text-slate-500" : "font-semibold text-red-600"}`}>Cash after: {formatCompactMoney(cashAfterBasket)}</span>
-                    {portfolioIsNew && (
-                      <span className={`ml-2 ${basketSatisfiesTheme ? "text-emerald-700" : "text-amber-700"}`}>
-                        {basketSatisfiesTheme ? "Theme allocation satisfied" : "Theme allocation needs adjustment"}
-                      </span>
-                    )}
+                    {portfolioIsNew && <span className="ml-2 text-amber-700">Theme validation runs at activation</span>}
                   </div>
                   <div className="flex items-center gap-2">
                     <button type="button" onClick={clearBasket} disabled={tradeSubmitting} className="rounded-md border border-slate-200 px-3 py-2 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">Clear</button>
                     <button type="submit" disabled={!basketCanSubmit} className="rounded-md bg-blue-800 px-3 py-2 text-[11px] font-semibold text-white hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-40">
-                      {tradeSubmitting ? "Executing…" : portfolioIsNew ? "Validate & Activate" : "Execute orders"}
+                      {tradeSubmitting ? "Adding…" : portfolioIsNew ? "Add Holdings" : "Execute orders"}
                     </button>
                   </div>
                 </div>
@@ -1326,8 +1300,16 @@ const PortfolioDetailsPage = () => {
 
       {/* TOAST */}
       {notice && (
-        <div role="status" className="fixed bottom-5 right-5 z-40 rounded-lg bg-emerald-700 px-4 py-3 text-sm font-medium text-white shadow-lg">
-          {notice}
+        <div role="status" className="fixed bottom-5 right-5 z-40 flex items-center gap-3 rounded-lg bg-emerald-700 px-4 py-3 pr-2 text-sm font-medium text-white shadow-lg">
+          <span>{notice}</span>
+          <button
+            type="button"
+            aria-label="Close notification"
+            onClick={() => setNotice("")}
+            className="rounded p-1 transition hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-white/80"
+          >
+            <X size={15} />
+          </button>
         </div>
       )}
     </div>
@@ -1374,6 +1356,26 @@ const holdingPrice = (holding) => {
   if (holding.currentPrice != null) return Number(holding.currentPrice);
   const qty = Number(holding.quantity || 0);
   return qty ? holdingValue(holding) / qty : 0;
+};
+
+const holdingTradePrice = (holding) =>
+  String(holding?.securityType || "").toUpperCase() === "BOND"
+    ? Number(holding?.bondReturnPrice?.tradePrice || holding?.averageCost || 0)
+    : holdingPrice(holding);
+
+const formatTransactionDate = (value) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? String(value)
+    : date.toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
 };
 
 const securityMatchesAllocation = (security, allocation) => {
@@ -1462,7 +1464,6 @@ const newOrder = () => ({
   side: "BUY",
   securityId: "",
   holdingId: "",
-  allocationValue: "",
   quantity: "",
 });
 
