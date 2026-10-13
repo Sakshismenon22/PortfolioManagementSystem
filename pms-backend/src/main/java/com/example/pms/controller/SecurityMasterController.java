@@ -30,6 +30,13 @@ public class SecurityMasterController {
         return new ResponseEntity<>(new Response<SecuritiesInfoDTO>(HttpStatus.OK.value(), true, securityMasterService.getAllSecuritiesInfo(), "All securities info retrieved.", LocalDateTime.now()),HttpStatus.OK);
     }
 
+    @GetMapping("/search")
+    public ResponseEntity<?> searchSecurities(@RequestParam String query) {
+        return ResponseEntity.ok(new Response<>(HttpStatus.OK.value(), true,
+                securityMasterService.searchSecurities(query),
+                "Securities matching the search query retrieved.", LocalDateTime.now()));
+    }
+
     @GetMapping("/bond-return-price/{securityId}")
     public ResponseEntity<Response<BondReturnPriceDTO>> getBondReturnPrice(
             @PathVariable Long securityId,

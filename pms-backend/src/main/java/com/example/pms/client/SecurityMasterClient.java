@@ -70,5 +70,25 @@ public class SecurityMasterClient {
         }
     }
 
+    public Optional<SecuritiesInfoDTO> searchSecurityInfo(String query) {
+        try {
+            Response<SecuritiesInfoDTO> envelope = securityMasterRestClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/api/security/search-security-info")
+                            .queryParam("query", query)
+                            .build())
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<Response<SecuritiesInfoDTO>>() {});
+            if (envelope == null || !Boolean.TRUE.equals(envelope.getSuccess())) {
+                log.warn("Security Master returned no search results for query={}", query);
+                return Optional.empty();
+            }
+            return Optional.ofNullable(envelope.getData());
+        } catch (Exception e) {
+            log.warn("Security search failed for query={}: {}", query, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
 
 }

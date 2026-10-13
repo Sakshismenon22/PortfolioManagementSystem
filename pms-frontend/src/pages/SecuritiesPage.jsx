@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { RefreshCw, ShieldCheck } from "lucide-react";
+import { RefreshCw, Search, ShieldCheck, X } from "lucide-react";
 import { AgGridReact } from "ag-grid-react";
 import {
   AllCommunityModule,
@@ -8,7 +8,7 @@ import {
 } from "ag-grid-community";
 import SideBarComponent from "../components/SideBarComponent";
 import TopBarComponent from "../components/TopBarComponent";
-import { getAllSecuritiesInfo } from "../services/securityService";
+import { getAllSecuritiesInfo, searchSecurities } from "../services/securityService";
 
 // Register once at module scope (AG Grid v33+)
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -52,20 +52,27 @@ export default function SecuritiesPage() {
   const [error, setError] = useState("");
   const [visibleCount, setVisibleCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
   const defaultPageSize = 50;
+  const requestVersion = useRef(0);
 
-  const loadSecurities = useCallback(async () => {
+  const loadSecurities = useCallback(async (query = "") => {
+    const version = ++requestVersion.current;
     setLoading(true);
     setError("");
     try {
-      const response = await getAllSecuritiesInfo();
+      const response = query.trim()
+        ? await searchSecurities(query.trim())
+        : await getAllSecuritiesInfo();
       const payload = response?.data?.data ?? response?.data ?? response;
       const list = payload?.securities ?? payload;
       if (!Array.isArray(list)) {
         throw new Error(payload?.message || "The securities response was not a list.");
       }
+      if (version !== requestVersion.current) return;
       setSecurities(list);
     } catch (loadError) {
+      if (version !== requestVersion.current) return;
       setError(
         loadError?.response?.data?.message ||
           loadError?.message ||
@@ -73,13 +80,15 @@ export default function SecuritiesPage() {
       );
       setSecurities([]);
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadSecurities();
-  }, [loadSecurities]);
+    const query = searchQuery.trim();
+    const timer = window.setTimeout(() => loadSecurities(query), query ? 300 : 0);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery, loadSecurities]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -257,12 +266,30 @@ export default function SecuritiesPage() {
 
           {/* Card shell: flex column, min-h-0 lets the grid shrink correctly */}
           <section className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            {/* Toolbar — Refresh only */}
+            {/* Common search plus paging and refresh controls */}
             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                Instrument reference data
-              </span>
-              <div className="flex items-center gap-2">
+              <div className="relative min-w-0 max-w-[520px] flex-1">
+                <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="search"
+                  aria-label="Search securities by name, symbol, ISIN, sector, or equity category"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search name, symbol, ISIN, sector, equity category"
+                  className="h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-9 text-xs text-slate-800 outline-none placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    aria-label="Clear securities search"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -304,7 +331,7 @@ export default function SecuritiesPage() {
                   </button>
                 </div>
                 <button
-                  onClick={loadSecurities}
+                  onClick={() => loadSecurities(searchQuery)}
                   disabled={loading}
                   className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 px-3 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
                 >
@@ -358,7 +385,7 @@ export default function SecuritiesPage() {
                   : `Showing ${visibleCount.toLocaleString("en-IN")} of ${securities.length.toLocaleString("en-IN")} instruments`}
               </span>
               <span className="text-slate-400">
-                Click a header to sort · use the row below headers to search
+                Search covers name, symbol, ISIN, sector and equity category · use headers to sort
               </span>
             </div>
           </section>

@@ -581,7 +581,9 @@ public class PortfolioServiceImpl implements PortfolioService{
                         portfolio.getBenchmark(),
                         portfolio.getPortfolioStatus(),
                         "View",
-                        portfolio.getAmount()
+                        portfolio.getAmount(),
+                        totalInvestedAmount,
+                        returnAmount
                 );
                 portfolioDetailsDTOList.add(portfolioDetailsDTO);
             }
@@ -595,49 +597,31 @@ public class PortfolioServiceImpl implements PortfolioService{
         List<PortfolioHolding> portfolioHoldings = portfolioHoldingRepository.findAllByPortfolio(portfolio);
         Double currentAum = 0.0d;
         for(PortfolioHolding portfolioHolding:portfolioHoldings){
-            SecurityPriceDTO  securityPriceDTO = securityMasterClient.findBySecurityId(portfolioHolding.getSecurityMaster().getId()).get();
-            SecurityType type = securityPriceDTO.getSecurityMaster().getSecurityType();
-            switch (type){
-                case ETF,EQUITY->{
-                    Double currentPrice = securityPriceDTO.getStockData().getClosePrice().doubleValue();
-                    Double holdingWorth = currentPrice * portfolioHolding.getQuantityHeld();
-                    currentAum += holdingWorth;
-                }
-
-                case MUTUAL_FUND -> {
-                    Double currentPrice = securityPriceDTO.getMutualFundNav().getNav().doubleValue();
-                    Double holdingWorth = currentPrice * portfolioHolding.getQuantityHeld();
-                    currentAum += holdingWorth;
-                }
-
-                case BOND -> {
-                    Double currentPrice = BondPriceResolver.unitPrice(securityPriceDTO.getBond());
-                    Double holdingWorth = currentPrice * portfolioHolding.getQuantityHeld();
-                    currentAum += holdingWorth;
-                }
-
-                case COMMODITY -> {
-                    Double currentPrice = CommodityPriceUnits.perPortfolioUnit(
-                            securityPriceDTO.getCommoditySpotData(),
-                            securityPriceDTO.getSecurityMaster().getSymbol());
-                    Double holdingWorth = currentPrice * portfolioHolding.getQuantityHeld();
-                    currentAum += holdingWorth;
-                }
-            }
-
+            if (portfolioHolding.getHoldingStatus() != HoldingStatus.BROUGHT
+                    || portfolioHolding.getQuantityHeld() == null
+                    || portfolioHolding.getQuantityHeld() <= 0) continue;
+            SecurityPriceDTO quote = securityMasterClient
+                    .findBySecurityId(portfolioHolding.getSecurityMaster().getId())
+                    .orElse(null);
+            double fallbackValue = portfolioHolding.getTotalCost() == null
+                    ? 0.0 : portfolioHolding.getTotalCost();
+            currentAum += getHoldingCurrentValue(portfolioHolding, fallbackValue, quote);
         }
-        return currentAum+portfolio.getAmount();
+        return currentAum + (portfolio.getAmount() == null ? 0.0 : portfolio.getAmount());
     }
 
     public Double getTotalInvestedAmount(Portfolio portfolio) {
         List<PortfolioHolding> portfolioHoldings = portfolioHoldingRepository.findAllByPortfolio(portfolio);
         Double totalInvestedAmount = 0.0d;
         for (PortfolioHolding portfolioHolding : portfolioHoldings) {
-            if(portfolioHolding.getHoldingStatus().equals(HoldingStatus.BROUGHT)){
-                totalInvestedAmount += portfolioHolding.getTotalCost();
+            if(portfolioHolding.getHoldingStatus() == HoldingStatus.BROUGHT
+                    && portfolioHolding.getQuantityHeld() != null
+                    && portfolioHolding.getQuantityHeld() > 0){
+                totalInvestedAmount += portfolioHolding.getTotalCost() == null
+                        ? 0.0 : portfolioHolding.getTotalCost();
             }
         }
-        return totalInvestedAmount + portfolio.getAmount();
+        return totalInvestedAmount + (portfolio.getAmount() == null ? 0.0 : portfolio.getAmount());
     }
 
 
@@ -872,7 +856,15 @@ public class PortfolioServiceImpl implements PortfolioService{
                         ? price.getStockData().getClosePrice().doubleValue() : null;
                 case MUTUAL_FUND -> price.getMutualFundNav() != null && price.getMutualFundNav().getNav() != null
                         ? price.getMutualFundNav().getNav().doubleValue() : null;
-                case BOND -> price.getBond() != null ? BondPriceResolver.unitPrice(price.getBond()) : null;
+                case BOND -> {
+                    try {
+                        BondReturnPriceDTO bondPrice = securityMasterService.getBondReturnPrice(
+                                holding.getSecurityMaster().getId(), holding.getFirstBuyDate());
+                        yield bondPrice.getCurrentReturnPrice();
+                    } catch (RuntimeException exception) {
+                        yield price.getBond() != null ? BondPriceResolver.unitPrice(price.getBond()) : null;
+                    }
+                }
                 case COMMODITY -> CommodityPriceUnits.perPortfolioUnit(
                         price.getCommoditySpotData(), price.getSecurityMaster().getSymbol());
             };

@@ -187,7 +187,11 @@ const PortfolioDetailsPage = () => {
     validation?.totalInvestedAmount ??
       holdings.reduce((sum, h) => sum + Number(h.totalCost || 0), 0)
   );
-  const invested = holdingsInvested + cashBalance;
+  const realizedPnl = sumRealizedPnl(transactions);
+  // Holdings cost + cash rises by realized gains (and falls by realized
+  // losses) after a sale. Remove that realized P/L to retain the original
+  // contributed-capital basis for total portfolio performance.
+  const invested = holdingsInvested + cashBalance - realizedPnl;
   const currentValue = holdings.reduce((sum, holding) => sum + holdingValue(holding), 0) + cashBalance;
   const pnl = currentValue - invested;
   const returnPercentage = invested ? (pnl / invested) * 100 : 0;
@@ -418,7 +422,12 @@ const PortfolioDetailsPage = () => {
   });
   const sellableHoldings = holdings.filter((h) => h.holdingId != null && Number(h.quantity) > 0);
 
-  const basketItems = orders.map((order) => {
+  // The grid keeps a blank trailing row ready for another order. Exclude that
+  // untouched row from validation and totals so it cannot disable submission.
+  const enteredOrders = orders.filter((order) =>
+    Boolean(order.securityId || order.holdingId || String(order.quantity).trim())
+  );
+  const basketItems = enteredOrders.map((order) => {
     if (order.side === "SELL") {
       const holding = sellableHoldings.find((h) => String(h.holdingId) === String(order.holdingId));
       const quantity = Number(order.quantity);
@@ -459,7 +468,7 @@ const PortfolioDetailsPage = () => {
   const buyTotal = basketItems.reduce((sum, i) => sum + (i.side === "BUY" ? i.amount : 0), 0);
   const sellTotal = basketItems.reduce((sum, i) => sum + (i.side === "SELL" ? i.amount : 0), 0);
   const basketValidCount = basketItems.filter((i) => i.valid).length;
-  const basketRowsValid = basketItems.length > 0 && basketItems.every((i) => i.valid);
+  const basketRowsValid = enteredOrders.length > 0 && basketItems.every((i) => i.valid);
   const cashAfterBasket = cashBalance + sellTotal - buyTotal;
   const basketWithinCash = cashAfterBasket >= -0.01;
 
@@ -846,7 +855,7 @@ const PortfolioDetailsPage = () => {
           {/* KPI STRIP */}
           <section className="mt-2.5 grid shrink-0 grid-cols-2 gap-2 lg:grid-cols-5">
             <MetricCard title="Portfolio value" value={formatMoney(currentValue)} caption="Positions + cash" icon={WalletCards} />
-            <MetricCard title="Invested" value={formatMoney(invested)} caption="Cost basis incl. cash" icon={LineChart} />
+            <MetricCard title="Invested" value={formatMoney(invested)} caption="Net contributed capital" icon={LineChart} />
             <MetricCard title="Total return" value={`${pnl >= 0 ? "+" : "−"}${Math.abs(returnPercentage).toFixed(2)}%`} caption={`${pnl >= 0 ? "+" : "−"}${formatMoney(Math.abs(pnl))} P&L`} icon={TrendingUp} positive={pnl >= 0} />
             <MetricCard title="Available cash" value={formatMoney(cashBalance)} caption="Deployable balance" icon={Wallet} />
             <MetricCard title="Benchmark" value={formatLabel(portfolio.benchmark || "—")} caption={`Rebalance: ${formatLabel(portfolio.reBalancingFrequency || "—")}`} icon={LineChart} />
@@ -1381,6 +1390,18 @@ const holdingValue = (holding) =>
       holding?.totalCost ??
       Number(holding?.averageCost || 0) * Number(holding?.quantity || 0)
   );
+
+const sumRealizedPnl = (transactions) =>
+  Array.isArray(transactions)
+    ? transactions.reduce(
+        (total, transaction) =>
+          total +
+          (String(transaction?.side || "").toUpperCase() === "SELL"
+            ? Number(transaction?.realizedPnl || 0)
+            : 0),
+        0
+      )
+    : 0;
 
 const holdingPrice = (holding) => {
   if (!holding) return 0;

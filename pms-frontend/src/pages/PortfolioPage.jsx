@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
+  ChevronDown,
   ChevronRight,
   ChevronsUpDown,
   Download,
@@ -25,6 +26,7 @@ import {
 import { useNavigate } from "react-router-dom";
 
 import SideBarComponent from "../components/SideBarComponent";
+import DashboardNotificationBell from "../components/DashboardNotificationBell";
 
 import {
   buyPortfolioSecurities,
@@ -165,6 +167,12 @@ const PortfolioPage = () => {
                   portfolio.currentValue ??
                   0
               ),
+              availableCash: Number(
+                portfolio.balance ??
+                  portfolio.availableBalance ??
+                  portfolio.amount ??
+                  0
+              ),
 
               returnValue: parseReturn(
                 portfolio.return1Y ??
@@ -182,6 +190,28 @@ const PortfolioPage = () => {
             };
           }
         );
+
+        const transactionResults = await Promise.allSettled(
+          normalized.map((portfolio) =>
+            getPortfolioTransactions(portfolio.id)
+          )
+        );
+        normalized.forEach((portfolio, index) => {
+          const result = transactionResults[index];
+          const realizedPnl = result?.status === "fulfilled"
+            ? sumRealizedPnl(result.value)
+            : 0;
+          const investedBeforeRealized = Number(
+            portfolio.investedAmount ??
+              portfolio.aum / (1 + portfolio.returnValue / 100)
+          );
+          portfolio.realizedPnl = realizedPnl;
+          portfolio.investedValue = investedBeforeRealized - realizedPnl;
+          portfolio.pnlAmount = portfolio.aum - portfolio.investedValue;
+          portfolio.returnValue = portfolio.investedValue > 0
+            ? (portfolio.pnlAmount / portfolio.investedValue) * 100
+            : 0;
+        });
 
         setPortfolios(normalized);
         setDriftLoading(true);
@@ -662,6 +692,7 @@ const PortfolioPage = () => {
                 <Plus size={15} />
                 Create Portfolio
               </button>
+              <DashboardNotificationBell />
             </div>
           </section>
 
@@ -735,9 +766,8 @@ const PortfolioPage = () => {
             ) : (
               <div className="min-h-0 flex-1 overflow-auto">
                 <PortfolioMasterDetail
-                  portfolios={
-                    displayedPortfolios
-                  }
+                  portfolios={portfolios}
+                  visiblePortfolioIds={displayedPortfolios.map((portfolio) => String(portfolio.id))}
                   driftPortfolioIds={
                     driftPortfolioIds
                   }
@@ -791,6 +821,7 @@ const PortfolioPage = () => {
 
 function PortfolioMasterDetail({
   portfolios,
+  visiblePortfolioIds,
   driftPortfolioIds,
   onDriftChange,
   openPortfolio,
@@ -829,6 +860,11 @@ function PortfolioMasterDetail({
     setPortfolioSnapshots(portfolios);
   }, [portfolios]);
 
+  const visiblePortfolioIdSet = useMemo(
+    () => new Set(visiblePortfolioIds),
+    [visiblePortfolioIds]
+  );
+
   async function loadPortfolioData(
     portfolio,
     options = {}
@@ -862,10 +898,11 @@ function PortfolioMasterDetail({
 
     try {
       const [
-        basicInfoResponse,
-        holdings,
-        validationResponse,
-      ] = await Promise.all([
+        basicInfoResult,
+        holdingsResult,
+        validationResult,
+        transactionsResult,
+      ] = await Promise.allSettled([
         getPortfolioBasicInfo(
           portfolio.id
         ),
@@ -874,25 +911,39 @@ function PortfolioMasterDetail({
         ),
         validatePortfolioAllocation(
           portfolio.id
-        ).catch(() => null),
+        ),
+        getPortfolioTransactions(portfolio.id),
       ]);
 
-      if (!Array.isArray(holdings)) {
+      if (holdingsResult.status !== "fulfilled" || !Array.isArray(holdingsResult.value)) {
         throw new Error(
-          "The holdings API did not return an array."
+          holdingsResult.status === "rejected"
+            ? holdingsResult.reason?.response?.data?.message ||
+                holdingsResult.reason?.message ||
+                "Portfolio holdings could not be refreshed."
+            : "The holdings API did not return an array."
         );
       }
 
+      const holdings = holdingsResult.value;
+
       const basicInfo =
-        basicInfoResponse?.data?.data ??
-        basicInfoResponse?.data ??
-        basicInfoResponse;
+        basicInfoResult.status === "fulfilled"
+          ? basicInfoResult.value?.data?.data ??
+            basicInfoResult.value?.data ??
+            basicInfoResult.value
+          : detailsById[portfolioId] ?? portfolio;
 
       const validationPayload =
-        validationResponse?.data?.data ??
-        validationResponse?.data ??
-        validationResponse ??
-        {};
+        validationResult.status === "fulfilled"
+          ? validationResult.value?.data?.data ??
+            validationResult.value?.data ??
+            validationResult.value ??
+            {}
+          : {};
+      const realizedPnl = transactionsResult.status === "fulfilled"
+        ? sumRealizedPnl(transactionsResult.value)
+        : Number(portfolio.realizedPnl || 0);
 
       const nextBasicInfo = {
         ...(basicInfo || {}),
@@ -999,6 +1050,11 @@ function PortfolioMasterDetail({
             reportedReturn !== undefined
               ? parseReturn(reportedReturn)
               : calculatedReturn;
+          // Remaining holdings cost + cash includes realized trade P/L.
+          // Remove it to recover the portfolio's net contributed capital.
+          const investedValue = holdingsCost + updatedBalance - realizedPnl;
+          const currentValue = holdingsValue + updatedBalance;
+          const pnlAmount = currentValue - investedValue;
 
           return {
             ...item,
@@ -1006,9 +1062,16 @@ function PortfolioMasterDetail({
             amount: updatedBalance,
             cashBalance: updatedBalance,
             availableBalance: updatedBalance,
+            availableCash: updatedBalance,
             aum: updatedAum,
+            investedValue,
+            currentValue,
+            pnlAmount,
+            realizedPnl,
             returnValue:
-              updatedReturnValue,
+              investedValue > 0
+                ? (pnlAmount / investedValue) * 100
+                : updatedReturnValue,
           };
         })
       );
@@ -1068,6 +1131,11 @@ function PortfolioMasterDetail({
   async function reloadPortfolioData(
     portfolio
   ) {
+    // The expanded row refresh returns the updated holdings and cash balance.
+    // loadPortfolioData also recalculates the matching master snapshot from
+    // those fresh values. Do not replace it with a second all-portfolios read:
+    // that endpoint can still return a cached snapshot and overwrite the
+    // just-recalculated master row.
     await loadPortfolioData(portfolio, {
       force: true,
     });
@@ -1259,6 +1327,7 @@ function PortfolioMasterDetail({
         amount: nextAvailableBalance,
         cashBalance: nextAvailableBalance,
         availableBalance: nextAvailableBalance,
+        availableCash: nextAvailableBalance,
         aum: nextAum,
       },
     }));
@@ -1274,6 +1343,7 @@ function PortfolioMasterDetail({
           amount: nextAvailableBalance,
           cashBalance: nextAvailableBalance,
           availableBalance: nextAvailableBalance,
+          availableCash: nextAvailableBalance,
           aum: nextAum,
         };
       })
@@ -1303,8 +1373,8 @@ function PortfolioMasterDetail({
   }
 
   return (
-    <div className="min-w-[1180px]">
-      <div className="sticky top-0 z-20 grid grid-cols-[42px_2fr_1.25fr_1.05fr_1fr_0.8fr_1fr_1.45fr] border-b border-slate-200 bg-[#eff4fc] text-[10px] font-bold uppercase tracking-wide text-slate-500">
+    <div className="min-w-[1600px]">
+      <div className="sticky top-0 z-20 grid grid-cols-[42px_1.5fr_0.95fr_0.75fr_1fr_1.05fr_1.1fr_0.75fr_0.75fr_minmax(100px,0.65fr)_112px] border-b border-slate-200 bg-[#eff4fc] text-[10px] font-bold uppercase tracking-wide text-slate-500">
         <div />
 
         <div className="px-3 py-2">
@@ -1320,11 +1390,23 @@ function PortfolioMasterDetail({
         </div>
 
         <div className="px-3 py-2 text-right">
-          AUM
+          Invested
         </div>
 
         <div className="px-3 py-2 text-right">
-          Return
+          Available cash
+        </div>
+
+        <div className="px-3 py-2 text-right">
+          Current value / AUM
+        </div>
+
+        <div className="px-3 py-2 text-right">
+          P/L
+        </div>
+
+        <div className="px-3 py-2 text-right">
+          P/L %
         </div>
 
         <div className="px-3 py-2">
@@ -1332,11 +1414,13 @@ function PortfolioMasterDetail({
         </div>
 
         <div className="px-3 py-2 text-right">
-          Status / action
+          Action
         </div>
       </div>
 
-      {portfolioSnapshots.map((portfolio) => {
+      {portfolioSnapshots
+        .filter((portfolio) => visiblePortfolioIdSet.has(String(portfolio.id)))
+        .map((portfolio) => {
         const portfolioId = String(
           portfolio.id
         );
@@ -1367,7 +1451,7 @@ function PortfolioMasterDetail({
         return (
           <React.Fragment key={portfolioId}>
             <div
-              className={`grid grid-cols-[42px_2fr_1.25fr_1.05fr_1fr_0.8fr_1fr_1.45fr] items-center border-b border-slate-100 text-sm ${
+              className={`grid grid-cols-[42px_1.5fr_0.95fr_0.75fr_1fr_1.05fr_1.1fr_0.75fr_0.75fr_minmax(100px,0.65fr)_112px] items-center border-b border-slate-100 text-sm ${
                 expanded
                   ? "bg-blue-50/50"
                   : "bg-white hover:bg-blue-50/30"
@@ -1455,26 +1539,39 @@ function PortfolioMasterDetail({
                 </span>
               </div>
 
-              <div className="px-3 text-right font-mono text-[12px] font-semibold text-blue-900">
-                {formatMoney(
-                  portfolio.aum
-                )}
+              <div className="px-3 text-right font-mono text-[11px] font-semibold text-blue-900" title={formatCurrencyAmount(portfolio.investedValue)}>
+                {formatCurrencyAmount(portfolio.investedValue)}
+              </div>
+
+              <div className="px-3 text-right font-mono text-[11px] font-semibold text-slate-700" title={formatCurrencyAmount(portfolio.availableCash)}>
+                {formatCurrencyAmount(portfolio.availableCash)}
+              </div>
+
+              <div className="px-3 text-right font-mono text-[11px] font-semibold text-blue-900" title={formatCurrencyAmount(portfolio.aum)}>
+                {formatCurrencyAmount(portfolio.aum)}
               </div>
 
               <div
-                className={`px-3 text-right font-mono text-[12px] font-semibold ${
+                className={`px-3 text-right font-mono text-[11px] font-semibold ${
+                  portfolio.pnlAmount >= 0
+                    ? "text-emerald-700"
+                    : "text-red-600"
+                }`}
+              >
+                {portfolio.pnlAmount >= 0
+                  ? "+"
+                  : "−"}
+                {formatCurrencyAmount(Math.abs(portfolio.pnlAmount))}
+              </div>
+
+              <div
+                className={`px-3 text-right font-mono text-[11px] font-semibold ${
                   portfolio.returnValue >= 0
                     ? "text-emerald-700"
                     : "text-red-600"
                 }`}
               >
-                {portfolio.returnValue >= 0
-                  ? "+"
-                  : ""}
-                {portfolio.returnValue.toFixed(
-                  2
-                )}
-                %
+                {portfolio.returnValue >= 0 ? "+" : ""}{portfolio.returnValue.toFixed(2)}%
               </div>
 
               <div
@@ -1484,23 +1581,7 @@ function PortfolioMasterDetail({
                 {portfolio.benchmark}
               </div>
 
-              <div className="flex items-center justify-end gap-2 px-3">
-                <span
-                  className={`whitespace-nowrap text-[9px] font-bold uppercase tracking-wide ${
-                    needsRebalance
-                      ? "text-red-600"
-                      : statusTone(
-                          portfolio.status
-                        )
-                  }`}
-                >
-                  {needsRebalance
-                    ? "Rebalance required"
-                    : formatStatus(
-                        portfolio.status
-                      )}
-                </span>
-
+              <div className="flex items-center justify-end px-3">
                 {needsRebalance &&
                 portfolio.status ===
                   "ACTIVE" ? (
@@ -1591,7 +1672,7 @@ function PortfolioMasterDetail({
             )}
           </React.Fragment>
         );
-      })}
+        })}
     </div>
   );
 }
@@ -1622,6 +1703,11 @@ function PortfolioChildPanel({
     useState(false);
   const [transactionsError, setTransactionsError] =
     useState("");
+  const [tradeDataVersion, setTradeDataVersion] = useState(0);
+  const [expandedHoldingKey, setExpandedHoldingKey] = useState(null);
+  const [securityTransactions, setSecurityTransactions] = useState([]);
+  const [securityTransactionsLoading, setSecurityTransactionsLoading] = useState(false);
+  const [securityTransactionsError, setSecurityTransactionsError] = useState("");
 
   useEffect(() => {
     if (activeTab !== "transactions") return undefined;
@@ -1646,7 +1732,56 @@ function PortfolioChildPanel({
     return () => {
       active = false;
     };
-  }, [activeTab, portfolio.id]);
+  }, [activeTab, portfolio.id, tradeDataVersion]);
+
+  const expandedHolding = holdings.find((holding) =>
+    getHoldingRowKey(holding) === expandedHoldingKey
+  ) || null;
+
+  useEffect(() => {
+    if (!expandedHoldingKey || !expandedHolding) {
+      setSecurityTransactions([]);
+      setSecurityTransactionsError("");
+      setSecurityTransactionsLoading(false);
+      return undefined;
+    }
+
+    let active = true;
+    setSecurityTransactionsLoading(true);
+    setSecurityTransactionsError("");
+    getPortfolioTransactions(portfolio.id)
+      .then((rows) => {
+        if (!active) return;
+        const transactionsForHolding = (Array.isArray(rows) ? rows : [])
+          .filter((transaction) => transactionMatchesHolding(transaction, expandedHolding))
+          .sort((a, b) => new Date(b.executedAt || 0) - new Date(a.executedAt || 0));
+        setSecurityTransactions(transactionsForHolding);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setSecurityTransactionsError(
+          error?.response?.data?.message ||
+            error?.message ||
+            "Security transactions could not be loaded."
+        );
+      })
+      .finally(() => {
+        if (active) setSecurityTransactionsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [expandedHoldingKey, expandedHolding, portfolio.id, tradeDataVersion]);
+
+  async function refreshAfterTrade() {
+    try {
+      await onHoldingChanged();
+      setTradeDataVersion((version) => version + 1);
+    } catch {
+      // The expanded row shows its retry action when the refresh fails.
+    }
+  }
 
   const totalCurrentValue = useMemo(
     () =>
@@ -1661,32 +1796,10 @@ function PortfolioChildPanel({
     [holdings]
   );
 
-  const totalCost = useMemo(
-    () =>
-      holdings.reduce(
-        (total, holding) =>
-          total +
-          Number(
-            holding.totalCost || 0
-          ),
-        0
-      ),
-    [holdings]
-  );
-
-  const totalPnl =
-    totalCurrentValue - totalCost;
-
   const sortedTransactions = useMemo(
     () => sortRows(transactions, transactionSortConfig),
     [transactions, transactionSortConfig]
   );
-
-  const availableBalance =
-    getAvailableBalance(
-      details,
-      portfolio
-    );
 
   const sortedHoldings = useMemo(() => {
     const result = [...holdings];
@@ -2025,13 +2138,6 @@ function PortfolioChildPanel({
         ]);
       }
 
-      setTradeRows((current) =>
-        current.filter(
-          (tradeRow) => tradeRow.id !== row.id
-        )
-      );
-
-      await onHoldingChanged();
     } catch (tradeError) {
       updateTradeRow(row.id, {
         error:
@@ -2042,11 +2148,20 @@ function PortfolioChildPanel({
             row.side
           } order.`,
       });
+      return;
     }
+
+    setTradeRows((current) =>
+      current.filter(
+        (tradeRow) => tradeRow.id !== row.id
+      )
+    );
+    await refreshAfterTrade();
   }
 
   async function executeAllTradeRows() {
     const rowsToSubmit = [...tradeRows];
+    let completedTrade = false;
 
     if (!rowsToSubmit.length) {
       return;
@@ -2124,6 +2239,7 @@ function PortfolioChildPanel({
           ]);
         }
 
+        completedTrade = true;
         setTradeRows((current) =>
           current.filter(
             (tradeRow) => tradeRow.id !== row.id
@@ -2143,69 +2259,11 @@ function PortfolioChildPanel({
       }
     }
 
-    await onHoldingChanged();
+    if (completedTrade) await refreshAfterTrade();
   }
 
   return (
     <div>
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h3 className="max-w-[500px] truncate text-[13px] font-semibold text-slate-800">
-              {portfolio.name}
-            </h3>
-
-            <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[9px] font-semibold text-blue-700">
-              {holdings.length} securities
-            </span>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-4 text-right">
-          <CompactMetric
-            label="Available balance"
-            value={
-              availableBalance === null
-                ? "Unavailable"
-                : formatMoney(
-                    availableBalance
-                  )
-            }
-            valueClass={
-              availableBalance === null
-                ? "text-amber-600"
-                : "text-blue-800"
-            }
-          />
-
-          <CompactMetric
-            label="Holdings value"
-            value={formatMoney(
-              totalCurrentValue
-            )}
-          />
-
-          <CompactMetric
-            label="Total cost"
-            value={formatMoney(
-              totalCost
-            )}
-          />
-
-          <CompactMetric
-            label="Unrealized P&L"
-            value={`${
-              totalPnl >= 0 ? "+" : ""
-            }${formatMoney(totalPnl)}`}
-            valueClass={
-              totalPnl >= 0
-                ? "text-emerald-700"
-                : "text-red-600"
-            }
-          />
-        </div>
-      </div>
-
       <div className="mb-2 flex flex-wrap items-center gap-1.5 border-b border-slate-200 pb-1.5">
         {tabOptions.map((tab) => (
           (() => {
@@ -2232,7 +2290,7 @@ function PortfolioChildPanel({
       {activeTab === "transactions" ? (
         <div role="tabpanel" className="overflow-hidden rounded-md border border-slate-200 bg-white">
           <div className="max-h-[260px] overflow-auto">
-            <table className="w-full min-w-[900px] table-fixed text-left text-[10px]">
+            <table className="w-full min-w-[840px] table-fixed text-left text-[10px]">
               <thead className="sticky top-0 z-[1] bg-[#eaf0fa] text-[9px] font-bold uppercase tracking-wide text-slate-500">
                 <tr>
                   <SortableHeader label="Date / time" sortKey="executedAt" sortConfig={transactionSortConfig} onSort={(key) => setTransactionSortConfig((current) => nextSortConfig(current, key))} />
@@ -2287,7 +2345,7 @@ function PortfolioChildPanel({
         </div>
       ) : activeTab === "holdings" ? (
         <div className="w-full overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-[0_1px_0_rgba(15,23,42,0.02)]">
-          <table className="w-full min-w-[1100px] table-fixed text-left text-[11px]" style={{ tableLayout: "fixed" }}>
+          <table className="w-full min-w-[1020px] table-fixed text-left text-[11px]" style={{ tableLayout: "fixed" }}>
             <colgroup>
               <col style={{ width: "20%" }} />
               <col style={{ width: "11%" }} />
@@ -2376,6 +2434,8 @@ function PortfolioChildPanel({
             <tbody className="divide-y divide-slate-200/80">
               {sortedHoldings.map(
                 (holding) => {
+                  const holdingKey = getHoldingRowKey(holding);
+                  const isExpanded = expandedHoldingKey === holdingKey;
                   const holdingPnl =
                     Number(
                       holding.currentValue ||
@@ -2386,28 +2446,22 @@ function PortfolioChildPanel({
                     );
 
                   return (
-                    <tr
-                      key={
-                        holding.holdingId ??
-                        `${holding.securityId}-${holding.symbol}`
-                      }
-                      className="h-11 text-[10px] transition-colors hover:bg-slate-50"
-                    >
+                    <React.Fragment key={holdingKey}>
+                    <tr className={`h-11 text-[10px] transition-colors hover:bg-slate-50 ${isExpanded ? "bg-blue-50/50" : ""}`}>
                       <td className="border-t border-slate-200 px-2.5 py-2 align-middle">
-                        <div className="truncate text-[12px] font-semibold tracking-[-0.01em] text-slate-800">
-                          {holding.symbol ||
-                            "—"}
-                        </div>
-
-                        <div
-                          className="truncate text-[10px] text-slate-500"
-                          title={
-                            holding.securityName
-                          }
+                        <button
+                          type="button"
+                          aria-expanded={isExpanded}
+                          aria-label={`${isExpanded ? "Hide" : "Show"} transactions for ${holding.securityName || holding.symbol || "security"}`}
+                          onClick={() => setExpandedHoldingKey(isExpanded ? null : holdingKey)}
+                          className="flex w-full min-w-0 items-center gap-1.5 text-left"
                         >
-                          {holding.securityName ||
-                            "Unnamed security"}
-                        </div>
+                          {isExpanded ? <ChevronDown size={13} className="shrink-0 text-blue-700" /> : <ChevronRight size={13} className="shrink-0 text-slate-400" />}
+                          <span className="min-w-0">
+                            <span className="block truncate text-[12px] font-semibold tracking-[-0.01em] text-slate-800 hover:text-blue-800">{holding.symbol || "—"}</span>
+                            <span className="block truncate text-[10px] text-slate-500" title={holding.securityName}>{holding.securityName || "Unnamed security"}</span>
+                          </span>
+                        </button>
                       </td>
 
                       <td className="border-t border-slate-200 px-2.5 py-2 align-middle text-slate-600">
@@ -2471,6 +2525,61 @@ function PortfolioChildPanel({
                       </td>
 
                     </tr>
+                    {isExpanded && (
+                      <tr className="bg-blue-50/30">
+                        <td colSpan={9} className="border-b border-slate-200 px-3 py-2">
+                          <div className="overflow-hidden rounded-md border border-blue-100 bg-white">
+                            <div className="flex items-center justify-between border-b border-blue-100 bg-blue-50/60 px-3 py-1.5">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <History size={12} className="shrink-0 text-blue-700" />
+                                <span className="truncate text-[10px] font-semibold text-slate-800">{holding.securityName || holding.symbol} <span className="font-mono text-slate-500">({holding.symbol || "—"})</span></span>
+                                <span className="shrink-0 text-[9px] text-slate-500">{securityTransactions.length} transaction{securityTransactions.length === 1 ? "" : "s"}</span>
+                              </div>
+                              <button type="button" onClick={() => setExpandedHoldingKey(null)} aria-label="Close security transactions" className="rounded p-1 text-slate-400 hover:bg-white hover:text-slate-700"><X size={12} /></button>
+                            </div>
+                            {securityTransactionsLoading ? (
+                              <p className="px-3 py-3 text-[10px] text-slate-500">Loading security transactions…</p>
+                            ) : securityTransactionsError ? (
+                              <p className="px-3 py-3 text-[10px] text-red-600">{securityTransactionsError}</p>
+                            ) : securityTransactions.length ? (
+                              <div className="max-h-40 overflow-auto">
+                                <table className="w-full border-collapse text-left text-[10px]">
+                                  <thead className="sticky top-0 bg-[#eef3ff] text-[9px] font-bold uppercase tracking-wide text-slate-500">
+                                    <tr>
+                                      <th className="px-3 py-1.5">Date / time</th>
+                                      <th className="px-3 py-1.5">Side</th>
+                                      <th className="px-3 py-1.5 text-right">Quantity</th>
+                                      <th className="px-3 py-1.5 text-right">Price</th>
+                                      <th className="px-3 py-1.5 text-right">Total value</th>
+                                      <th className="px-3 py-1.5 text-right">Realized P/L</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100">
+                                    {securityTransactions.map((transaction) => {
+                                      const isSell = String(transaction.side || "").toUpperCase() === "SELL";
+                                      const realized = Number(transaction.realizedPnl || 0);
+                                      return (
+                                        <tr key={transaction.transactionId}>
+                                          <td className="whitespace-nowrap px-3 py-1.5 font-mono text-slate-600">{formatTransactionDate(transaction.executedAt)}</td>
+                                          <td className={`px-3 py-1.5 font-bold ${isSell ? "text-red-700" : "text-emerald-700"}`}>{transaction.side || "—"}</td>
+                                          <td className="px-3 py-1.5 text-right font-mono text-slate-700">{formatNumber(transaction.quantity)}{String(holding.symbol || "").toUpperCase() === "GOLD" ? " g" : ""}</td>
+                                          <td className="px-3 py-1.5 text-right font-mono text-slate-600">{formatCurrencyAmount(transaction.executionPrice)}</td>
+                                          <td className="px-3 py-1.5 text-right font-mono font-semibold text-blue-900">{formatCurrencyAmount(transaction.totalAmount)}</td>
+                                          <td className={`px-3 py-1.5 text-right font-mono font-semibold ${!isSell ? "text-slate-300" : realized >= 0 ? "text-emerald-700" : "text-red-600"}`}>{!isSell ? "—" : `${realized >= 0 ? "+" : "−"}${formatCurrencyAmount(Math.abs(realized))}`}</td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            ) : (
+                              <p className="px-3 py-3 text-[10px] text-slate-500">No recorded transactions for this security.</p>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   );
                 }
               )}
@@ -2479,7 +2588,7 @@ function PortfolioChildPanel({
         </div>
       ) : activeTab === "theme" ? (
         <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
-          <table className="w-full min-w-[760px] text-left text-[11px]">
+          <table className="w-full min-w-[720px] text-left text-[11px]">
             <thead className="bg-[#eaf0fa] text-[9px] uppercase tracking-wide text-slate-500">
               <tr>
                 <SortableHeader label="Theme" sortKey="theme" sortConfig={themeSortConfig} onSort={(key) => setThemeSortConfig((current) => nextSortConfig(current, key))} />
@@ -2567,7 +2676,7 @@ function PortfolioChildPanel({
           </div>
 
           <div className="w-full overflow-x-auto">
-            <table className="w-full min-w-[760px] table-fixed border-collapse text-left text-[10px]">
+            <table className="w-full min-w-[720px] table-fixed border-collapse text-left text-[10px]">
               <thead className="bg-slate-50 text-[9px] font-bold uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="border-b border-slate-200 px-2 py-2">Side</th>
@@ -3228,7 +3337,7 @@ function SortableHeader({
             : "descending"
           : "none"
       }
-      className={`border-b border-slate-200 px-2.5 py-1.5 ${
+      className={`border-b border-slate-200 px-2 py-1.5 ${
         align === "right"
           ? "text-right"
           : "text-left"
@@ -3263,26 +3372,6 @@ function SortableHeader({
         )}
       </button>
     </th>
-  );
-}
-
-function CompactMetric({
-  label,
-  value,
-  valueClass = "text-slate-800",
-}) {
-  return (
-    <div>
-      <div className="text-[8px] font-semibold uppercase tracking-wide text-slate-400">
-        {label}
-      </div>
-
-      <div
-        className={`whitespace-nowrap font-mono text-[10px] font-semibold ${valueClass}`}
-      >
-        {value}
-      </div>
-    </div>
   );
 }
 
@@ -3501,8 +3590,11 @@ function exportPortfolioCsv(rows) {
     "Code",
     "Theme",
     "Allocation Type",
-    "AUM",
-    "Return",
+    "Invested",
+    "Available Cash",
+    "Current Value / AUM",
+    "P/L",
+    "P/L %",
     "Benchmark",
     "Status",
   ];
@@ -3513,7 +3605,10 @@ function exportPortfolioCsv(rows) {
       portfolio.code,
       portfolio.theme,
       portfolio.allocationType,
+      portfolio.investedValue,
+      portfolio.availableCash,
       portfolio.aum,
+      portfolio.pnlAmount,
       portfolio.returnValue,
       portfolio.benchmark,
       portfolio.status,
@@ -3572,6 +3667,19 @@ function parseReturn(value) {
 
   return Number.isFinite(parsed)
     ? parsed
+    : 0;
+}
+
+function sumRealizedPnl(transactions) {
+  return Array.isArray(transactions)
+    ? transactions.reduce(
+        (total, transaction) =>
+          total +
+          (String(transaction?.side || "").toUpperCase() === "SELL"
+            ? Number(transaction?.realizedPnl || 0)
+            : 0),
+        0
+      )
     : 0;
 }
 
@@ -3651,6 +3759,22 @@ function formatTransactionDate(value) {
       });
 }
 
+function getHoldingRowKey(holding) {
+  return String(
+    holding?.holdingId ?? `${holding?.securityId}-${holding?.symbol}`
+  );
+}
+
+function transactionMatchesHolding(transaction, holding) {
+  const transactionSymbol = String(transaction?.symbol || "").trim().toUpperCase();
+  const holdingSymbol = String(holding?.symbol || "").trim().toUpperCase();
+  if (transactionSymbol && holdingSymbol) {
+    return transactionSymbol === holdingSymbol;
+  }
+  const normalizeName = (value) => String(value || "").trim().replace(/\s+/g, " ").toUpperCase();
+  return normalizeName(transaction?.securityName) === normalizeName(holding?.securityName);
+}
+
 function formatLabel(value) {
   const label = String(
     value ?? ""
@@ -3703,32 +3827,6 @@ function formatStatus(status) {
       .slice(1)
       .toLowerCase()
   );
-}
-
-function statusTone(status) {
-  const normalizedStatus = String(
-    status || ""
-  ).toUpperCase();
-
-  if (normalizedStatus === "NEW") {
-    return "text-blue-700";
-  }
-
-  if (
-    normalizedStatus === "ACTIVE"
-  ) {
-    return "text-emerald-700";
-  }
-
-  if (
-    ["DRAFT", "CREATED"].includes(
-      normalizedStatus
-    )
-  ) {
-    return "text-amber-600";
-  }
-
-  return "text-slate-500";
 }
 
 export default PortfolioPage;

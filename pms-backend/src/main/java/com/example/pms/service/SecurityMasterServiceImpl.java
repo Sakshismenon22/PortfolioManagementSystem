@@ -57,6 +57,17 @@ public class SecurityMasterServiceImpl implements SecurityMasterService{
     }
 
     @Override
+    public SecuritiesInfoDTO searchSecurities(String query) {
+        String normalizedQuery = query == null ? "" : query.trim();
+        if (normalizedQuery.isEmpty()) {
+            return getAllSecuritiesInfo();
+        }
+        return securityMasterClient.searchSecurityInfo(normalizedQuery)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Security Master search is unavailable right now."));
+    }
+
+    @Override
     // Bump the cache namespace after changing bond pricing precedence so stale
     // face-value entries from the previous resolver cannot be used for trades.
     public Double getCurrentPrice(Long securityId) {

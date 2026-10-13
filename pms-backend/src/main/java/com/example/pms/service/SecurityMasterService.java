@@ -12,6 +12,8 @@ public interface SecurityMasterService {
 
     public SecuritiesInfoDTO getAllSecuritiesInfo();
 
+    SecuritiesInfoDTO searchSecurities(String query);
+
     public Double getCurrentPrice(Long securityId);
 
     Double getCurrentTradePrice(Long securityId);

@@ -22,4 +22,6 @@ public class PortfolioDetailsDTO {
     private PortfolioStatus portfolioStatus;
     private String action;
     private Double balance;
+    private Double investedAmount;
+    private Double profitLossAmount;
 }
