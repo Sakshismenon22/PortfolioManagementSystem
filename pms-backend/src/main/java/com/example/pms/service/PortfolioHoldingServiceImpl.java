@@ -17,6 +17,7 @@ import com.example.pms.model.SecurityMaster;
 import com.example.pms.model.enums.HoldingStatus;
 import com.example.pms.model.enums.EquityCategory;
 import com.example.pms.model.enums.SecurityType;
+import com.example.pms.model.enums.TransactionType;
 import com.example.pms.repository.AssetRepository;
 import com.example.pms.repository.PortFolioHoldingRepository;
 import com.example.pms.repository.PortfolioRepository;
@@ -43,6 +44,7 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
     private final PortFolioHoldingRepository portfolioHoldingRepository;
     private final SecurityMasterClient securityMasterClient;
     private final SecurityMasterService securityMasterService;
+    private final TransactionService transactionService;
 
 
 
@@ -209,7 +211,8 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
         requireActivePortfolio(portfolio);
         double currentPrice = securityMasterService.getCurrentPrice(holding.getSecurityMaster().getId());
         requirePositivePrice(currentPrice);
-        double averageCost = holding.getAverageCost() == null ? 0 : holding.getAverageCost();
+        double averageCost = resolveAverageCost(holding);
+        double realizedPnl = (currentPrice - averageCost) * quantity;
         int remainingShares = holding.getQuantityHeld() - quantity;
         portfolio.setAmount(safeAmount(portfolio.getAmount()) + currentPrice * quantity);
         holding.setQuantityHeld(remainingShares);
@@ -219,6 +222,20 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
         if (remainingShares == 0) holding.setHoldingStatus(HoldingStatus.SOLD);
         portfolioHoldingRepository.save(holding);
         portfolioRepository.save(portfolio);
+
+        transactionService.recordTrade(
+                portfolio.getId(),
+                holding.getId(),
+                holding.getSecurityMaster().getId(),
+                TransactionType.SELL,
+                quantity,
+                currentPrice,
+                currentPrice * quantity,
+                0.0,
+                averageCost,
+                realizedPnl
+        );
+
         return "Sold " + quantity + " share(s) of " + holding.getSecurityMaster().getName() + ".";
     }
 
@@ -261,7 +278,8 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
             PortfolioHolding holding = entry.getValue();
             int quantity = quantityByHolding.get(entry.getKey());
             double currentPrice = priceByHolding.get(holding.getId());
-            double averageCost = safeAmount(holding.getAverageCost());
+            double averageCost = resolveAverageCost(holding);
+            double realizedPnl = (currentPrice - averageCost) * quantity;
             int remaining = holding.getQuantityHeld() - quantity;
             cashProceeds += currentPrice * quantity;
             holding.setQuantityHeld(remaining);
@@ -269,6 +287,19 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
             holding.setUpdatedAt(LocalDate.now());
             if (remaining == 0) holding.setHoldingStatus(HoldingStatus.SOLD);
             portfolioHoldingRepository.save(holding);
+
+            transactionService.recordTrade(
+                    portfolio.getId(),
+                    holding.getId(),
+                    holding.getSecurityMaster().getId(),
+                    TransactionType.SELL,
+                    quantity,
+                    currentPrice,
+                    currentPrice * quantity,
+                    0.0,
+                    averageCost,
+                    realizedPnl
+            );
         }
         portfolio.setAmount(safeAmount(portfolio.getAmount()) + cashProceeds);
         portfolioRepository.save(portfolio);
@@ -331,8 +362,20 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
             security.setEquityCategory(equityCategory);
             securityMasterRepository.save(security);
         }
-        portfolioHoldingRepository.save(holding);
+        holding = portfolioHoldingRepository.saveAndFlush(holding);
         portfolioRepository.save(portfolio);
+
+        transactionService.recordTrade(
+                portfolio.getId(),
+                holding.getId(),
+                security.getId(),
+                TransactionType.BUY,
+                quantity,
+                currentPrice,
+                buyAmount,
+                0.0
+        );
+
         return "Bought " + quantity + " share(s) of " + security.getName() + ".";
     }
 
@@ -423,7 +466,18 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
                 security.setEquityCategory(equityCategory);
                 securityMasterRepository.save(security);
             }
-            portfolioHoldingRepository.save(holding);
+            holding = portfolioHoldingRepository.saveAndFlush(holding);
+
+            transactionService.recordTrade(
+                    portfolio.getId(),
+                    holding.getId(),
+                    security.getId(),
+                    TransactionType.BUY,
+                    quantity,
+                    price,
+                    buyAmount,
+                    0.0
+            );
         }
 
         portfolio.setAmount(Math.max(0, availableCash - totalBuyAmount));
@@ -449,6 +503,15 @@ public class PortfolioHoldingServiceImpl implements PortfolioHoldingService{
         if (price == null || !Double.isFinite(price) || price <= 0) {
             throw new IllegalArgumentException("A current security price is unavailable; the trade was not placed.");
         }
+    }
+
+    private double resolveAverageCost(PortfolioHolding holding) {
+        double averageCost = safeAmount(holding.getAverageCost());
+        if (averageCost > 0) return averageCost;
+        double totalCost = safeAmount(holding.getTotalCost());
+        int quantityHeld = holding.getQuantityHeld() == null ? 0 : holding.getQuantityHeld();
+        if (totalCost > 0 && quantityHeld > 0) return totalCost / quantityHeld;
+        return 0.0;
     }
 
     private double safeAmount(Double amount) { return amount == null ? 0 : amount; }

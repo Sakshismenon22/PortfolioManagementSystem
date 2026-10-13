@@ -6,7 +6,7 @@ const PMS_URL = process.env.PMS_BASE_URL ?? "http://localhost:8082";
 const MASTER_URL = process.env.SECURITY_MASTER_BASE_URL ?? "http://localhost:8081";
 const SAMPLE_USER = {
   name: process.env.SAMPLE_USER_NAME ?? "Sample Fund Manager",
-  email: process.env.SAMPLE_USER_EMAIL ?? "sample.manager@example.com",
+  email: process.env.SAMPLE_USER_EMAIL ?? "",
   phoneNumber: process.env.SAMPLE_USER_PHONE ?? "9000000001",
   role: "FUND_MANAGER",
   password: process.env.SAMPLE_USER_PASSWORD ?? "PmsDemo@12345",

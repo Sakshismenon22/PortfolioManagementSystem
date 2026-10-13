@@ -14,6 +14,7 @@ import {
   getPortfolioHoldings,
   getThemeAllocation,
   validatePortfolioAllocation,
+  getPortfolioTransactions,
   buyPortfolioSecurities,
   addInitialPortfolioHoldings,
   sellPortfolioHolding,
@@ -69,6 +70,7 @@ const TABS = [
   { key: "trade", label: "Buy or Sell holdings", icon: ArrowLeftRight },
   { key: "composition", label: "Theme composition", icon: PieChart },
   { key: "rebalance", label: "Rebalance recommendation", icon: Scale },
+  { key: "orders", label: "Orders history", icon: Table2 },
 ];
 
 /* ------------------------- page ------------------------- */
@@ -91,6 +93,9 @@ const PortfolioDetailsPage = () => {
   const [securities, setSecurities] = useState([]);
   const [securitiesLoading, setSecuritiesLoading] = useState(true);
   const [orders, setOrders] = useState([newOrder()]);
+  const [transactionsList, setTransactionsList] = useState([]);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
+  const [transactionsError, setTransactionsError] = useState("");
   const [tradeSubmitting, setTradeSubmitting] = useState(false);
   const [tradeError, setTradeError] = useState("");
   const [notice, setNotice] = useState("");
@@ -173,6 +178,28 @@ const PortfolioDetailsPage = () => {
   const pnl = currentValue - invested;
   const returnPercentage = invested ? (pnl / invested) * 100 : 0;
   const portfolioId = portfolio?.portfolioId ?? id;
+
+  useEffect(() => {
+    let active = true;
+    if (!portfolioId) return () => { active = false; };
+
+    setTransactionsLoading(true);
+    setTransactionsError("");
+    getPortfolioTransactions(portfolioId)
+      .then((response) => {
+        if (!active) return;
+        const list = response?.data?.data ?? response?.data ?? response ?? [];
+        setTransactionsList(Array.isArray(list) ? list : []);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setTransactionsError(err?.response?.data?.message || err?.message || "Could not load transactions.");
+        setTransactionsList([]);
+      })
+      .finally(() => active && setTransactionsLoading(false));
+
+    return () => { active = false; };
+  }, [portfolioId]);
   const portfolioIsNew = String(portfolio?.portfolioStatus || "").toUpperCase() === "NEW";
   const portfolioUsesWeights = String(portfolio?.portfolioType || "").toUpperCase() === "WEIGHTAGE";
   const allocationBase = Math.max(0, holdingsInvested + cashBalance);
@@ -346,6 +373,27 @@ const PortfolioDetailsPage = () => {
     { headerName: "Why", field: "reason", flex: 1.2, minWidth: 150, cellClass: "text-[10px] text-slate-500" },
   ], []);
 
+  const transactionsColumnDefs = useMemo(() => [
+    { headerName: "Date", field: "transactionDate", flex: 1.4, minWidth: 160, valueFormatter: (p) => p.value ? new Date(p.value).toLocaleString() : "—" },
+    { headerName: "Type", field: "transactionType", width: 110, cellClass: (p) => `text-[11px] font-semibold ${p.value === "SELL" ? "text-red-600" : p.value === "BUY" ? "text-emerald-700" : "text-slate-700"}` },
+    { headerName: "Security", field: "security", flex: 1.6, minWidth: 160, cellClass: "font-medium text-slate-800" },
+    numericCol({ headerName: "Qty", field: "quantity", width: 100, valueFormatter: (p) => p.value == null ? "" : Number(p.value).toLocaleString("en-IN") }),
+    numericCol({ headerName: "Price/unit", field: "pricePerUnit", width: 120, valueFormatter: (p) => p.value == null ? "" : formatMoney(p.value) }),
+    numericCol({ headerName: "Amount", field: "totalAmount", width: 140, cellStyle: { ...RIGHT_CELL, color: "#1e3a8a" }, valueFormatter: (p) => p.value == null ? "" : formatMoney(p.value) }),
+    numericCol({
+      headerName: "P&L",
+      field: "realizedPnl",
+      width: 130,
+      cellClass: (p) => `font-mono text-[11px] font-semibold ${Number(p.value) > 0 ? "text-emerald-700" : Number(p.value) < 0 ? "text-red-600" : "text-slate-500"}`,
+      valueFormatter: (p) => {
+        const value = Number(p.value);
+        if (!Number.isFinite(value)) return "—";
+        const signed = value >= 0 ? "+" : "−";
+        return `${signed}${formatMoney(Math.abs(value))}`;
+      },
+    }),
+  ], []);
+
   const handleHoldingCellValueChanged = async (event) => {
     if (event.colDef.field !== "equityCategory" || !event.data?.holdingId) return;
     try {
@@ -475,17 +523,34 @@ const PortfolioDetailsPage = () => {
   const removeOrderRow = (rowId) => setOrders((prev) => prev.filter((o) => o.rowId !== rowId));
   const clearBasket = () => { setOrders([newOrder()]); setTradeError(""); };
 
+  const refreshTransactionsData = async () => {
+    const pid = portfolio?.portfolioId ?? id;
+    if (!pid) return;
+
+    try {
+      const response = await getPortfolioTransactions(pid);
+      const list = response?.data?.data ?? response?.data ?? response ?? [];
+      setTransactionsList(Array.isArray(list) ? list : []);
+      setTransactionsError("");
+    } catch (error) {
+      setTransactionsError(error?.response?.data?.message || error?.message || "Could not load transactions.");
+      setTransactionsList([]);
+    }
+  };
+
   const refreshPortfolioData = async () => {
+    const pid = portfolio?.portfolioId ?? id;
     const [freshPortfolio, freshHoldings, freshValidation, freshTheme] = await Promise.all([
-      getPortfolioBasicInfo(portfolioId),
-      getPortfolioHoldings(portfolioId),
-      validatePortfolioAllocation(portfolioId),
-      getThemeAllocation(portfolioId).catch(() => null),
+      getPortfolioBasicInfo(pid),
+      getPortfolioHoldings(pid),
+      validatePortfolioAllocation(pid),
+      getThemeAllocation(pid).catch(() => null),
     ]);
     setPortfolio(freshPortfolio);
     setHoldings(Array.isArray(freshHoldings) ? freshHoldings : []);
     setValidation(freshValidation);
     setThemeAllocation(freshTheme);
+    await refreshTransactionsData();
   };
 
   const submitTrades = async (event) => {
@@ -531,7 +596,7 @@ const PortfolioDetailsPage = () => {
       if (buys.length) parts.push(`${buys.length} buy${buys.length === 1 ? "" : "s"}`);
       setNotice(`${parts.join(" and ")} recorded.`);
       setOrders([newOrder()]);
-      setActiveTab("holdings");
+      setActiveTab("orders");
     } catch (failure) {
       if (completedSells > 0) await refreshPortfolioData().catch(() => {});
       setTradeError(
@@ -726,6 +791,7 @@ const PortfolioDetailsPage = () => {
     trade: basketValidCount,
     composition: compositionRows.length,
     rebalance: rebalanceActionLines.length,
+    orders: transactionsList.length,
   };
 
   const inputHeader = portfolioUsesWeights ? "Alloc. % | Qty" : "Amount | Qty";
@@ -904,6 +970,56 @@ const PortfolioDetailsPage = () => {
                 <div className="flex shrink-0 items-center justify-between border-t border-slate-100 px-3 py-1.5 text-[10px] text-slate-500">
                   <span className="inline-flex items-center gap-1.5"><CheckCircle2 size={12} className="text-emerald-600" /> Cost basis from recorded average cost × quantity</span>
                   <span>{holdingRows.length} of {holdings.length} holdings</span>
+                </div>
+              </div>
+            )}
+
+            {/* ------------------ TAB: ORDERS HISTORY ------------------ */}
+            {activeTab === "orders" && (
+              <div role="tabpanel" id="panel-orders" aria-labelledby="tab-orders" className="flex min-h-0 flex-1 flex-col">
+                <p className="shrink-0 border-b border-slate-100 px-3 py-1.5 text-[10px] text-slate-500">Transactions and order history recorded for this portfolio</p>
+
+                {transactionsLoading ? (
+                  <div className="flex min-h-0 flex-1 items-center justify-center px-5 text-center text-xs text-slate-500">
+                    Loading order history…
+                  </div>
+                ) : transactionsError ? (
+                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-5 text-center">
+                    <AlertTriangle size={28} className="text-amber-500" />
+                    <p className="mt-2 text-sm font-semibold text-slate-600">Transactions unavailable</p>
+                    <p className="mt-1 text-xs text-slate-400">{transactionsError}</p>
+                  </div>
+                ) : (
+                  <div className="min-h-0 flex-1">
+                    <AgGridReact
+                      theme={gridTheme}
+                      rowData={transactionsList.map((t) => ({
+                        rowKey: String(t.transactionId || t.id || Math.random()),
+                        transactionId: t.transactionId,
+                        transactionDate: t.transactionDate,
+                        transactionType: t.transactionType,
+                        security: (t.securityMaster && (t.securityMaster.name || t.securityMaster.symbol)) || (t.portfolioHolding && (t.portfolioHolding.securityName || t.portfolioHolding.symbol)) || "—",
+                        quantity: t.quantity,
+                        pricePerUnit: t.pricePerUnit,
+                        totalAmount: t.totalAmount,
+                        realizedPnl: t.realizedPnl,
+                        fees: t.fees,
+                      }))}
+                      columnDefs={transactionsColumnDefs}
+                      defaultColDef={defaultColDef}
+                      getRowId={(p) => String(p.data.rowKey)}
+                      suppressCellFocus
+                      overlayNoRowsTemplate='<span class="text-xs text-slate-500">No transactions recorded for this portfolio.</span>'
+                      style={{ height: "100%", width: "100%" }}
+                    />
+                  </div>
+                )}
+
+                <div className="flex shrink-0 items-center justify-between border-t border-slate-100 px-3 py-1.5 text-[10px] text-slate-500">
+                  <span>{transactionsList.length} transaction{transactionsList.length === 1 ? "" : "s"}</span>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => setActiveTab("holdings")} className="rounded-md border border-slate-200 px-3 py-2 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">Back</button>
+                  </div>
                 </div>
               </div>
             )}

@@ -54,6 +54,9 @@ class PortfolioHoldingServiceImplTest {
     @Mock
     private SecurityMasterService securityMasterService;
 
+    @Mock
+    private TransactionService transactionService;
+
     @InjectMocks
     private PortfolioHoldingServiceImpl holdingService;
 
@@ -806,6 +809,78 @@ class PortfolioHoldingServiceImplTest {
                 .save(portfolio);
     }
 
+
+    @Test
+    @DisplayName("TC-HOLD-018A | Sell records realized P&L on trade")
+    void sellHoldingsShare_shouldRecordRealizedPnl() {
+
+        Portfolio portfolio = activePortfolio();
+        SecurityMaster security = equitySecurity();
+        PortfolioHolding holding = new PortfolioHolding();
+
+        holding.setId(10);
+        holding.setPortfolio(portfolio);
+        holding.setSecurityMaster(security);
+        holding.setQuantityHeld(10);
+        holding.setAverageCost(100.0);
+        holding.setTotalCost(1000.0);
+        holding.setHoldingStatus(HoldingStatus.BROUGHT);
+
+        when(portfolioHoldingRepository.findById(10)).thenReturn(Optional.of(holding));
+        when(portfolioRepository.findById(100L)).thenReturn(Optional.of(portfolio));
+        when(securityMasterService.getCurrentPrice(200L)).thenReturn(120.0);
+
+        holdingService.sellHoldingsShare(new SellHoldingDTO(10, 3));
+
+        verify(transactionService).recordTrade(
+                100L,
+                10,
+                200L,
+                com.example.pms.model.enums.TransactionType.SELL,
+                3,
+                120.0,
+                360.0,
+                0.0,
+                100.0,
+                60.0
+        );
+    }
+
+    @Test
+    @DisplayName("TC-HOLD-018B | Sell falls back to cost basis from total cost when average cost is missing")
+    void sellHoldingsShare_shouldUseTotalCostFallbackForRealizedPnl() {
+
+        Portfolio portfolio = activePortfolio();
+        SecurityMaster security = equitySecurity();
+        PortfolioHolding holding = new PortfolioHolding();
+
+        holding.setId(10);
+        holding.setPortfolio(portfolio);
+        holding.setSecurityMaster(security);
+        holding.setQuantityHeld(10);
+        holding.setAverageCost(null);
+        holding.setTotalCost(1000.0);
+        holding.setHoldingStatus(HoldingStatus.BROUGHT);
+
+        when(portfolioHoldingRepository.findById(10)).thenReturn(Optional.of(holding));
+        when(portfolioRepository.findById(100L)).thenReturn(Optional.of(portfolio));
+        when(securityMasterService.getCurrentPrice(200L)).thenReturn(120.0);
+
+        holdingService.sellHoldingsShare(new SellHoldingDTO(10, 3));
+
+        verify(transactionService).recordTrade(
+                100L,
+                10,
+                200L,
+                com.example.pms.model.enums.TransactionType.SELL,
+                3,
+                120.0,
+                360.0,
+                0.0,
+                100.0,
+                60.0
+        );
+    }
 
     @Test
     @DisplayName("TC-HOLD-019 | Complete sale marks holding SOLD")

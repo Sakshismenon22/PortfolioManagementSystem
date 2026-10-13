@@ -49,6 +49,7 @@ public class PortfolioServiceImpl implements PortfolioService{
     private final NotificationRepository notificationRepository;
     private final SecurityMasterService securityMasterService;
     private final SecurityMasterRepository securityMasterRepository;
+    private final TransactionService transactionService;
 
     private static final List<String> DEMO_PORTFOLIO_NAMES = List.of(
             "DEMO 1Y | Equity overweight",
@@ -161,7 +162,23 @@ public class PortfolioServiceImpl implements PortfolioService{
             }
         }
 
-        portfolioHoldingRepository.saveAll(holdings);
+        List<PortfolioHolding> savedHoldings = portfolioHoldingRepository.saveAll(holdings);
+        for (PortfolioHolding holding : savedHoldings) {
+            double unitPrice = holding.getAverageCost() == null ? 0.0 : holding.getAverageCost();
+            if (unitPrice <= 0 && holding.getTotalCost() != null && holding.getQuantityHeld() != null && holding.getQuantityHeld() > 0) {
+                unitPrice = holding.getTotalCost() / holding.getQuantityHeld();
+            }
+            transactionService.recordTrade(
+                    portfolio.getId(),
+                    holding.getId(),
+                    holding.getSecurityMaster().getId(),
+                    com.example.pms.model.enums.TransactionType.BUY,
+                    holding.getQuantityHeld(),
+                    unitPrice,
+                    holding.getTotalCost() == null ? 0.0 : holding.getTotalCost(),
+                    0.0
+            );
+        }
         portfolio.setAmount(Math.max(0, initialAmount - totalCost));
         portfolio.setPortfolioStatus(PortfolioStatus.ACTIVE);
         portfolioRepository.save(portfolio);
