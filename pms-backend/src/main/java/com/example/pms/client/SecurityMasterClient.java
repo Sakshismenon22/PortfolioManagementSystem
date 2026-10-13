@@ -45,6 +45,7 @@ public class SecurityMasterClient {
         }
     }
 
+    @Cacheable(key = "'allSecurities'",value = "SecuritiesInfo")
     public Optional<SecuritiesInfoDTO> getAllSecurityInfo(){
         try {
             Response<SecuritiesInfoDTO> envelope = securityMasterRestClient.get()

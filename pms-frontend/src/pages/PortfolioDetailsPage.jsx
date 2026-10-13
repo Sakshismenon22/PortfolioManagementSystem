@@ -91,7 +91,7 @@ const PortfolioDetailsPage = () => {
   const [holdingsError, setHoldingsError] = useState("");
   const [transactionsError, setTransactionsError] = useState("");
   const [assetFilter, setAssetFilter] = useState("ALL");
-  const [activeTab, setActiveTab] = useState("holdings");
+  const [activeTab, setActiveTab] = useState(location.state?.initialTab || "holdings");
 
   const [securities, setSecurities] = useState([]);
   const [securitiesLoading, setSecuritiesLoading] = useState(true);
@@ -109,6 +109,12 @@ const PortfolioDetailsPage = () => {
     const timeoutId = window.setTimeout(() => setNotice(""), 1000);
     return () => window.clearTimeout(timeoutId);
   }, [notice]);
+
+  useEffect(() => {
+    if (location.state?.initialTab) {
+      setActiveTab(location.state.initialTab);
+    }
+  }, [location.state?.initialTab]);
 
   /* ------------------------- load ------------------------- */
 

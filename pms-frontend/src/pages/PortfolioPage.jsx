@@ -501,7 +501,7 @@ const PortfolioPage = () => {
   );
 
   const openPortfolio = useCallback(
-    async (portfolio) => {
+    async (portfolio, initialTab = "holdings") => {
       try {
         const response =
           await getPortfolioBasicInfo(
@@ -521,6 +521,7 @@ const PortfolioPage = () => {
                 ...portfolio,
                 ...(basicInfo || {}),
               },
+              initialTab,
             },
           }
         );
@@ -530,6 +531,7 @@ const PortfolioPage = () => {
           {
             state: {
               portfolio,
+              initialTab,
             },
           }
         );
@@ -1519,14 +1521,9 @@ function PortfolioMasterDetail({
                   <button
                     type="button"
                     onClick={() =>
-                      navigate(
-                        "/rebalancing",
-                        {
-                          state: {
-                            portfolioId:
-                              portfolio.id,
-                          },
-                        }
+                      openPortfolio(
+                        portfolio,
+                        "trade"
                       )
                     }
                     className="inline-flex items-center gap-1 whitespace-nowrap rounded border border-blue-200 px-2 py-1 text-[10px] font-semibold text-blue-800 hover:bg-blue-50"

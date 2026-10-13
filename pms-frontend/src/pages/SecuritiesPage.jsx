@@ -87,10 +87,41 @@ export default function SecuritiesPage() {
 
   const pageSize = useMemo(() => (securities?.length || 0) <= defaultPageSize ? 10 : defaultPageSize, [securities]);
   const totalPages = Math.max(1, Math.ceil((securities?.length || 0) / pageSize));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const pageNumbers = useMemo(() => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+
+    const pages = new Set([1, totalPages, safeCurrentPage]);
+    [safeCurrentPage - 2, safeCurrentPage - 1, safeCurrentPage, safeCurrentPage + 1, safeCurrentPage + 2].forEach((page) => {
+      if (page > 1 && page < totalPages) pages.add(page);
+    });
+
+    const orderedPages = [...pages].sort((a, b) => a - b);
+    const result = [];
+    let previous = 0;
+
+    orderedPages.forEach((page) => {
+      if (previous && page - previous > 1) {
+        result.push("ellipsis");
+      }
+      result.push(page);
+      previous = page;
+    });
+
+    return result;
+  }, [safeCurrentPage, totalPages]);
   const pagedSecurities = useMemo(() => {
-    const start = (Math.max(1, currentPage) - 1) * pageSize;
+    const start = (Math.max(1, safeCurrentPage) - 1) * pageSize;
     return (securities || []).slice(start, start + pageSize);
-  }, [securities, currentPage, pageSize]);
+  }, [securities, safeCurrentPage, pageSize]);
+
+  useEffect(() => {
+    if (currentPage !== safeCurrentPage) {
+      setCurrentPage(safeCurrentPage);
+    }
+  }, [currentPage, safeCurrentPage]);
 
   const defaultColDef = useMemo(
     () => ({
@@ -233,15 +264,44 @@ export default function SecuritiesPage() {
               </span>
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-2">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => setCurrentPage(p)}
-                      className={`h-8 min-w-[36px] rounded-md px-2 text-sm font-medium ${p === currentPage ? "bg-blue-800 text-white" : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"}`}
-                    >
-                      {p}
-                    </button>
-                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((value) => Math.max(1, value - 1))}
+                    disabled={safeCurrentPage === 1}
+                    className="h-8 min-w-[36px] rounded-md border border-slate-200 bg-white px-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Prev
+                  </button>
+
+                  {pageNumbers.map((page, index) => {
+                    if (page === "ellipsis") {
+                      return (
+                        <span key={`ellipsis-${index}`} className="px-1 text-sm text-slate-400">
+                          …
+                        </span>
+                      );
+                    }
+
+                    return (
+                      <button
+                        key={page}
+                        type="button"
+                        onClick={() => setCurrentPage(page)}
+                        className={`h-8 min-w-[36px] rounded-md px-2 text-sm font-medium ${page === safeCurrentPage ? "bg-blue-800 text-white" : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
+                      >
+                        {page}
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((value) => Math.min(totalPages, value + 1))}
+                    disabled={safeCurrentPage === totalPages}
+                    className="h-8 min-w-[36px] rounded-md border border-slate-200 bg-white px-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next
+                  </button>
                 </div>
                 <button
                   onClick={loadSecurities}
