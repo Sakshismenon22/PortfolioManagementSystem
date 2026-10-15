@@ -1373,8 +1373,8 @@ function PortfolioMasterDetail({
   }
 
   return (
-    <div className="min-w-[1600px]">
-      <div className="sticky top-0 z-20 grid grid-cols-[42px_1.5fr_0.95fr_0.75fr_1fr_1.05fr_1.1fr_0.75fr_0.75fr_minmax(100px,0.65fr)_112px] border-b border-slate-200 bg-[#eff4fc] text-[10px] font-bold uppercase tracking-wide text-slate-500">
+    <div className="min-w-[1280px]">
+      <div className="sticky top-0 z-20 grid grid-cols-[42px_1.35fr_0.8fr_0.7fr_0.9fr_0.9fr_1fr_0.7fr_0.7fr_minmax(90px,0.55fr)_96px] border-b border-slate-200 bg-[#eff4fc] text-[10px] font-bold uppercase tracking-wide text-slate-500">
         <div />
 
         <div className="px-3 py-2">
@@ -1401,11 +1401,11 @@ function PortfolioMasterDetail({
           Current value / AUM
         </div>
 
-        <div className="px-3 py-2 text-right">
+        <div className="px-2 py-2 text-right">
           P/L
         </div>
 
-        <div className="px-3 py-2 text-right">
+        <div className="px-2 py-2 text-right">
           P/L %
         </div>
 
@@ -1451,7 +1451,7 @@ function PortfolioMasterDetail({
         return (
           <React.Fragment key={portfolioId}>
             <div
-              className={`grid grid-cols-[42px_1.5fr_0.95fr_0.75fr_1fr_1.05fr_1.1fr_0.75fr_0.75fr_minmax(100px,0.65fr)_112px] items-center border-b border-slate-100 text-sm ${
+              className={`grid grid-cols-[42px_1.35fr_0.8fr_0.7fr_0.9fr_0.9fr_1fr_0.7fr_0.7fr_minmax(90px,0.55fr)_96px] items-center border-b border-slate-100 text-sm ${
                 expanded
                   ? "bg-blue-50/50"
                   : "bg-white hover:bg-blue-50/30"
@@ -1484,7 +1484,7 @@ function PortfolioMasterDetail({
                 </button>
               </div>
 
-              <div className="flex min-w-0 items-center gap-2 px-3 py-2">
+              <div className="flex min-w-0 items-center gap-2 px-2 py-2">
                 <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#e9effc] text-[10px] font-semibold text-blue-700">
                   {portfolio.initials}
                 </div>
@@ -1520,13 +1520,13 @@ function PortfolioMasterDetail({
               </div>
 
               <div
-                className="truncate px-3 text-[11px] font-medium text-slate-700"
+                className="truncate px-2 text-[11px] font-medium text-slate-700"
                 title={portfolio.theme}
               >
                 {portfolio.theme}
               </div>
 
-              <div className="flex min-w-0 items-center gap-1.5 px-3 text-[11px] text-slate-600">
+              <div className="flex min-w-0 items-center gap-1.5 px-2 text-[11px] text-slate-600">
                 <Scale
                   size={12}
                   className="shrink-0"
@@ -1539,20 +1539,20 @@ function PortfolioMasterDetail({
                 </span>
               </div>
 
-              <div className="px-3 text-right font-mono text-[11px] font-semibold text-blue-900" title={formatCurrencyAmount(portfolio.investedValue)}>
+              <div className="px-2 text-right font-mono text-[11px] font-semibold text-blue-900" title={formatCurrencyAmount(portfolio.investedValue)}>
                 {formatCurrencyAmount(portfolio.investedValue)}
               </div>
 
-              <div className="px-3 text-right font-mono text-[11px] font-semibold text-slate-700" title={formatCurrencyAmount(portfolio.availableCash)}>
+              <div className="px-2 text-right font-mono text-[11px] font-semibold text-slate-700" title={formatCurrencyAmount(portfolio.availableCash)}>
                 {formatCurrencyAmount(portfolio.availableCash)}
               </div>
 
-              <div className="px-3 text-right font-mono text-[11px] font-semibold text-blue-900" title={formatCurrencyAmount(portfolio.aum)}>
+              <div className="px-2 text-right font-mono text-[11px] font-semibold text-blue-900" title={formatCurrencyAmount(portfolio.aum)}>
                 {formatCurrencyAmount(portfolio.aum)}
               </div>
 
               <div
-                className={`px-3 text-right font-mono text-[11px] font-semibold ${
+                className={`px-2 text-right font-mono text-[11px] font-semibold ${
                   portfolio.pnlAmount >= 0
                     ? "text-emerald-700"
                     : "text-red-600"
@@ -1565,7 +1565,7 @@ function PortfolioMasterDetail({
               </div>
 
               <div
-                className={`px-3 text-right font-mono text-[11px] font-semibold ${
+                className={`px-2 text-right font-mono text-[11px] font-semibold ${
                   portfolio.returnValue >= 0
                     ? "text-emerald-700"
                     : "text-red-600"
@@ -1575,13 +1575,13 @@ function PortfolioMasterDetail({
               </div>
 
               <div
-                className="truncate px-3 font-mono text-[11px] text-slate-700"
+                className="truncate px-2 font-mono text-[11px] text-slate-700"
                 title={portfolio.benchmark}
               >
                 {portfolio.benchmark}
               </div>
 
-              <div className="flex items-center justify-end px-3">
+              <div className="flex items-center justify-end px-2">
                 {needsRebalance &&
                 portfolio.status ===
                   "ACTIVE" ? (
@@ -2477,31 +2477,31 @@ function PortfolioChildPanel({
                         )}
                       </td>
 
-                      <td className="border-t border-slate-200 px-2.5 py-2 align-middle text-right font-mono text-slate-700">
+                      <td className="border-t border-slate-200 px-2.5 py-2 align-middle text-right font-mono text-[11px] font-bold text-slate-800">
                         {formatNumber(
                           holding.quantity
                         )}
                       </td>
 
-                      <td className="border-t border-slate-200 px-2.5 py-2 align-middle text-right font-mono text-slate-700">
+                      <td className="border-t border-slate-200 px-2.5 py-2 align-middle text-right font-mono text-[11px] font-bold text-slate-800">
                         {formatCurrencyAmount(
                           holding.averageCost
                         )}
                       </td>
 
-                      <td className="border-t border-slate-200 px-2.5 py-2 align-middle text-right font-mono text-slate-700">
-                        {formatMoney(
+                      <td className="border-t border-slate-200 px-2.5 py-2 align-middle text-right font-mono text-[11px] font-bold text-slate-800">
+                        {formatCurrencyAmount(
                           holding.totalCost
                         )}
                       </td>
 
-                      <td className="border-t border-slate-200 px-2.5 py-2 align-middle text-right font-mono font-semibold text-blue-900">
-                        {formatMoney(
+                      <td className="border-t border-slate-200 px-2.5 py-2 align-middle text-right font-mono text-[11px] font-extrabold text-blue-900">
+                        {formatCurrencyAmount(
                           holding.currentValue
                         )}
                       </td>
 
-                      <td className="border-t border-slate-200 px-2.5 py-2 align-middle text-right font-mono text-slate-700">
+                      <td className="border-t border-slate-200 px-2.5 py-2 align-middle text-right font-mono text-[11px] font-bold text-slate-800">
                         {Number(
                           holding.allocationPercentage ||
                             0
@@ -2510,17 +2510,15 @@ function PortfolioChildPanel({
                       </td>
 
                       <td
-                        className={`border-t border-slate-200 px-2.5 py-2 align-middle text-right font-mono font-semibold ${
+                        className={`border-t border-slate-200 px-2.5 py-2 align-middle text-right font-mono text-[11px] font-extrabold ${
                           holdingPnl >= 0
                             ? "text-emerald-700"
                             : "text-red-600"
                         }`}
                       >
-                        {holdingPnl >= 0
-                          ? "+"
-                          : ""}
-                        {formatMoney(
-                          holdingPnl
+                        {holdingPnl >= 0 ? "+" : "-"}
+                        {formatCurrencyAmount(
+                          Math.abs(holdingPnl)
                         )}
                       </td>
 

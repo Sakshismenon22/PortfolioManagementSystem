@@ -7,16 +7,20 @@ import com.example.pms.dto.response.BondReturnPriceDTO;
 import com.example.pms.exception.SecurityNotFoundException;
 import com.example.pms.model.Bond;
 import com.example.pms.model.enums.SecurityType;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.concurrent.ConcurrentHashMap;
 
 @RequiredArgsConstructor
 @Service
@@ -24,33 +28,49 @@ public class SecurityMasterServiceImpl implements SecurityMasterService{
 
     private final SecurityMasterClient securityMasterClient;
 
-    private SecuritiesInfoDTO securitiesInfoDTO;
+    private final Cache<Long, Double> priceCache = Caffeine.newBuilder()
+            .maximumSize(10_000)
+            .expireAfterWrite(Duration.ofMinutes(5))
+            .build();
 
-    private HashMap<Long,Double> priceMap = new HashMap<>();
+    private volatile SecuritiesInfoDTO securitiesInfoDTO;
+    private ConcurrentHashMap<Long,Double> priceMap = new ConcurrentHashMap<>();
 
     @Override
     public SecuritiesInfoDTO getAllSecuritiesInfo() {
        if(securitiesInfoDTO==null){
-           SecuritiesInfoDTO info = securityMasterClient.getAllSecurityInfo()
-                   .orElseThrow(() -> new IllegalStateException("Security Master returned no security information."));
-//           if (info != null && info.getSecurities() != null) {
-//               info.getSecurities().stream()
-//                       .filter(security -> security.getAsset() != null
-//                               && security.getAsset().getAssetClass() != null
-//                               && (security.getAsset().getAssetClass().toLowerCase().contains("commodit")
-//                               || security.getAsset().getAssetClass().toLowerCase().contains("bond")
-//                               || security.getAsset().getAssetClass().toLowerCase().contains("fixed")
-//                               || security.getAsset().getAssetClass().toLowerCase().contains("debt")))
-//                       .forEach(security -> {
-//                           try {
-//                               security.setPrice(getCurrentPrice(security.getId()));
-//                           } catch (RuntimeException ignored) {
-//                               // Leave the Security Master list price in place if its quote endpoint is unavailable.
-//                           }
-//                       });
-//           }
-           securitiesInfoDTO = info;
-           return info;
+//           SecuritiesInfoDTO info = securityMasterClient.getAllSecurityInfo()
+//                   .orElseThrow(() -> new IllegalStateException("Security Master returned no security information."));
+////           if (info != null && info.getSecurities() != null) {
+////               info.getSecurities().stream()
+////                       .filter(security -> security.getAsset() != null
+////                               && security.getAsset().getAssetClass() != null
+////                               && (security.getAsset().getAssetClass().toLowerCase().contains("commodit")
+////                               || security.getAsset().getAssetClass().toLowerCase().contains("bond")
+////                               || security.getAsset().getAssetClass().toLowerCase().contains("fixed")
+////                               || security.getAsset().getAssetClass().toLowerCase().contains("debt")))
+////                       .forEach(security -> {
+////                           try {
+////                               security.setPrice(getCurrentPrice(security.getId()));
+////                           } catch (RuntimeException ignored) {
+////                               // Leave the Security Master list price in place if its quote endpoint is unavailable.
+////                           }
+////                       });
+////           }
+//           securitiesInfoDTO = info;
+//           return info;
+           if (securitiesInfoDTO != null) {
+               return securitiesInfoDTO;
+           }
+
+           synchronized (this) {
+               if (securitiesInfoDTO == null) {
+                   SecuritiesInfoDTO info = securityMasterClient.getAllSecurityInfo()
+                           .orElseThrow(() -> new IllegalStateException("Security Master returned no security information."));
+                   securitiesInfoDTO = info;
+               }
+               return securitiesInfoDTO;
+           }
        }else{
            return securitiesInfoDTO;
        }
@@ -71,12 +91,13 @@ public class SecurityMasterServiceImpl implements SecurityMasterService{
     // Bump the cache namespace after changing bond pricing precedence so stale
     // face-value entries from the previous resolver cannot be used for trades.
     public Double getCurrentPrice(Long securityId) {
-        if(priceMap.get(securityId)!=null){
-            return priceMap.get(securityId);
-        }
-        Double price = fetchCurrentPrice(securityId);
-        priceMap.put(securityId,price);
-        return price;
+//        if(priceMap.get(securityId)!=null){
+//            return priceMap.get(securityId);
+//        }
+//        Double price = fetchCurrentPrice(securityId);
+//        priceMap.put(securityId,price);
+//        return price;
+        return priceCache.get(securityId, this::fetchCurrentPrice);
     }
 
     /** Trade quotes are deliberately fetched fresh so a cached face-value fallback

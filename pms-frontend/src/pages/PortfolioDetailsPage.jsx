@@ -446,10 +446,47 @@ const PortfolioDetailsPage = () => {
         amount: valid ? price * quantity : 0,
       };
     }
+
     const security = eligibleSecurities.find((s) => String(s.id) === String(order.securityId));
+    const rawPrice = Number(security?.price || 0);
+    const price = normalizeGoldPriceForPortfolioUnit(
+      rawPrice,
+      security?.symbol,
+      security?.quotation || security?.commoditySpotData?.quotation || ""
+    );
+
+    if (portfolioIsNew) {
+      const inputValue = Number(order.allocationValue);
+      const qtyFromValue = Number.isFinite(inputValue) && inputValue > 0 && price > 0
+        ? (portfolioUsesWeights
+            ? Math.floor((cashBalance * inputValue / 100) / price)
+            : Math.floor(inputValue / price))
+        : 0;
+      const quantity = Number.isFinite(Number(order.quantity)) && Number(order.quantity) > 0
+        ? Number(order.quantity)
+        : qtyFromValue;
+      const validQuantity = Number.isInteger(quantity) && quantity > 0;
+      const valid = Boolean(security) && validQuantity && price > 0 && (
+        portfolioUsesWeights
+          ? inputValue > 0 && inputValue <= 100
+          : inputValue > 0
+      );
+      const resolvedAmount = valid ? price * quantity : 0;
+      return {
+        ...order,
+        holding: null,
+        security,
+        label: security?.name || "",
+        symbol: security?.symbol || "",
+        quantity,
+        price,
+        valid,
+        amount: resolvedAmount,
+      };
+    }
+
     const quantity = Number(order.quantity);
     const validQuantity = Number.isInteger(quantity) && quantity > 0;
-    const price = Number(security?.price || 0);
     const valid = Boolean(security) && validQuantity && price > 0;
     const resolvedAmount = price * quantity;
     return {
@@ -497,7 +534,58 @@ const PortfolioDetailsPage = () => {
     if (order.side === "SELL") {
       return Boolean(order.holdingId) && Number(order.quantity) > 0;
     }
+    if (portfolioIsNew) {
+      return Boolean(order.securityId) && (
+        Number(order.quantity) > 0 || Number(order.allocationValue) > 0
+      );
+    }
     return Boolean(order.securityId) && Number(order.quantity) > 0;
+  };
+
+  const syncNewPortfolioInputs = (order, patch) => {
+    if (!portfolioIsNew || order.side !== "BUY") {
+      return { ...order, ...patch };
+    }
+
+    const nextOrder = { ...order, ...patch };
+    const security = eligibleSecurities.find((item) => String(item.id) === String(nextOrder.securityId));
+    const price = Number(security?.price || 0);
+    const normalizedPrice = price > 0
+      ? normalizeGoldPriceForPortfolioUnit(
+          price,
+          security?.symbol,
+          security?.quotation || security?.commoditySpotData?.quotation || ""
+        )
+      : 0;
+
+    if (patch.quantity !== undefined && patch.quantity !== "") {
+      const qty = Number(patch.quantity);
+      if (Number.isFinite(qty) && qty >= 0 && normalizedPrice > 0) {
+        const value = qty * normalizedPrice;
+        nextOrder.allocationValue = portfolioUsesWeights
+          ? Number(((value / Math.max(Number(portfolio?.amount || 0), 1)) * 100).toFixed(4))
+          : Number(value.toFixed(2));
+      } else {
+        nextOrder.allocationValue = "";
+      }
+      return nextOrder;
+    }
+
+    if (patch.allocationValue !== undefined) {
+      const rawValue = Number(patch.allocationValue);
+      if (Number.isFinite(rawValue) && rawValue >= 0 && normalizedPrice > 0) {
+        const resolvedAmount = portfolioUsesWeights
+          ? (Number(portfolio?.amount || 0) * rawValue) / 100
+          : rawValue;
+        const derivedQty = resolvedAmount > 0 ? Math.floor(resolvedAmount / normalizedPrice) : 0;
+        nextOrder.quantity = derivedQty > 0 ? String(derivedQty) : "";
+      } else if (rawValue <= 0 || !Number.isFinite(rawValue)) {
+        nextOrder.quantity = "";
+      }
+      return nextOrder;
+    }
+
+    return nextOrder;
   };
 
   useEffect(() => {
@@ -512,7 +600,7 @@ const PortfolioDetailsPage = () => {
   }, [orders]);
 
   const updateOrder = (rowId, patch) => {
-    setOrders((prev) => prev.map((o) => (o.rowId === rowId ? { ...o, ...patch } : o)));
+    setOrders((prev) => prev.map((o) => (o.rowId === rowId ? syncNewPortfolioInputs(o, patch) : o)));
     setTradeError("");
   };
   const addOrderRow = () => setOrders((prev) => [...prev, newOrder()]);
@@ -681,7 +769,7 @@ const PortfolioDetailsPage = () => {
               securityId: s.id,
               name: s.name,
               symbol: s.symbol || s.isin,
-              price: Number(s.price) || 0,
+              price: normalizeGoldPriceForPortfolioUnit(Number(s.price) || 0, s.symbol, s.quotation || s.commoditySpotData?.quotation || ""),
               weight: 1 / arr.length,
             }));
       if (!candidates.length) {
@@ -792,6 +880,9 @@ const PortfolioDetailsPage = () => {
     composition: compositionRows.length,
     rebalance: rebalanceActionLines.length,
   };
+  const tradeTableColumns = portfolioIsNew
+    ? [["Side", "11%"], ["Security / holding", "29%"], ["Allocation", "16%"], ["Qty", "10%"], ["Price", "12%"], ["Est. value", "13%"], ["Actions", "9%"]]
+    : [["Side", "11%"], ["Security / holding", "33%"], ["Quantity", "14%"], ["Price", "13%"], ["Est. value", "16%"], ["Actions", "13%"]];
 
   return (
     <div className="h-screen overflow-hidden bg-[#f6f8fd] text-slate-900">
@@ -1023,7 +1114,7 @@ const PortfolioDetailsPage = () => {
                   <table className="w-full min-w-[720px] table-fixed border-collapse text-left text-[10px]">
                     <thead className="sticky top-0 z-[1] bg-slate-50 text-[9px] font-bold uppercase tracking-wide text-slate-500">
                       <tr>
-                        {[["Side", "11%"], ["Security / holding", "33%"], ["Quantity", "14%"], ["Price", "13%"], ["Est. value", "16%"], ["Actions", "13%"]].map(([label, width]) => (
+                        {tradeTableColumns.map(([label, width]) => (
                           <th key={label} style={{ width }} className="px-1.5 py-1.5">{label}</th>
                         ))}
                       </tr>
@@ -1048,7 +1139,7 @@ const PortfolioDetailsPage = () => {
                                 aria-label="Order side"
                                 value={order.side}
                                 disabled={tradeSubmitting}
-                                onChange={(e) => updateOrder(order.rowId, { side: e.target.value, securityId: "", holdingId: "", quantity: "" })}
+                                onChange={(e) => updateOrder(order.rowId, { side: e.target.value, securityId: "", holdingId: "", quantity: "", allocationValue: "" })}
                                 className={`h-7 w-full rounded border bg-white px-1.5 text-[10px] font-semibold outline-none focus:border-blue-500 ${isSell ? "border-red-200 text-red-700" : "border-slate-200 text-emerald-700"}`}
                               >
                                 <option value="BUY">Buy</option>
@@ -1121,7 +1212,7 @@ const PortfolioDetailsPage = () => {
                                             key={s.id}
                                             onMouseDown={(ev) => {
                                               ev.preventDefault();
-                                              updateOrder(order.rowId, { securityId: s.id });
+                                              updateOrder(order.rowId, { securityId: s.id, quantity: "", allocationValue: "" });
                                               setSearchTexts((p) => { const np = { ...p }; delete np[order.rowId]; return np; });
                                             }}
                                             className="cursor-pointer px-2 py-1 hover:bg-slate-50"
@@ -1134,6 +1225,22 @@ const PortfolioDetailsPage = () => {
                                 </div>
                               )}
                             </td>
+                            {portfolioIsNew && (
+                              <td className="px-1 py-1">
+                                <input
+                                  aria-label={portfolioUsesWeights ? "Allocation percentage" : "Amount to buy"}
+                                  type="number"
+                                  min="0"
+                                  max={portfolioUsesWeights ? 100 : undefined}
+                                  step="any"
+                                  value={order.allocationValue}
+                                  disabled={tradeSubmitting || isSell}
+                                  onChange={(e) => updateOrder(order.rowId, { allocationValue: e.target.value })}
+                                  placeholder={portfolioUsesWeights ? "%" : "₹"}
+                                  className="h-7 w-full rounded border border-slate-200 bg-white px-1.5 text-right font-mono text-[10px] outline-none focus:border-blue-500 disabled:bg-slate-50"
+                                />
+                              </td>
+                            )}
                             <td className="px-1 py-1">
                               <input
                                 aria-label={isSell ? "Quantity to sell" : "Quantity to buy"}
@@ -1384,6 +1491,27 @@ function MetricCard({ title, value, caption, icon: Icon, positive }) {
 
 const isGold = (symbol) => String(symbol || "").toUpperCase() === "GOLD";
 
+const normalizeGoldPriceForPortfolioUnit = (value, symbol, quotation = "") => {
+  console.log("Quotation "+quotation);
+  console.log("Value "+value)
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue) || numericValue <= 0) return 0;
+  if (!isGold(symbol)) return numericValue;
+
+  const quoteText = String(quotation || "").toUpperCase();
+  if (/(KG|KILOGRAM)/.test(quoteText)) return numericValue / 100;
+
+  const gramsMatch = quoteText.match(/(\d+(?:\.\d+)?)\s*(?:G|GM|GRAMS?)\b/);
+  if (gramsMatch) {
+    const gramsPerQuote = Number(gramsMatch[1]);
+    return Number.isFinite(gramsPerQuote) && gramsPerQuote > 0 ? numericValue / gramsPerQuote : numericValue;
+  }
+
+  if (/GRAM/.test(quoteText) || /\bG\b/.test(quoteText)) return numericValue;
+
+  return numericValue / 10;
+};
+
 const holdingValue = (holding) =>
   Number(
     holding?.currentValue ??
@@ -1405,15 +1533,32 @@ const sumRealizedPnl = (transactions) =>
 
 const holdingPrice = (holding) => {
   if (!holding) return 0;
-  if (holding.currentPrice != null) return Number(holding.currentPrice);
-  const qty = Number(holding.quantity || 0);
-  return qty ? holdingValue(holding) / qty : 0;
+  const rawPrice = holding.currentPrice != null
+    ? Number(holding.currentPrice)
+    : (() => {
+        const qty = Number(holding.quantity || 0);
+        return qty ? holdingValue(holding) / qty : 0;
+      })();
+
+  return normalizeGoldPriceForPortfolioUnit(
+    rawPrice,
+    holding?.symbol,
+    holding?.quotation || holding?.commoditySpotData?.quotation || ""
+  );
 };
 
-const holdingTradePrice = (holding) =>
-  String(holding?.securityType || "").toUpperCase() === "BOND"
+const holdingTradePrice = (holding) => {
+  if (!holding) return 0;
+  const rawPrice = String(holding?.securityType || "").toUpperCase() === "BOND"
     ? Number(holding?.bondReturnPrice?.tradePrice || holding?.averageCost || 0)
     : holdingPrice(holding);
+
+  return normalizeGoldPriceForPortfolioUnit(
+    rawPrice,
+    holding?.symbol,
+    holding?.quotation || holding?.commoditySpotData?.quotation || ""
+  );
+};
 
 const formatTransactionDate = (value) => {
   if (!value) return "—";
@@ -1517,6 +1662,7 @@ const newOrder = () => ({
   securityId: "",
   holdingId: "",
   quantity: "",
+  allocationValue: "",
 });
 
 export default PortfolioDetailsPage;
