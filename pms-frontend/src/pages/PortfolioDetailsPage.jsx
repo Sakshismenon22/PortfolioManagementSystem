@@ -192,6 +192,7 @@ const PortfolioDetailsPage = () => {
   // losses) after a sale. Remove that realized P/L to retain the original
   // contributed-capital basis for total portfolio performance.
   const invested = holdingsInvested + cashBalance - realizedPnl;
+  const portfolioInvestmentBase = Math.max(invested > 0 ? invested : cashBalance, 1);
   const currentValue = holdings.reduce((sum, holding) => sum + holdingValue(holding), 0) + cashBalance;
   const pnl = currentValue - invested;
   const returnPercentage = invested ? (pnl / invested) * 100 : 0;
@@ -460,7 +461,7 @@ const PortfolioDetailsPage = () => {
       const inputValue = Number(order.allocationValue);
       const qtyFromValue = Number.isFinite(inputValue) && inputValue > 0 && price > 0
         ? (portfolioUsesWeights
-            ? Math.floor((cashBalance * inputValue / 100) / price)
+            ? Math.floor((portfolioInvestmentBase * inputValue / 100) / price)
             : Math.floor(inputValue / price))
         : 0;
       const quantity = Number.isFinite(Number(order.quantity)) && Number(order.quantity) > 0
@@ -557,7 +558,7 @@ const PortfolioDetailsPage = () => {
       if (Number.isFinite(qty) && qty >= 0 && price > 0) {
         const value = qty * price;
         nextOrder.allocationValue = portfolioUsesWeights
-          ? Number(((value / Math.max(Number(portfolio?.amount || 0), 1)) * 100).toFixed(4))
+          ? Number(((value / Math.max(portfolioInvestmentBase, 1)) * 100).toFixed(4))
           : Number(value.toFixed(2));
       } else {
         nextOrder.allocationValue = "";
@@ -569,7 +570,7 @@ const PortfolioDetailsPage = () => {
       const rawValue = Number(patch.allocationValue);
       if (Number.isFinite(rawValue) && rawValue >= 0 && price > 0) {
         const resolvedAmount = portfolioUsesWeights
-          ? (Number(portfolio?.amount || 0) * rawValue) / 100
+          ? (portfolioInvestmentBase * rawValue) / 100
           : rawValue;
         const derivedQty = resolvedAmount > 0 ? Math.floor(resolvedAmount / price) : 0;
         nextOrder.quantity = derivedQty > 0 ? String(derivedQty) : "";
