@@ -217,6 +217,9 @@ const PortfolioDetailsPage = () => {
           const cost = Number(h.totalCost ?? Number(h.averageCost || 0) * Number(h.quantity || 0));
           const value = holdingValue(h);
           const qty = Number(h.quantity || 0);
+          const rawPrice = h.currentPrice != null
+            ? Number(h.currentPrice)
+            : qty ? value / qty : 0;
           return {
             rowKey: String(h.holdingId ?? h.securityId),
             holdingId: h.holdingId,
@@ -227,7 +230,7 @@ const PortfolioDetailsPage = () => {
             securityType: h.securityType || "",
             quantity: qty,
             averageCost: Number(h.averageCost || 0),
-            currentPrice: holdingPrice(h),
+            currentPrice: rawPrice,
             cost,
             value,
             allocationValue: portfolioUsesWeights
@@ -433,7 +436,9 @@ const PortfolioDetailsPage = () => {
       const quantity = Number(order.quantity);
       const held = Number(holding?.quantity || 0);
       const valid = Boolean(holding) && Number.isInteger(quantity) && quantity > 0 && quantity <= held;
-      const price = holding ? holdingTradePrice(holding) : 0;
+      const security = eligibleSecurities.find((s) => String(s.id) === String(holding?.securityId));
+      const rawPrice = Number(security?.price || holding?.currentPrice || 0);
+      const price = valid && quantity > 0 ? rawPrice : 0;
       return {
         ...order,
         holding,
@@ -443,17 +448,13 @@ const PortfolioDetailsPage = () => {
         quantity: valid ? quantity : 0,
         price,
         valid,
-        amount: valid ? price * quantity : 0,
+        amount: valid ? rawPrice * quantity : 0,
       };
     }
 
     const security = eligibleSecurities.find((s) => String(s.id) === String(order.securityId));
     const rawPrice = Number(security?.price || 0);
-    const price = normalizeGoldPriceForPortfolioUnit(
-      rawPrice,
-      security?.symbol,
-      security?.quotation || security?.commoditySpotData?.quotation || ""
-    );
+    const price = rawPrice;
 
     if (portfolioIsNew) {
       const inputValue = Number(order.allocationValue);
@@ -550,18 +551,11 @@ const PortfolioDetailsPage = () => {
     const nextOrder = { ...order, ...patch };
     const security = eligibleSecurities.find((item) => String(item.id) === String(nextOrder.securityId));
     const price = Number(security?.price || 0);
-    const normalizedPrice = price > 0
-      ? normalizeGoldPriceForPortfolioUnit(
-          price,
-          security?.symbol,
-          security?.quotation || security?.commoditySpotData?.quotation || ""
-        )
-      : 0;
 
     if (patch.quantity !== undefined && patch.quantity !== "") {
       const qty = Number(patch.quantity);
-      if (Number.isFinite(qty) && qty >= 0 && normalizedPrice > 0) {
-        const value = qty * normalizedPrice;
+      if (Number.isFinite(qty) && qty >= 0 && price > 0) {
+        const value = qty * price;
         nextOrder.allocationValue = portfolioUsesWeights
           ? Number(((value / Math.max(Number(portfolio?.amount || 0), 1)) * 100).toFixed(4))
           : Number(value.toFixed(2));
@@ -573,11 +567,11 @@ const PortfolioDetailsPage = () => {
 
     if (patch.allocationValue !== undefined) {
       const rawValue = Number(patch.allocationValue);
-      if (Number.isFinite(rawValue) && rawValue >= 0 && normalizedPrice > 0) {
+      if (Number.isFinite(rawValue) && rawValue >= 0 && price > 0) {
         const resolvedAmount = portfolioUsesWeights
           ? (Number(portfolio?.amount || 0) * rawValue) / 100
           : rawValue;
-        const derivedQty = resolvedAmount > 0 ? Math.floor(resolvedAmount / normalizedPrice) : 0;
+        const derivedQty = resolvedAmount > 0 ? Math.floor(resolvedAmount / price) : 0;
         nextOrder.quantity = derivedQty > 0 ? String(derivedQty) : "";
       } else if (rawValue <= 0 || !Number.isFinite(rawValue)) {
         nextOrder.quantity = "";
@@ -769,7 +763,7 @@ const PortfolioDetailsPage = () => {
               securityId: s.id,
               name: s.name,
               symbol: s.symbol || s.isin,
-              price: normalizeGoldPriceForPortfolioUnit(Number(s.price) || 0, s.symbol, s.quotation || s.commoditySpotData?.quotation || ""),
+              price: Number(s.price) || 0,
               weight: 1 / arr.length,
             }));
       if (!candidates.length) {
@@ -1491,27 +1485,6 @@ function MetricCard({ title, value, caption, icon: Icon, positive }) {
 
 const isGold = (symbol) => String(symbol || "").toUpperCase() === "GOLD";
 
-const normalizeGoldPriceForPortfolioUnit = (value, symbol, quotation = "") => {
-  console.log("Quotation "+quotation);
-  console.log("Value "+value)
-  const numericValue = Number(value);
-  if (!Number.isFinite(numericValue) || numericValue <= 0) return 0;
-  if (!isGold(symbol)) return numericValue;
-
-  const quoteText = String(quotation || "").toUpperCase();
-  if (/(KG|KILOGRAM)/.test(quoteText)) return numericValue / 100;
-
-  const gramsMatch = quoteText.match(/(\d+(?:\.\d+)?)\s*(?:G|GM|GRAMS?)\b/);
-  if (gramsMatch) {
-    const gramsPerQuote = Number(gramsMatch[1]);
-    return Number.isFinite(gramsPerQuote) && gramsPerQuote > 0 ? numericValue / gramsPerQuote : numericValue;
-  }
-
-  if (/GRAM/.test(quoteText) || /\bG\b/.test(quoteText)) return numericValue;
-
-  return numericValue / 10;
-};
-
 const holdingValue = (holding) =>
   Number(
     holding?.currentValue ??
@@ -1533,31 +1506,22 @@ const sumRealizedPnl = (transactions) =>
 
 const holdingPrice = (holding) => {
   if (!holding) return 0;
-  const rawPrice = holding.currentPrice != null
+  return holding.currentPrice != null
     ? Number(holding.currentPrice)
     : (() => {
         const qty = Number(holding.quantity || 0);
         return qty ? holdingValue(holding) / qty : 0;
       })();
-
-  return normalizeGoldPriceForPortfolioUnit(
-    rawPrice,
-    holding?.symbol,
-    holding?.quotation || holding?.commoditySpotData?.quotation || ""
-  );
 };
 
 const holdingTradePrice = (holding) => {
   if (!holding) return 0;
-  const rawPrice = String(holding?.securityType || "").toUpperCase() === "BOND"
-    ? Number(holding?.bondReturnPrice?.tradePrice || holding?.averageCost || 0)
-    : holdingPrice(holding);
 
-  return normalizeGoldPriceForPortfolioUnit(
-    rawPrice,
-    holding?.symbol,
-    holding?.quotation || holding?.commoditySpotData?.quotation || ""
-  );
+  if (String(holding?.securityType || "").toUpperCase() === "BOND") {
+    return Number(holding?.bondReturnPrice?.tradePrice || holding?.averageCost || 0);
+  }
+
+  return holdingPrice(holding);
 };
 
 const formatTransactionDate = (value) => {
